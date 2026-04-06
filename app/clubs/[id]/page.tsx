@@ -13,8 +13,8 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Users, Clock, MapPin, Globe, Calendar, Crown, CheckCircle, XCircle,
-  ClockIcon, Vote, Plus, Trash2, UserCheck, Pencil, Newspaper, Instagram,
-  Twitter, Facebook, Youtube, Link as LinkIcon,
+  ClockIcon, Vote, Plus, Trash2, UserCheck, Pencil, Newspaper, Camera,
+  MessageCircle, Tv, Video, Link as LinkIcon,
 } from 'lucide-react'
 import { JoinRequest, LeadershipPosition, Poll, ClubEvent, ClubNews, SocialLink, SocialPlatform, MeetingTime } from '@/types'
 
@@ -23,10 +23,10 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 function SocialIcon({ platform }: { platform: SocialPlatform }) {
   const cls = 'w-4 h-4'
   switch (platform) {
-    case 'instagram': return <Instagram className={cls} />
-    case 'twitter':   return <Twitter className={cls} />
-    case 'facebook':  return <Facebook className={cls} />
-    case 'youtube':   return <Youtube className={cls} />
+    case 'instagram': return <Camera className={cls} />
+    case 'twitter':   return <MessageCircle className={cls} />
+    case 'facebook':  return <Tv className={cls} />
+    case 'youtube':   return <Video className={cls} />
     case 'website':   return <Globe className={cls} />
     default:          return <LinkIcon className={cls} />
   }
