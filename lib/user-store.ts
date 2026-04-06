@@ -23,9 +23,7 @@ export async function getOverride(userId: string): Promise<{ name?: string; emai
   return data ?? {}
 }
 
-export async function applyOverrides<T extends { id: string; name: string; email: string }>(
-  user: T
-): Promise<T> {
-  const ov = await getOverride(user.id)
-  return { ...user, ...(ov.name ? { name: ov.name } : {}), ...(ov.email ? { email: ov.email } : {}) }
+/** Sync pass-through — overrides are loaded async per-component via getOverride(). */
+export function applyOverrides<T extends { id: string; name: string; email: string }>(user: T): T {
+  return user
 }
