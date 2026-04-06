@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Search, Bell, Settings } from 'lucide-react'
+import { UserButton } from '@clerk/nextjs'
 import { useMockAuth } from '@/lib/mock-auth'
 import Avatar from '@/components/Avatar'
 
@@ -52,6 +53,7 @@ export default function TopBar() {
           <Link href="/profile">
             <Avatar name={currentUser.name} size="sm" />
           </Link>
+          <UserButton afterSignOutUrl="/sign-in" />
         </div>
       </div>
     </header>
