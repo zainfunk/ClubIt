@@ -1,10 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
-import { CLUBS, JOIN_REQUESTS, getUserById, getClubsByAdvisor, getNewsByClub, getEventsByClub } from '@/lib/mock-data'
+import { CLUBS, getUserById, getClubsByAdvisor, getNewsByClub, getEventsByClub } from '@/lib/mock-data'
+import { supabase } from '@/lib/supabase'
 import { Users, BookOpen, Pin, Calendar } from 'lucide-react'
-import type { Club } from '@/types'
+import type { Club, JoinRequest } from '@/types'
 
 function getPattern(club: Club): 'chess' | 'art' | 'robotics' {
   const tags = (club.tags ?? []).map((t) => t.toLowerCase())
@@ -21,12 +23,21 @@ const PATTERN_ICON_STYLES: Record<string, { bg: string; text: string }> = {
 
 export default function DashboardPage() {
   const { currentUser } = useMockAuth()
+  const [myClubIds, setMyClubIds] = useState<string[]>([])
+  const [pendingRequests, setPendingRequests] = useState<JoinRequest[]>([])
+
+  useEffect(() => {
+    if (!currentUser.id) return
+    supabase.from('memberships').select('club_id').eq('user_id', currentUser.id).then(({ data }) => {
+      setMyClubIds((data ?? []).map((r) => r.club_id))
+    })
+    supabase.from('join_requests').select('*').eq('user_id', currentUser.id).eq('status', 'pending').then(({ data }) => {
+      setPendingRequests((data ?? []).map((r) => ({ id: r.id, clubId: r.club_id, userId: r.user_id, requestedAt: r.requested_at, status: r.status })))
+    })
+  }, [currentUser.id])
 
   if (currentUser.role === 'student') {
-    const myClubs = CLUBS.filter((c) => c.memberIds.includes(currentUser.id))
-    const pendingRequests = JOIN_REQUESTS.filter(
-      (r) => r.userId === currentUser.id && r.status === 'pending'
-    )
+    const myClubs = CLUBS.filter((c) => myClubIds.includes(c.id))
     const firstName = currentUser.name.split(' ')[0]
 
     return (
