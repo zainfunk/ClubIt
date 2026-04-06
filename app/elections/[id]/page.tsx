@@ -61,8 +61,8 @@ export default function FormDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     if (votingItem) {
-      setVoted(hasVoted(votingItem.id, currentUser.id))
-      setStoredVotes(getVotes(votingItem.id))
+      hasVoted(votingItem.id, currentUser.id).then(setVoted)
+      getVotes(votingItem.id).then(setStoredVotes)
     }
   }, [votingItem?.id, currentUser.id])
 
@@ -81,11 +81,11 @@ export default function FormDetailPage({ params }: { params: Promise<{ id: strin
     setPendingCandidate(candidateUserId)
   }
 
-  function confirmVote() {
+  async function confirmVote() {
     if (!votingItem || !pendingCandidate) return
-    castVote(votingItem.id, pendingCandidate, currentUser.id)
+    await castVote(votingItem.id, pendingCandidate, currentUser.id)
     setVoted(true)
-    setStoredVotes(getVotes(votingItem.id))
+    getVotes(votingItem.id).then(setStoredVotes)
     setPendingCandidate(null)
   }
 
@@ -100,14 +100,14 @@ export default function FormDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     if (form) {
-      setSubmitted(hasResponded(form.id, currentUser.id))
-      setResponseCount(getResponseCount(form.id))
+      hasResponded(form.id, currentUser.id).then(setSubmitted)
+      getResponseCount(form.id).then(setResponseCount)
     }
   }, [form?.id, currentUser.id])
 
-  function handleFormSubmit() {
+  async function handleFormSubmit() {
     if (!form) return
-    addResponse(form.id, currentUser.id)
+    await addResponse(form.id, currentUser.id)
     setSubmitted(true)
     setResponseCount((n) => n + 1)
   }

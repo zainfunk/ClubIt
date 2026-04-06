@@ -70,11 +70,14 @@ export default function FormsPage() {
 
   // Read localStorage only after mount
   useEffect(() => {
-    const done = new Set<string>()
-    for (const e of openElections) if (hasVoted(e.id, currentUser.id)) done.add(e.id)
-    for (const p of openPolls)    if (hasVoted(p.id, currentUser.id)) done.add(p.id)
-    for (const f of openForms)    if (hasResponded(f.id, currentUser.id)) done.add(f.id)
-    setDoneIds(done)
+    const allChecks = [
+      ...openElections.map((e) => hasVoted(e.id, currentUser.id).then((v) => v ? e.id : null)),
+      ...openPolls.map((p) => hasVoted(p.id, currentUser.id).then((v) => v ? p.id : null)),
+      ...openForms.map((f) => hasResponded(f.id, currentUser.id).then((v) => v ? f.id : null)),
+    ]
+    Promise.all(allChecks).then((results) => {
+      setDoneIds(new Set(results.filter(Boolean) as string[]))
+    })
   }, [currentUser.id])
 
   // Merged active list for filtered view
