@@ -152,9 +152,16 @@ export default function ViewProfilePage({ params }: PageProps) {
   const advisingClubs = getClubsByAdvisor(profileUser.id)
   const displayClubs = profileUser.role === 'advisor' ? advisingClubs : memberClubs
 
+  const [supabaseAttendance, setSupabaseAttendance] = useState<AttendanceRecord[]>([])
+  useEffect(() => {
+    Promise.all(memberClubs.map((c) => getRecordsByClub(c.id))).then((results) => {
+      setSupabaseAttendance(results.flat().filter((r) => r.userId === profileUser.id))
+    })
+  }, [profileUser.id, memberClubs.length])
+
   function getClubAttendance(clubId: string): AttendanceRecord[] {
     const mock = getAttendanceByUserAndClub(profileUser.id, clubId)
-    const stored = getRecordsByClub(clubId).filter((r) => r.userId === profileUser.id)
+    const stored = supabaseAttendance.filter((r) => r.clubId === clubId)
     const merged = new Map<string, AttendanceRecord>()
     for (const r of mock) merged.set(r.meetingDate, r)
     for (const r of stored) merged.set(r.meetingDate, r)

@@ -1,6 +1,5 @@
-import { supabase } from '@/lib/supabase'
-
 // ── Admin global controls ──────────────────────────────────────────────────
+const ADMIN_KEY = 'clubit_admin_settings'
 
 export interface AdminSettings {
   achievementsFeatureEnabled: boolean
@@ -16,28 +15,20 @@ const ADMIN_DEFAULTS: AdminSettings = {
   studentSocialsEnabled: true,
 }
 
-export async function getAdminSettings(): Promise<AdminSettings> {
-  const { data } = await supabase.from('admin_settings').select('*').eq('id', 1).maybeSingle()
-  if (!data) return { ...ADMIN_DEFAULTS }
-  return {
-    achievementsFeatureEnabled: data.achievements_enabled,
-    attendanceFeatureEnabled: data.attendance_enabled,
-    clubsFeatureEnabled: data.clubs_enabled,
-    studentSocialsEnabled: data.student_socials_enabled,
-  }
+export function getAdminSettings(): AdminSettings {
+  if (typeof window === 'undefined') return ADMIN_DEFAULTS
+  try {
+    const raw = localStorage.getItem(ADMIN_KEY)
+    return raw ? { ...ADMIN_DEFAULTS, ...JSON.parse(raw) } : ADMIN_DEFAULTS
+  } catch { return ADMIN_DEFAULTS }
 }
 
-export async function setAdminSettings(partial: Partial<AdminSettings>): Promise<void> {
-  await supabase.from('admin_settings').upsert({
-    id: 1,
-    ...(partial.achievementsFeatureEnabled !== undefined && { achievements_enabled: partial.achievementsFeatureEnabled }),
-    ...(partial.attendanceFeatureEnabled !== undefined && { attendance_enabled: partial.attendanceFeatureEnabled }),
-    ...(partial.clubsFeatureEnabled !== undefined && { clubs_enabled: partial.clubsFeatureEnabled }),
-    ...(partial.studentSocialsEnabled !== undefined && { student_socials_enabled: partial.studentSocialsEnabled }),
-  }, { onConflict: 'id' })
+export function setAdminSettings(partial: Partial<AdminSettings>): void {
+  localStorage.setItem(ADMIN_KEY, JSON.stringify({ ...getAdminSettings(), ...partial }))
 }
 
 // ── Per-user privacy settings ──────────────────────────────────────────────
+const PRIVACY_PREFIX = 'clubit_privacy_'
 
 export interface UserPrivacySettings {
   achievementsPublic: boolean
@@ -51,33 +42,21 @@ const PRIVACY_DEFAULTS: UserPrivacySettings = {
   clubsPublic: true,
 }
 
-export async function getUserPrivacy(userId: string): Promise<UserPrivacySettings> {
-  const { data } = await supabase
-    .from('user_privacy_settings')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (!data) return { ...PRIVACY_DEFAULTS }
-  return {
-    achievementsPublic: data.achievements_public,
-    attendancePublic: data.attendance_public,
-    clubsPublic: data.clubs_public,
-  }
+export function getUserPrivacy(userId: string): UserPrivacySettings {
+  if (typeof window === 'undefined') return PRIVACY_DEFAULTS
+  try {
+    const raw = localStorage.getItem(PRIVACY_PREFIX + userId)
+    return raw ? { ...PRIVACY_DEFAULTS, ...JSON.parse(raw) } : PRIVACY_DEFAULTS
+  } catch { return PRIVACY_DEFAULTS }
 }
 
-export async function setUserPrivacy(userId: string, partial: Partial<UserPrivacySettings>): Promise<void> {
-  const current = await getUserPrivacy(userId)
-  await supabase.from('user_privacy_settings').upsert({
-    user_id: userId,
-    achievements_public: partial.achievementsPublic ?? current.achievementsPublic,
-    attendance_public: partial.attendancePublic ?? current.attendancePublic,
-    clubs_public: partial.clubsPublic ?? current.clubsPublic,
-  }, { onConflict: 'user_id' })
+export function setUserPrivacy(userId: string, partial: Partial<UserPrivacySettings>): void {
+  localStorage.setItem(PRIVACY_PREFIX + userId, JSON.stringify({ ...getUserPrivacy(userId), ...partial }))
 }
 
-// ── Per-user app settings (dark mode etc.) — keep in localStorage, no DB needed ──
-
+// ── Per-user app settings ──────────────────────────────────────────────────
 const APP_PREFIX = 'clubit_app_'
+
 export interface UserAppSettings { darkMode: boolean }
 const APP_DEFAULTS: UserAppSettings = { darkMode: false }
 
@@ -95,24 +74,24 @@ export function setAppSettings(userId: string, partial: Partial<UserAppSettings>
 
 // ── Visibility helpers ─────────────────────────────────────────────────────
 
-export async function canViewAchievements(viewerId: string, targetId: string, viewerRole: string): Promise<boolean> {
+export function canViewAchievements(viewerId: string, targetId: string, viewerRole: string): boolean {
   if (viewerRole === 'admin' || viewerId === targetId) return true
-  const [admin, privacy] = await Promise.all([getAdminSettings(), getUserPrivacy(targetId)])
+  const admin = getAdminSettings()
   if (!admin.achievementsFeatureEnabled) return false
-  return privacy.achievementsPublic
+  return getUserPrivacy(targetId).achievementsPublic
 }
 
-export async function canViewAttendance(viewerId: string, targetId: string, viewerRole: string, sharedClubIds: string[]): Promise<boolean> {
+export function canViewAttendance(viewerId: string, targetId: string, viewerRole: string, sharedClubIds: string[]): boolean {
   if (viewerRole === 'admin' || viewerId === targetId) return true
   if (viewerRole === 'advisor' && sharedClubIds.length > 0) return true
-  const [admin, privacy] = await Promise.all([getAdminSettings(), getUserPrivacy(targetId)])
+  const admin = getAdminSettings()
   if (!admin.attendanceFeatureEnabled) return false
-  return privacy.attendancePublic
+  return getUserPrivacy(targetId).attendancePublic
 }
 
-export async function canViewClubs(viewerId: string, targetId: string, viewerRole: string): Promise<boolean> {
+export function canViewClubs(viewerId: string, targetId: string, viewerRole: string): boolean {
   if (viewerRole === 'admin' || viewerId === targetId) return true
-  const [admin, privacy] = await Promise.all([getAdminSettings(), getUserPrivacy(targetId)])
+  const admin = getAdminSettings()
   if (!admin.clubsFeatureEnabled) return false
-  return privacy.clubsPublic
+  return getUserPrivacy(targetId).clubsPublic
 }

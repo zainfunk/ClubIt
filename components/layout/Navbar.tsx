@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { USERS } from '@/lib/mock-data'
 import { GraduationCap, LayoutDashboard, Calendar, FileText, Compass, User, ShieldCheck, MessageSquare, Settings } from 'lucide-react'
 import Avatar from '@/components/Avatar'
 import { HelpButton } from '@/components/HelpTour'
@@ -25,7 +24,7 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar() {
-  const { currentUser, setCurrentUser, realUser, isViewingAs, resetToSelf } = useMockAuth()
+  const { currentUser, devRole, setDevRole } = useMockAuth()
   const pathname = usePathname()
   const router = useRouter()
 
@@ -103,48 +102,32 @@ export default function Sidebar() {
 
       {/* User section */}
       <div className="border-t border-slate-200/50 pt-6 space-y-3 px-4">
-        {/* Real identity */}
         <div className="flex items-center gap-3">
           <Link href="/profile" className="shrink-0">
             <Avatar name={currentUser.name} size="sm" />
           </Link>
           <div className="flex-1 min-w-0">
-            <p
-              className="text-sm font-semibold text-slate-900 truncate leading-tight"
-              style={{ fontFamily: 'var(--font-manrope)' }}
-            >
-              {isViewingAs ? realUser?.name ?? 'You' : currentUser.name}
+            <p className="text-sm font-semibold text-slate-900 truncate leading-tight" style={{ fontFamily: 'var(--font-manrope)' }}>
+              {currentUser.name}
             </p>
-            <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${ROLE_BADGE[isViewingAs ? (realUser?.role ?? 'student') : currentUser.role]}`}>
-              {isViewingAs ? (realUser?.role ?? 'student') : currentUser.role}
+            <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${ROLE_BADGE[currentUser.role]}`}>
+              {currentUser.role}
             </span>
           </div>
         </div>
 
-        {/* Dev: View As switcher */}
+        {/* Dev: role override for UI testing (your identity/data never changes) */}
         <div>
-          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">View As (Dev)</p>
-          {isViewingAs && (
-            <button
-              onClick={() => { resetToSelf(); router.push('/') }}
-              className="w-full text-xs rounded-lg px-2 py-1 mb-1 text-amber-700 bg-amber-50 font-semibold text-left"
-            >
-              ← Back to yourself
-            </button>
-          )}
+          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Preview Role (Dev)</p>
           <select
-            value={isViewingAs ? currentUser.id : ''}
-            onChange={(e) => {
-              if (!e.target.value) { resetToSelf(); router.push('/'); return }
-              const user = USERS.find((u) => u.id === e.target.value)
-              if (user) { setCurrentUser(user); router.push('/') }
-            }}
+            value={devRole ?? ''}
+            onChange={(e) => { setDevRole((e.target.value as Role) || null); router.push('/') }}
             className="w-full text-xs rounded-lg px-2 py-1.5 cursor-pointer text-slate-500 bg-slate-100 border-none outline-none"
           >
-            <option value="">— Myself —</option>
-            {USERS.map((u) => (
-              <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-            ))}
+            <option value="">— My Role —</option>
+            <option value="student">Student</option>
+            <option value="advisor">Advisor</option>
+            <option value="admin">Admin</option>
           </select>
         </div>
       </div>

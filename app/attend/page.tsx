@@ -13,14 +13,16 @@ import { Button } from '@/components/ui/button'
 type Status = 'idle' | 'checking' | 'success' | 'expired' | 'already' | 'distance' | 'no-session' | 'location-error'
 
 function AttendContent() {
-  const { currentUser, setCurrentUser } = useMockAuth()
+  const { currentUser } = useMockAuth()
   const searchParams = useSearchParams()
   const token = searchParams.get('t') ?? ''
 
   const [status, setStatus] = useState<Status>('idle')
   const [distanceM, setDistanceM] = useState<number | null>(null)
+  const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionById>> | null | undefined>(undefined)
 
-  const session = getSessionById(token)
+  useEffect(() => { getSessionById(token).then(setSession) }, [token])
+
   const club = session ? CLUBS.find((c) => c.id === session.clubId) : undefined
 
   async function checkIn() {
@@ -53,8 +55,8 @@ function AttendContent() {
     }
 
     // Record attendance
-    upsertRecord(session.clubId, currentUser.id, session.meetingDate, true)
-    markSessionCheckin(token, currentUser.id)
+    await upsertRecord(session.clubId, currentUser.id, session.meetingDate, true)
+    await markSessionCheckin(token, currentUser.id)
     setStatus('success')
   }
 

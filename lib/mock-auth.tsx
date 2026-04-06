@@ -2,69 +2,57 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useUser } from '@clerk/nextjs'
-import { User } from '@/types'
-import { USERS } from '@/lib/mock-data'
+import { User, Role } from '@/types'
 import { supabase } from '@/lib/supabase'
 
 interface AuthContextValue {
-  realUser: User | null        // the actual Clerk-backed Supabase user
-  currentUser: User            // what's being viewed as (real or mock for testing)
-  setCurrentUser: (user: User) => void
-  isViewingAs: boolean         // true when viewing as a mock user
-  resetToSelf: () => void
-  logout: () => void
+  currentUser: User
+  devRole: Role | null
+  setDevRole: (role: Role | null) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const FALLBACK_USER = USERS.find((u) => u.role === 'student')!
+const LOADING_USER: User = { id: '', name: 'Loading...', email: '', role: 'student' }
 
 export function MockAuthProvider({ children }: { children: ReactNode }) {
   const { user: clerkUser, isLoaded } = useUser()
-  const [realUser, setRealUser] = useState<User | null>(null)
-  const [viewAsUser, setViewAsUser] = useState<User | null>(null)
+  const [baseUser, setBaseUser] = useState<User>(LOADING_USER)
+  const [devRole, setDevRole] = useState<Role | null>(null)
 
   useEffect(() => {
     if (!isLoaded || !clerkUser) return
 
-    const supabaseUser: User = {
-      id: clerkUser.id,
-      name: clerkUser.fullName ?? clerkUser.username ?? 'New User',
-      email: clerkUser.primaryEmailAddress?.emailAddress ?? '',
-      role: 'student',
-      avatarUrl: clerkUser.imageUrl,
-    }
+    const id = clerkUser.id
+    const name = clerkUser.fullName ?? clerkUser.username ?? 'New User'
+    const email = clerkUser.primaryEmailAddress?.emailAddress ?? ''
 
-    // Upsert into users table so FK constraints work
-    supabase.from('users').upsert(supabaseUser, { onConflict: 'id' }).then(({ error }) => {
-      if (error) console.error('Failed to upsert user:', error)
-    })
-
-    // Check if they already have a saved role in Supabase
-    supabase.from('users').select('role').eq('id', clerkUser.id).maybeSingle().then(({ data }) => {
-      const role = (data?.role as User['role']) ?? 'student'
-      const userWithRole: User = { ...supabaseUser, role }
-      setRealUser(userWithRole)
+    // Ensure this user exists in Supabase (insert only, don't overwrite existing role)
+    supabase.from('users').upsert(
+      { id, name, email, role: 'student' },
+      { onConflict: 'id', ignoreDuplicates: true }
+    ).then(() => {
+      // Fetch their stored role
+      supabase.from('users').select('role').eq('id', id).maybeSingle().then(({ data }) => {
+        setBaseUser({ id, name, email, role: (data?.role as Role) ?? 'student' })
+      })
     })
   }, [isLoaded, clerkUser?.id])
 
-  const currentUser = viewAsUser ?? realUser ?? FALLBACK_USER
+  // devRole overrides the role for UI/permission testing only.
+  // currentUser.id is always the real Clerk user — data always saves to your account.
+  const currentUser: User = devRole
+    ? { ...baseUser, role: devRole }
+    : baseUser
 
   return (
-    <AuthContext.Provider value={{
-      realUser,
-      currentUser,
-      setCurrentUser: setViewAsUser,
-      isViewingAs: viewAsUser !== null,
-      resetToSelf: () => setViewAsUser(null),
-      logout: () => setViewAsUser(null),
-    }}>
+    <AuthContext.Provider value={{ currentUser, devRole, setDevRole }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-export function useMockAuth(): AuthContextValue {
+export function useMockAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useMockAuth must be used inside MockAuthProvider')
   return ctx

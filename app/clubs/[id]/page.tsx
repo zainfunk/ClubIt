@@ -102,23 +102,28 @@ export default function ClubDetailPage({ params }: PageProps) {
   const [pollPositionTitle, setPollPositionTitle] = useState('')
   const [pollCandidateIds, setPollCandidateIds] = useState<string[]>([])
 
-  // Attendance state (merges static mock data + localStorage records)
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(() => {
-    const staticRecs = getAttendanceByClub(id)
-    const stored = getRecordsByClub(id)
-    const merged = [...staticRecs]
-    for (const r of stored) {
-      const idx = merged.findIndex(
-        (m) => m.clubId === r.clubId && m.userId === r.userId && m.meetingDate === r.meetingDate
-      )
-      if (idx >= 0) merged[idx] = r
-      else merged.push(r)
-    }
-    return merged
-  })
+  // Attendance state (merges static mock data + Supabase records)
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(getAttendanceByClub(id))
+
+  useEffect(() => {
+    getRecordsByClub(id).then((stored) => {
+      setAttendanceRecords((prev) => {
+        const merged = [...prev]
+        for (const r of stored) {
+          const idx = merged.findIndex(
+            (m) => m.clubId === r.clubId && m.userId === r.userId && m.meetingDate === r.meetingDate
+          )
+          if (idx >= 0) merged[idx] = r
+          else merged.push(r)
+        }
+        return merged
+      })
+    })
+  }, [id])
 
   // QR / attendance session state (advisor)
-  const [sessions, setSessions] = useState<AttendanceSession[]>(() => getSessionsByClub(id))
+  const [sessions, setSessions] = useState<AttendanceSession[]>([])
+  useEffect(() => { getSessionsByClub(id).then(setSessions) }, [id])
   const [showQrForm, setShowQrForm] = useState(false)
   const [qrDate, setQrDate] = useState(() => new Date().toISOString().split('T')[0])
   const [qrExpiry, setQrExpiry] = useState(30) // minutes
@@ -419,7 +424,7 @@ export default function ClubDetailPage({ params }: PageProps) {
   // --- Manual attendance handlers ---
 
   function setManualAttendance(userId: string, present: boolean) {
-    upsertRecord(id, userId, manualDate, present)
+    upsertRecord(id, userId, manualDate, present) // async write, fire-and-forget
     setAttendanceRecords((prev) => {
       const next = [...prev]
       const idx = next.findIndex(

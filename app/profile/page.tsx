@@ -89,7 +89,7 @@ function computeAchievements(
 }
 
 export default function ProfilePage() {
-  const { currentUser, setCurrentUser } = useMockAuth()
+  const { currentUser } = useMockAuth()
   const isAdmin = currentUser.role === 'admin'
 
   const [selectedUserId, setSelectedUserId] = useState(currentUser.id)
@@ -119,7 +119,6 @@ export default function ProfilePage() {
     if (!nameInput.trim() || nameInput.trim() === profileUser.name) return
     setName(profileUser.id, nameInput.trim())
     refresh()
-    if (profileUser.id === currentUser.id) setCurrentUser({ ...currentUser, name: nameInput.trim() })
   }
 
   // ---- Email editing ----
@@ -129,7 +128,6 @@ export default function ProfilePage() {
     if (!emailInput.trim()) return
     setEmail(profileUser.id, emailInput.trim())
     refresh()
-    if (profileUser.id === currentUser.id) setCurrentUser({ ...currentUser, email: emailInput.trim() })
     setEditingEmail(false)
   }
 
@@ -161,9 +159,16 @@ export default function ProfilePage() {
     ? getClubsByAdvisor(profileUser.id) : []
   const displayClubs = profileUser.role === 'advisor' ? advisingClubs : memberClubs
 
+  const [supabaseAttendance, setSupabaseAttendance] = useState<AttendanceRecord[]>([])
+  useEffect(() => {
+    Promise.all(memberClubs.map((c) => getRecordsByClub(c.id))).then((results) => {
+      setSupabaseAttendance(results.flat().filter((r) => r.userId === profileUser.id))
+    })
+  }, [profileUser.id, memberClubs.length])
+
   function getClubAttendance(clubId: string): AttendanceRecord[] {
     const mock = getAttendanceByUserAndClub(profileUser.id, clubId)
-    const stored = getRecordsByClub(clubId).filter((r) => r.userId === profileUser.id)
+    const stored = supabaseAttendance.filter((r) => r.clubId === clubId)
     const merged = new Map<string, AttendanceRecord>()
     for (const r of mock) merged.set(r.meetingDate, r)
     for (const r of stored) merged.set(r.meetingDate, r)
@@ -172,7 +177,7 @@ export default function ProfilePage() {
 
   const allAttendanceRecords = useMemo(() => {
     return memberClubs.flatMap((c) => getClubAttendance(c.id))
-  }, [profileUser.id, memberClubs.length])
+  }, [profileUser.id, memberClubs.length, supabaseAttendance.length])
 
   const totalMeetings = allAttendanceRecords.length
   const presentCount = allAttendanceRecords.filter((r) => r.present).length
