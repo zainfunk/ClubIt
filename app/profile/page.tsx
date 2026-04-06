@@ -90,6 +90,9 @@ function computeAchievements(
 
 export default function ProfilePage() {
   const { currentUser } = useMockAuth()
+
+  if (!currentUser.id) return null
+
   const isAdmin = currentUser.role === 'admin'
 
   const [selectedUserId, setSelectedUserId] = useState(currentUser.id)

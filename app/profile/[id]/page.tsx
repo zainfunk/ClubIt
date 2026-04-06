@@ -69,6 +69,8 @@ export default function ViewProfilePage({ params }: PageProps) {
   const { id } = use(params)
   const { currentUser } = useMockAuth()
 
+  if (!currentUser.id) return null
+
   const rawUser = USERS.find((u) => u.id === id)
   if (!rawUser) notFound()
 
