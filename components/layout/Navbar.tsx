@@ -14,13 +14,13 @@ const ROLE_BADGE: Record<string, string> = {
 }
 
 const NAV_ITEMS = [
-  { href: '/dashboard',  icon: LayoutDashboard, label: 'My Clubs',  roles: ['student', 'advisor'] },
-  { href: '/events',     icon: Calendar,        label: 'Events',    roles: ['student', 'advisor', 'admin'] },
-  { href: '/chat',       icon: MessageSquare,   label: 'Chat',      roles: ['student', 'advisor', 'admin'] },
-  { href: '/elections',  icon: FileText,        label: 'Forms',     roles: ['student', 'advisor', 'admin'] },
-  { href: '/clubs',      icon: Compass,         label: 'All Clubs', roles: ['student', 'advisor', 'admin'] },
-  { href: '/profile',    icon: User,            label: 'Profile',   roles: ['student', 'advisor', 'admin'] },
-  { href: '/admin',      icon: ShieldCheck,     label: 'Admin',     roles: ['admin'] },
+  { href: '/dashboard',  icon: LayoutDashboard, label: 'My Clubs',       roles: ['student', 'advisor'] },
+  { href: '/events',     icon: Calendar,        label: 'Events',          roles: ['student', 'advisor', 'admin'] },
+  { href: '/chat',       icon: MessageSquare,   label: 'Chat',            roles: ['student', 'advisor', 'admin'] },
+  { href: '/elections',  icon: FileText,        label: 'Elections',       roles: ['student', 'advisor', 'admin'] },
+  { href: '/clubs',      icon: Compass,         label: 'All Clubs',       roles: ['student', 'advisor', 'admin'] },
+  { href: '/profile',    icon: User,            label: 'Profile',         roles: ['student', 'advisor', 'admin'] },
+  { href: '/admin',      icon: ShieldCheck,     label: 'Admin',           roles: ['admin'] },
 ]
 
 export default function Sidebar() {
@@ -37,70 +37,61 @@ export default function Sidebar() {
   }
 
   return (
-    <aside
-      className="w-64 shrink-0 min-h-screen flex flex-col sticky top-0 h-screen overflow-y-auto"
-      style={{
-        background: 'rgba(255,255,255,0.88)',
-        backdropFilter: 'blur(20px)',
-        boxShadow: '1px 0 0 rgba(194,198,214,0.18)',
-      }}
-    >
+    <aside className="fixed left-0 top-0 h-screen w-64 bg-slate-50 border-r border-slate-200/40 flex flex-col py-8 px-4 z-50">
       {/* Brand */}
-      <div className="px-5 pt-6 pb-5">
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-lg bg-[#0058be] flex items-center justify-center shrink-0">
-            <GraduationCap className="w-4 h-4 text-white" />
-          </div>
-          <span
-            className="font-bold text-[1.05rem] text-[#191c1d] tracking-tight leading-none"
-            style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}
-          >
-            Clubit
-          </span>
-        </Link>
+      <div className="flex items-center gap-3 px-4 mb-10">
+        <div className="w-10 h-10 rounded-full bg-[#0058be] flex items-center justify-center text-white shrink-0">
+          <GraduationCap className="w-5 h-5" />
+        </div>
+        <div>
+          <Link href="/">
+            <h2
+              className="text-lg font-bold text-slate-900 leading-none"
+              style={{ fontFamily: 'var(--font-manrope)' }}
+            >
+              Clubit
+            </h2>
+          </Link>
+          <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-widest mt-1">
+            Academic Curator
+          </p>
+        </div>
       </div>
 
       {/* Nav items */}
-      <nav className="flex-1 px-3 space-y-0.5">
+      <nav className="flex-1 space-y-1">
         {visibleItems.map(({ href, icon: Icon, label }) => {
           const active = isActive(href)
           return (
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+              className={`flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 ${
                 active
-                  ? 'bg-[#dbeafe] text-[#0058be]'
-                  : 'text-[#424754] hover:bg-[#f3f4f5] hover:text-[#191c1d]'
+                  ? 'text-[#0058be] font-bold bg-blue-50/60 border-r-4 border-[#0058be]'
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               <Icon
                 className="shrink-0"
-                style={{
-                  width: '1.1rem',
-                  height: '1.1rem',
-                  color: active ? '#0058be' : '#727785',
-                }}
+                style={{ width: '1.1rem', height: '1.1rem' }}
               />
-              {label}
+              <span className="text-xs font-semibold uppercase tracking-widest">{label}</span>
             </Link>
           )
         })}
       </nav>
 
       {/* User section */}
-      <div
-        className="px-4 pt-4 pb-5 mt-4"
-        style={{ borderTop: '1px solid rgba(194,198,214,0.2)' }}
-      >
-        <div className="flex items-center gap-3 mb-3">
+      <div className="border-t border-slate-200/50 pt-6 space-y-3 px-4">
+        <div className="flex items-center gap-3">
           <Link href="/profile" className="shrink-0">
             <Avatar name={currentUser.name} size="sm" />
           </Link>
           <div className="flex-1 min-w-0">
             <p
-              className="text-sm font-semibold text-[#191c1d] truncate leading-tight"
-              style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}
+              className="text-sm font-semibold text-slate-900 truncate leading-tight"
+              style={{ fontFamily: 'var(--font-manrope)' }}
             >
               {currentUser.name}
             </p>
@@ -117,8 +108,7 @@ export default function Sidebar() {
             const user = USERS.find((u) => u.id === e.target.value)
             if (user) { setCurrentUser(user); router.push('/') }
           }}
-          className="w-full text-xs rounded-lg px-2 py-1.5 cursor-pointer text-[#424754]"
-          style={{ background: '#f3f4f5', border: 'none', outline: 'none' }}
+          className="w-full text-xs rounded-lg px-2 py-1.5 cursor-pointer text-slate-500 bg-slate-100 border-none outline-none"
         >
           {USERS.map((u) => (
             <option key={u.id} value={u.id}>{u.name} ({u.role})</option>

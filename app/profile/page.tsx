@@ -192,12 +192,20 @@ export default function ProfilePage() {
     { key: 'achievements', label: 'ACHIEVEMENTS' },
   ]
 
+  const roleAccent: Record<string, string> = {
+    admin:   '#EF4444',
+    advisor: '#3B82F6',
+    student: '#10B981',
+  }
+  const accent = roleAccent[profileUser.role]
+
   return (
-    <div className="space-y-0">
+    <div className="max-w-2xl mx-auto space-y-0">
+
       {/* Admin user selector */}
       {isAdmin && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-5"
-          style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.12)' }}>
+        <div className="flex items-center gap-3 px-4 py-3 rounded-2xl mb-5"
+          style={{ background: 'rgba(239,68,68,0.06)' }}>
           <Shield className="w-4 h-4 text-red-500 shrink-0" />
           <span className="text-sm font-medium text-red-700 mr-1">Viewing:</span>
           <select
@@ -218,35 +226,62 @@ export default function ProfilePage() {
       )}
 
       {/* ── Hero card ── */}
-      <div className="rounded-2xl overflow-hidden mb-0"
-        style={{ background: '#ffffff', boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
+      <div className="rounded-2xl overflow-hidden mb-0" style={{ background: '#ffffff', boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
 
-        {/* Banner */}
-        <div className="h-28 w-full relative" style={{ background: ROLE_GRADIENT[profileUser.role] }} />
+        {/* Top accent strip — thin, not a full banner */}
+        <div className="h-2 w-full" style={{ background: `linear-gradient(90deg, ${accent} 0%, ${accent}66 100%)` }} />
 
         {/* Content */}
-        <div className="px-6 pb-6">
+        <div className="px-6 pt-6 pb-6">
 
-          {/* Avatar row + action buttons */}
-          <div className="flex items-end justify-between -mt-12 mb-5">
-            <div className="rounded-full p-1.5 bg-white shrink-0"
-              style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.10)' }}>
-              <Avatar name={profileUser.name} size="lg" />
+          {/* Avatar + name row */}
+          <div className="flex items-start justify-between gap-4 mb-5">
+            <div className="flex items-center gap-4">
+              <div className="rounded-2xl p-1 shrink-0" style={{ background: `${accent}14`, boxShadow: `0 4px 16px ${accent}22` }}>
+                <Avatar name={profileUser.name} size="lg" />
+              </div>
+              <div>
+                {/* Name */}
+                {editingProfile && isAdmin && editingName ? (
+                  <div className="flex items-center gap-2 mb-1">
+                    <Input value={nameInput} onChange={(e) => setNameInput(e.target.value)}
+                      className="h-8 text-sm max-w-xs" autoFocus onKeyDown={(e) => e.key === 'Enter' && saveName()} />
+                    <button onClick={saveName} className="text-emerald-600"><Check className="w-4 h-4" /></button>
+                    <button onClick={() => setEditingName(false)} className="text-[#727785]"><X className="w-4 h-4" /></button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-2xl font-bold text-[#191c1d]"
+                      style={{ fontFamily: 'var(--font-manrope)', letterSpacing: '-0.02em' }}>
+                      {profileUser.name}
+                    </h1>
+                    <BadgeCheck className="w-5 h-5 shrink-0" style={{ color: accent }} />
+                    {editingProfile && isAdmin && (
+                      <button onClick={() => { setNameInput(profileUser.name); setEditingName(true) }}
+                        className="text-[#727785] hover:text-[#191c1d]">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                {/* Role */}
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${ROLE_BADGE[profileUser.role]}`}>
+                    {profileUser.role}
+                  </span>
+                  <span className="text-sm text-[#727785]">{ROLE_LABEL[profileUser.role]}</span>
+                </div>
+              </div>
             </div>
 
             {/* Action buttons */}
-            <div className="flex items-center gap-2 pb-1">
+            <div className="flex items-center gap-2 shrink-0">
               {canEdit && (
-                <button
-                  onClick={() => setEditingProfile((v) => !v)}
+                <button onClick={() => setEditingProfile((v) => !v)}
                   className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl transition-all"
-                  style={{
-                    background: editingProfile ? '#0058be' : '#f3f4f5',
-                    color: editingProfile ? '#ffffff' : '#191c1d',
-                  }}
-                >
+                  style={{ background: editingProfile ? '#0058be' : '#f3f4f5', color: editingProfile ? '#ffffff' : '#191c1d' }}>
                   <Pencil style={{ width: '0.75rem', height: '0.75rem' }} />
-                  {editingProfile ? 'Done' : 'Edit Profile'}
+                  {editingProfile ? 'Done' : 'Edit'}
                 </button>
               )}
               <a href={`mailto:${profileUser.email}`}
@@ -258,75 +293,21 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Name + verified */}
-          <div className="mb-1">
-            {editingProfile && isAdmin && editingName ? (
-              <div className="flex items-center gap-2 mb-2">
-                <Input value={nameInput} onChange={(e) => setNameInput(e.target.value)}
-                  className="h-8 text-sm max-w-xs" autoFocus onKeyDown={(e) => e.key === 'Enter' && saveName()} />
-                <button onClick={saveName} className="text-emerald-600"><Check className="w-4 h-4" /></button>
-                <button onClick={() => setEditingName(false)} className="text-[#727785]"><X className="w-4 h-4" /></button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-bold text-[#191c1d]"
-                  style={{ fontFamily: 'var(--font-manrope, sans-serif)', letterSpacing: '-0.02em' }}>
-                  {profileUser.name}
-                </h1>
-                {/* Verified badge */}
-                <BadgeCheck className="w-5 h-5 text-[#0058be] shrink-0" />
-                {editingProfile && isAdmin && (
-                  <button onClick={() => { setNameInput(profileUser.name); setEditingName(true) }}
-                    className="text-[#727785] hover:text-[#191c1d]">
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Role badge + subtitle */}
-          <div className="flex items-center gap-2 mb-4">
-            <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${ROLE_BADGE[profileUser.role]}`}>
-              {profileUser.role}
-            </span>
-            <span className="text-sm text-[#727785]">{ROLE_LABEL[profileUser.role]}</span>
-          </div>
-
           {/* Stats row */}
-          <div className="flex items-center gap-6 mb-5 py-4 rounded-xl px-4"
-            style={{ background: '#f8f9fa' }}>
-            <div className="text-center">
-              <p className="text-xl font-bold text-[#191c1d]" style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}>
-                {displayClubs.length}
-              </p>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#727785] mt-0.5">Clubs</p>
-            </div>
-            {profileUser.role === 'student' && (
-              <>
-                <div className="w-px h-8 bg-[#e7e8e9]" />
-                <div className="text-center">
-                  <p className="text-xl font-bold text-[#191c1d]" style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}>
-                    {attendancePct}%
-                  </p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#727785] mt-0.5">Attendance</p>
-                </div>
-                <div className="w-px h-8 bg-[#e7e8e9]" />
-                <div className="text-center">
-                  <p className="text-xl font-bold text-[#191c1d]" style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}>
-                    {earnedCount}
-                  </p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#727785] mt-0.5">Achievements</p>
-                </div>
-              </>
-            )}
-            <div className="w-px h-8 bg-[#e7e8e9]" />
-            <div className="text-center">
-              <p className="text-xl font-bold text-[#191c1d]" style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}>
-                {memberClubs.filter((c) => c.leadershipPositions.some((lp) => lp.userId === profileUser.id)).length}
-              </p>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#727785] mt-0.5">Leadership</p>
-            </div>
+          <div className="grid grid-cols-4 gap-3 mb-5">
+            {[
+              { value: displayClubs.length, label: 'Clubs' },
+              ...(profileUser.role === 'student' ? [
+                { value: `${attendancePct}%`, label: 'Attendance' },
+                { value: earnedCount, label: 'Achievements' },
+              ] : []),
+              { value: memberClubs.filter((c) => c.leadershipPositions.some((lp) => lp.userId === profileUser.id)).length, label: 'Leadership' },
+            ].map(({ value, label }) => (
+              <div key={label} className="rounded-xl p-3 text-center" style={{ background: '#f8f9fa' }}>
+                <p className="text-xl font-bold text-[#191c1d]" style={{ fontFamily: 'var(--font-manrope)' }}>{value}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#727785] mt-0.5">{label}</p>
+              </div>
+            ))}
           </div>
 
           {/* Bio */}

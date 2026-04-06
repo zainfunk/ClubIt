@@ -63,7 +63,7 @@ export default function ClubsPage() {
   })
 
   return (
-    <div>
+    <div className="max-w-7xl mx-auto">
       {/* Editorial Header */}
       <header className="mb-12">
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-8">
