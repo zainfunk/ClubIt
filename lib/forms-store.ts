@@ -1,33 +1,25 @@
-/**
- * Persists club form responses in localStorage.
- * Map shape: { [formId]: userId[] }
- */
+import { supabase } from '@/lib/supabase'
 
-const KEY = 'ss_form_responses'
-
-type ResponseMap = Record<string, string[]>
-
-function load(): ResponseMap {
-  if (typeof window === 'undefined') return {}
-  try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
+export async function hasResponded(formId: string, userId: string): Promise<boolean> {
+  const { count } = await supabase
+    .from('form_responses')
+    .select('*', { count: 'exact', head: true })
+    .eq('form_id', formId)
+    .eq('user_id', userId)
+  return (count ?? 0) > 0
 }
 
-function persist(map: ResponseMap) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(KEY, JSON.stringify(map))
+export async function addResponse(formId: string, userId: string): Promise<void> {
+  await supabase.from('form_responses').upsert(
+    { form_id: formId, user_id: userId, responded_at: new Date().toISOString() },
+    { onConflict: 'form_id,user_id' }
+  )
 }
 
-export function hasResponded(formId: string, userId: string): boolean {
-  return (load()[formId] ?? []).includes(userId)
-}
-
-export function addResponse(formId: string, userId: string): void {
-  const map = load()
-  if (!map[formId]) map[formId] = []
-  if (!map[formId].includes(userId)) map[formId].push(userId)
-  persist(map)
-}
-
-export function getResponseCount(formId: string): number {
-  return (load()[formId] ?? []).length
+export async function getResponseCount(formId: string): Promise<number> {
+  const { count } = await supabase
+    .from('form_responses')
+    .select('*', { count: 'exact', head: true })
+    .eq('form_id', formId)
+  return count ?? 0
 }

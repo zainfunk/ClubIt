@@ -1,42 +1,31 @@
-/**
- * Persists profile overrides in localStorage.
- * - Any user can update their own email.
- * - Only admins can update a user's name.
- */
+import { supabase } from '@/lib/supabase'
 
-const KEY = 'ss_user_overrides'
-
-type Override = { name?: string; email?: string }
-type OverrideMap = Record<string, Override>
-
-function load(): OverrideMap {
-  if (typeof window === 'undefined') return {}
-  try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
+export async function setName(userId: string, name: string): Promise<void> {
+  await supabase.from('user_overrides').upsert(
+    { user_id: userId, name: name.trim() },
+    { onConflict: 'user_id' }
+  )
 }
 
-function save(map: OverrideMap) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(KEY, JSON.stringify(map))
+export async function setEmail(userId: string, email: string): Promise<void> {
+  await supabase.from('user_overrides').upsert(
+    { user_id: userId, email: email.trim() },
+    { onConflict: 'user_id' }
+  )
 }
 
-export function getOverride(userId: string): Override {
-  return load()[userId] ?? {}
+export async function getOverride(userId: string): Promise<{ name?: string; email?: string }> {
+  const { data } = await supabase
+    .from('user_overrides')
+    .select('name, email')
+    .eq('user_id', userId)
+    .maybeSingle()
+  return data ?? {}
 }
 
-export function setName(userId: string, name: string) {
-  const map = load()
-  map[userId] = { ...map[userId], name: name.trim() }
-  save(map)
-}
-
-export function setEmail(userId: string, email: string) {
-  const map = load()
-  map[userId] = { ...map[userId], email: email.trim() }
-  save(map)
-}
-
-/** Merge base user data with any stored overrides. */
-export function applyOverrides<T extends { id: string; name: string; email: string }>(user: T): T {
-  const ov = getOverride(user.id)
+export async function applyOverrides<T extends { id: string; name: string; email: string }>(
+  user: T
+): Promise<T> {
+  const ov = await getOverride(user.id)
   return { ...user, ...(ov.name ? { name: ov.name } : {}), ...(ov.email ? { email: ov.email } : {}) }
 }

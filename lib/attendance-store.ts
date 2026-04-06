@@ -1,80 +1,94 @@
 import { AttendanceSession, AttendanceRecord } from '@/types'
-
-const SESSIONS_KEY = 'ss_att_sessions'
-const RECORDS_KEY  = 'ss_att_records'
-
-function safe<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback
-  try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback } catch { return fallback }
-}
-
-function persist(key: string, value: unknown) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(key, JSON.stringify(value))
-}
+import { supabase } from '@/lib/supabase'
 
 // --- Sessions ---
 
-export function getAllSessions(): AttendanceSession[] {
-  return safe<AttendanceSession[]>(SESSIONS_KEY, [])
+export async function getAllSessions(): Promise<AttendanceSession[]> {
+  const { data } = await supabase.from('attendance_sessions').select('*')
+  return (data ?? []).map(mapSession)
 }
 
-export function getSessionsByClub(clubId: string): AttendanceSession[] {
-  return getAllSessions().filter((s) => s.clubId === clubId)
+export async function getSessionsByClub(clubId: string): Promise<AttendanceSession[]> {
+  const { data } = await supabase.from('attendance_sessions').select('*').eq('club_id', clubId)
+  return (data ?? []).map(mapSession)
 }
 
-export function getSessionById(id: string): AttendanceSession | undefined {
-  return getAllSessions().find((s) => s.id === id)
+export async function getSessionById(id: string): Promise<AttendanceSession | undefined> {
+  const { data } = await supabase.from('attendance_sessions').select('*').eq('id', id).maybeSingle()
+  return data ? mapSession(data) : undefined
 }
 
-export function saveSession(session: AttendanceSession) {
-  const all = getAllSessions()
-  const idx = all.findIndex((s) => s.id === session.id)
-  if (idx >= 0) all[idx] = session
-  else all.push(session)
-  persist(SESSIONS_KEY, all)
+export async function saveSession(session: AttendanceSession): Promise<void> {
+  await supabase.from('attendance_sessions').upsert({
+    id: session.id,
+    club_id: session.clubId,
+    meeting_date: session.meetingDate,
+    created_by: session.createdBy,
+    expires_at: session.expiresAt,
+    max_distance_meters: session.maxDistanceMeters,
+    advisor_lat: session.advisorLat,
+    advisor_lng: session.advisorLng,
+    recorded_user_ids: session.recordedUserIds,
+  })
 }
 
-export function markSessionCheckin(sessionId: string, userId: string) {
-  const session = getSessionById(sessionId)
-  if (!session) return
-  if (!session.recordedUserIds.includes(userId)) {
-    session.recordedUserIds.push(userId)
-    saveSession(session)
+export async function markSessionCheckin(sessionId: string, userId: string): Promise<void> {
+  const session = await getSessionById(sessionId)
+  if (!session || session.recordedUserIds.includes(userId)) return
+  await supabase
+    .from('attendance_sessions')
+    .update({ recorded_user_ids: [...session.recordedUserIds, userId] })
+    .eq('id', sessionId)
+}
+
+// --- Records ---
+
+export async function getRecordsByClub(clubId: string): Promise<AttendanceRecord[]> {
+  const { data } = await supabase.from('attendance_records').select('*').eq('club_id', clubId)
+  return (data ?? []).map(mapRecord)
+}
+
+export async function upsertRecord(
+  clubId: string, userId: string, meetingDate: string, present: boolean
+): Promise<string> {
+  const id = `att-dyn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+  const { data } = await supabase
+    .from('attendance_records')
+    .upsert({ id, club_id: clubId, user_id: userId, meeting_date: meetingDate, present },
+             { onConflict: 'club_id,user_id,meeting_date' })
+    .select('id')
+    .maybeSingle()
+  return data?.id ?? id
+}
+
+// --- Mappers ---
+
+function mapSession(r: Record<string, unknown>): AttendanceSession {
+  return {
+    id: r.id as string,
+    clubId: r.club_id as string,
+    meetingDate: r.meeting_date as string,
+    createdBy: r.created_by as string,
+    expiresAt: r.expires_at as string,
+    maxDistanceMeters: r.max_distance_meters as number,
+    advisorLat: r.advisor_lat as number | undefined,
+    advisorLng: r.advisor_lng as number | undefined,
+    recordedUserIds: r.recorded_user_ids as string[],
   }
 }
 
-// --- Extra attendance records (QR check-ins + manual edits) ---
-
-export function getStoredRecords(): AttendanceRecord[] {
-  return safe<AttendanceRecord[]>(RECORDS_KEY, [])
+function mapRecord(r: Record<string, unknown>): AttendanceRecord {
+  return {
+    id: r.id as string,
+    clubId: r.club_id as string,
+    userId: r.user_id as string,
+    meetingDate: r.meeting_date as string,
+    present: r.present as boolean,
+  }
 }
 
-export function getRecordsByClub(clubId: string): AttendanceRecord[] {
-  return getStoredRecords().filter((r) => r.clubId === clubId)
-}
-
-/** Upsert: if a record for club+user+date exists, update it; otherwise insert. */
-export function upsertRecord(
-  clubId: string, userId: string, meetingDate: string, present: boolean
-): string {
-  const all = getStoredRecords()
-  const existing = all.find(
-    (r) => r.clubId === clubId && r.userId === userId && r.meetingDate === meetingDate
-  )
-  const id = existing?.id ?? `att-dyn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-  const record: AttendanceRecord = { id, clubId, userId, meetingDate, present }
-  const idx = all.findIndex((r) => r.id === id)
-  if (idx >= 0) all[idx] = record
-  else all.push(record)
-  persist(RECORDS_KEY, all)
-  return id
-}
-
-// Haversine distance in metres between two GPS coordinates
-export function haversineMeters(
-  lat1: number, lng1: number, lat2: number, lng2: number
-): number {
+// Haversine distance in metres
+export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6_371_000
   const toRad = (d: number) => (d * Math.PI) / 180
   const dLat = toRad(lat2 - lat1)

@@ -1,28 +1,42 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { ChatMessage } from '@/types'
-import { CHAT_MESSAGES } from '@/lib/mock-data'
+import { supabase } from '@/lib/supabase'
 
 interface ChatContextValue {
   messages: ChatMessage[]
-  sendMessage: (clubId: string, senderId: string, content: string) => void
+  sendMessage: (clubId: string, senderId: string, content: string) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
 
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const [messages, setMessages] = useState<ChatMessage[]>(CHAT_MESSAGES)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
 
-  function sendMessage(clubId: string, senderId: string, content: string) {
-    const msg: ChatMessage = {
+  useEffect(() => {
+    supabase.from('chat_messages').select('*').order('sent_at').then(({ data }) => {
+      if (data) setMessages(data.map(mapMessage))
+    })
+
+    const channel = supabase
+      .channel('chat_messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
+        setMessages((prev) => [...prev, mapMessage(payload.new as Record<string, unknown>)])
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
+  async function sendMessage(clubId: string, senderId: string, content: string) {
+    await supabase.from('chat_messages').insert({
       id: `msg-${Date.now()}`,
-      clubId,
-      senderId,
+      club_id: clubId,
+      sender_id: senderId,
       content: content.trim(),
-      sentAt: new Date().toISOString(),
-    }
-    setMessages((prev) => [...prev, msg])
+      sent_at: new Date().toISOString(),
+    })
   }
 
   return (
@@ -36,4 +50,14 @@ export function useChatStore() {
   const ctx = useContext(ChatContext)
   if (!ctx) throw new Error('useChatStore must be used inside ChatProvider')
   return ctx
+}
+
+function mapMessage(r: Record<string, unknown>): ChatMessage {
+  return {
+    id: r.id as string,
+    clubId: r.club_id as string,
+    senderId: r.sender_id as string,
+    content: r.content as string,
+    sentAt: r.sent_at as string,
+  }
 }

@@ -1,8 +1,4 @@
-/**
- * Persists extended profile data (bio, skills, interests, socials) in localStorage.
- */
-
-const KEY = 'ss_user_profiles'
+import { supabase } from '@/lib/supabase'
 
 export interface PersonalSocialLink {
   id: string
@@ -24,24 +20,30 @@ const DEFAULT_PROFILE: UserProfileData = {
   socials: [],
 }
 
-function load(): Record<string, UserProfileData> {
-  if (typeof window === 'undefined') return {}
-  try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} }
+export async function getProfile(userId: string): Promise<UserProfileData> {
+  const { data } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (!data) return { ...DEFAULT_PROFILE }
+  return {
+    bio: data.bio ?? '',
+    skills: data.skills ?? [],
+    interests: data.interests ?? [],
+    socials: data.socials ?? [],
+  }
 }
 
-function persist(map: Record<string, UserProfileData>) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(KEY, JSON.stringify(map))
-}
-
-export function getProfile(userId: string): UserProfileData {
-  return { ...DEFAULT_PROFILE, ...load()[userId] }
-}
-
-export function setProfile(userId: string, data: Partial<UserProfileData>) {
-  const map = load()
-  map[userId] = { ...DEFAULT_PROFILE, ...map[userId], ...data }
-  persist(map)
+export async function setProfile(userId: string, partial: Partial<UserProfileData>): Promise<void> {
+  const current = await getProfile(userId)
+  await supabase.from('user_profiles').upsert({
+    user_id: userId,
+    bio: partial.bio ?? current.bio,
+    skills: partial.skills ?? current.skills,
+    interests: partial.interests ?? current.interests,
+    socials: partial.socials ?? current.socials,
+  }, { onConflict: 'user_id' })
 }
 
 // ---- Preset options ----
