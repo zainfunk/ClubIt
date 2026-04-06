@@ -6,7 +6,7 @@ export interface JoinRequest {
   id: string
   clubId: string
   userId: string
-  requestedAt: string // ISO timestamp — used for FCFS sorting
+  requestedAt: string
   status: JoinRequestStatus
 }
 
@@ -24,12 +24,15 @@ export interface LeadershipPosition {
   userId?: string
 }
 
+export type SocialPlatform = 'instagram' | 'twitter' | 'discord' | 'facebook' | 'youtube' | 'website' | 'other'
+
 export interface SocialLink {
-  platform: 'instagram' | 'twitter' | 'discord' | 'facebook' | 'website' | 'other'
+  platform: SocialPlatform
   url: string
 }
 
 export interface MeetingTime {
+  id: string
   dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6
   startTime: string
   endTime: string
@@ -44,12 +47,13 @@ export interface Club {
   capacity: number | null // null = unlimited
   advisorId: string
   memberIds: string[]
+  eventCreatorIds: string[] // member IDs granted event/news creation by advisor
   leadershipPositions: LeadershipPosition[]
   socialLinks: SocialLink[]
   meetingTimes: MeetingTime[]
   tags?: string[]
   createdAt: string
-  autoAccept: boolean // auto-approve requests until capacity; after limit requires manual approval
+  autoAccept: boolean
 }
 
 export interface Membership {
@@ -67,6 +71,17 @@ export interface ClubEvent {
   date: string
   location?: string
   isPublic: boolean
+  createdBy: string // userId of creator
+}
+
+export interface ClubNews {
+  id: string
+  clubId: string
+  title: string
+  content: string
+  authorId: string
+  createdAt: string
+  isPinned: boolean
 }
 
 export interface AttendanceRecord {
@@ -81,10 +96,9 @@ export interface AttendanceRecord {
 
 export interface PollCandidate {
   userId: string
-  votes: string[] // userIds who voted for this candidate
+  votes: string[]
 }
 
-/** Club-level poll pushed by an advisor — only club members can vote */
 export interface Poll {
   id: string
   clubId: string
@@ -94,7 +108,6 @@ export interface Poll {
   isOpen: boolean
 }
 
-/** School-wide election pushed by an admin — all users can vote */
 export interface SchoolElection {
   id: string
   positionTitle: string

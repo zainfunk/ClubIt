@@ -29,6 +29,9 @@ export default function Navbar() {
           <Link href="/clubs" className="hover:text-gray-900 transition-colors">
             Clubs
           </Link>
+          <Link href="/events" className="hover:text-gray-900 transition-colors">
+            Events
+          </Link>
           <Link href="/elections" className="hover:text-gray-900 transition-colors">
             Elections
           </Link>
