@@ -79,7 +79,7 @@ export const CLUBS: Club[] = [
     ],
     tags: ['Strategy', 'Competition', 'Games'],
     createdAt: '2024-09-01',
-    autoAccept: false,
+    autoAccept: true,
   },
   {
     id: 'club-environment',
