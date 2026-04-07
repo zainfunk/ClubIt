@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
-import { CLUB_FORMS, getClubById } from '@/lib/mock-data'
 import { supabase } from '@/lib/supabase'
 import { hasVoted } from '@/lib/election-store'
 import { hasResponded } from '@/lib/forms-store'
@@ -55,6 +54,8 @@ export default function FormsPage() {
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set())
   const [schoolElections, setSchoolElections] = useState<SchoolElection[]>([])
   const [polls, setPolls] = useState<Poll[]>([])
+  const [clubForms, setClubForms] = useState<import('@/types').ClubForm[]>([])
+  const [clubNames, setClubNames] = useState<Record<string, { name: string; iconUrl?: string }>>({})
 
   useEffect(() => {
     if (!currentUser.schoolId) return
@@ -70,17 +71,27 @@ export default function FormsPage() {
         })),
       })))
     })
-    // Load club polls for this school's clubs
-    supabase.from('clubs').select('id').eq('school_id', currentUser.schoolId).then(({ data: clubData }) => {
+    // Load club polls, forms, and club names for this school's clubs
+    supabase.from('clubs').select('id, name, icon_url').eq('school_id', currentUser.schoolId).then(({ data: clubData }) => {
       const schoolClubIds = (clubData ?? []).map((c) => c.id)
       if (schoolClubIds.length === 0) return
-      const visibleIds = (devRole === 'advisor' || devRole === 'admin')
-        ? schoolClubIds
-        : schoolClubIds // memberships filter applied below
+
+      // Build club name map
+      const nameMap: Record<string, { name: string; iconUrl?: string }> = {}
+      for (const c of clubData ?? []) nameMap[c.id] = { name: c.name, iconUrl: c.icon_url ?? undefined }
+      setClubNames(nameMap)
+
+      // Load club forms
+      supabase.from('club_forms').select('*').in('club_id', schoolClubIds).then(({ data: formData }) => {
+        if (formData) setClubForms(formData.map((f) => ({
+          id: f.id, clubId: f.club_id, title: f.title, description: f.description ?? '',
+          formType: f.form_type, isOpen: f.is_open, closesAt: f.closes_at ?? null, createdAt: f.created_at,
+        })))
+      })
 
       supabase.from('memberships').select('club_id').eq('user_id', currentUser.id).then(({ data: memData }) => {
         const myClubIds = (memData ?? []).map((r) => r.club_id)
-        const pollClubIds = (devRole === 'advisor' || devRole === 'admin') ? visibleIds : myClubIds.filter((id) => visibleIds.includes(id))
+        const pollClubIds = (devRole === 'advisor' || devRole === 'admin') ? schoolClubIds : myClubIds.filter((id) => schoolClubIds.includes(id))
         if (pollClubIds.length === 0) return
         supabase.from('polls').select('*, poll_candidates(*), poll_votes(*)').in('club_id', pollClubIds).then(({ data: pollData }) => {
           if (pollData) setPolls(pollData.map((p) => ({
@@ -101,9 +112,8 @@ export default function FormsPage() {
   const closedElections = schoolElections.filter((e) => !e.isOpen)
   const openPolls = polls.filter((p) => p.isOpen)
 
-  // Club forms (still from mock for now — will be school-scoped when forms get school_id)
-  const openForms = CLUB_FORMS.filter((f) => f.isOpen)
-  const closedForms = CLUB_FORMS.filter((f) => !f.isOpen)
+  const openForms = clubForms.filter((f) => f.isOpen)
+  const closedForms = clubForms.filter((f) => !f.isOpen)
 
   const urgentElection = openElections[0] ?? null
 
@@ -129,7 +139,7 @@ export default function FormsPage() {
       done: doneIds.has(e.id),
     })),
     ...openPolls.map((p) => {
-      const club = getClubById(p.clubId)
+      const club = clubNames[p.clubId]
       return {
         id: p.id, kind: 'poll' as const,
         title: p.positionTitle, subtitle: club?.name,
@@ -138,7 +148,7 @@ export default function FormsPage() {
       }
     }),
     ...openForms.map((f) => {
-      const club = getClubById(f.clubId)
+      const club = clubNames[f.clubId]
       return {
         id: f.id, kind: 'form' as const,
         title: f.title, subtitle: club?.name,
@@ -247,7 +257,7 @@ export default function FormsPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((item) => {
-            const club = item.clubId ? getClubById(item.clubId) : null
+            const club = item.clubId ? clubNames[item.clubId] : null
             const color = urgencyColor(item.closesAt)
             const label = deadlineLabel(item.closesAt)
             const isElection = item.kind === 'election' || item.kind === 'poll'
@@ -364,7 +374,7 @@ export default function FormsPage() {
                   </tr>
                 ))}
                 {closedForms.map((f) => {
-                  const club = getClubById(f.clubId)
+                  const club = clubNames[f.clubId]
                   return (
                     <tr key={f.id} style={{ borderBottom: '1px solid #f8f9fa' }} className="hover:bg-[#f8f9fa] transition-colors">
                       <td className="px-4 py-3 font-medium text-[#191c1d]">

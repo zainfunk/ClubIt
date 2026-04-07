@@ -2,10 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useUser } from '@clerk/nextjs'
 import { Hash, CheckCircle } from 'lucide-react'
+import { saveSchoolSession } from '@/lib/mock-auth'
 
 export default function JoinPage() {
   const router = useRouter()
+  const { user: clerkUser } = useUser()
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -24,8 +27,17 @@ export default function JoinPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Something went wrong')
+
+      // Cache the school session so the user never needs to re-enter the code
+      if (clerkUser?.id) {
+        saveSchoolSession(clerkUser.id, {
+          schoolId: data.schoolId,
+          schoolName: data.schoolName,
+          role: data.role,
+        })
+      }
+
       setSuccess({ schoolName: data.schoolName, role: data.role })
-      // Redirect to dashboard after brief success state
       setTimeout(() => router.push('/dashboard'), 1800)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')

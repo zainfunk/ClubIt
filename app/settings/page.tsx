@@ -8,10 +8,10 @@ import {
   AdminSettings, UserPrivacySettings,
 } from '@/lib/settings-store'
 import { useAppSettings } from '@/components/SettingsProvider'
-import { USERS } from '@/lib/mock-data'
+import { supabase } from '@/lib/supabase'
 import {
   Moon, Sun, Shield, Eye, EyeOff, Users, Trophy,
-  Calendar, Share2, AlertCircle, ChevronRight, Lock,
+  Calendar, Share2, AlertCircle, ChevronRight, Lock, CheckCircle,
 } from 'lucide-react'
 
 // ── Toggle component ───────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ function SettingRow({
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const { currentUser } = useMockAuth()
+  const { currentUser, schoolPrincipal, schoolContactEmail } = useMockAuth()
   const { darkMode, toggleDarkMode } = useAppSettings()
   const isAdmin = currentUser.role === 'admin'
   const isStudent = currentUser.role === 'student'
@@ -121,14 +121,24 @@ export default function SettingsPage() {
 
   // ── Report issue ──
   const [issueText, setIssueText] = useState('')
-  const adminUser = USERS.find((u) => u.role === 'admin')
+  const [issueSubmitted, setIssueSubmitted] = useState(false)
+  const [issueSubmitting, setIssueSubmitting] = useState(false)
 
-  function submitIssue() {
-    if (!issueText.trim() || !adminUser) return
-    const subject = encodeURIComponent(`ClubIt Issue Report — from ${currentUser.name}`)
-    const body = encodeURIComponent(`Issue reported by: ${currentUser.name} (${currentUser.email})\n\n${issueText}`)
-    window.open(`mailto:${adminUser.email}?subject=${subject}&body=${body}`)
+  async function submitIssue() {
+    if (!issueText.trim()) return
+    setIssueSubmitting(true)
+    await supabase.from('issue_reports').insert({
+      school_id: currentUser.schoolId ?? null,
+      reporter_id: currentUser.id,
+      reporter_name: currentUser.name,
+      reporter_email: currentUser.email,
+      message: issueText.trim(),
+      status: 'open',
+    })
     setIssueText('')
+    setIssueSubmitted(true)
+    setIssueSubmitting(false)
+    setTimeout(() => setIssueSubmitted(false), 3000)
   }
 
   if (!loaded) return null
@@ -306,26 +316,35 @@ export default function SettingsPage() {
       <Section title="Report an Issue" icon={<AlertCircle className="w-4 h-4" />}>
         <div className="px-6 py-5 space-y-3">
           <p className="text-sm text-gray-600">
-            Describe your issue below and it will be sent directly to{' '}
-            <span className="font-semibold text-gray-800">{adminUser?.name ?? 'the admin'}</span> via email.
+            Your report will be sent directly to{' '}
+            <span className="font-semibold text-gray-800">{schoolPrincipal ?? 'the admin'}</span>.
           </p>
-          <textarea
-            value={issueText}
-            onChange={(e) => setIssueText(e.target.value)}
-            rows={4}
-            placeholder="Describe the issue you're experiencing…"
-            className="w-full text-sm rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            style={{ background: '#f8f9fa', border: '1px solid #e9ecef' }}
-          />
-          <button
-            onClick={submitIssue}
-            disabled={!issueText.trim()}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: '#0058be' }}
-          >
-            Send Report
-            <ChevronRight className="w-4 h-4" />
-          </button>
+          {issueSubmitted ? (
+            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-xl px-4 py-3">
+              <CheckCircle className="w-4 h-4 shrink-0" />
+              Report submitted — the admin has been notified.
+            </div>
+          ) : (
+            <>
+              <textarea
+                value={issueText}
+                onChange={(e) => setIssueText(e.target.value)}
+                rows={4}
+                placeholder="Describe the issue you're experiencing…"
+                className="w-full text-sm rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                style={{ background: '#f8f9fa', border: '1px solid #e9ecef' }}
+              />
+              <button
+                onClick={submitIssue}
+                disabled={!issueText.trim() || issueSubmitting}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: '#0058be' }}
+              >
+                {issueSubmitting ? 'Sending…' : 'Send Report'}
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
       </Section>
 

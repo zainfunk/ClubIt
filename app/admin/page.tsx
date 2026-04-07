@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
-import { CLUBS as INITIAL_CLUBS, USERS, SCHOOL_ELECTIONS as INITIAL_ELECTIONS } from '@/lib/mock-data'
 import { supabase } from '@/lib/supabase'
-import { Club, SchoolElection, PollCandidate, User, Role } from '@/types'
+import { Club, SchoolElection, User, Role } from '@/types'
 import RoleGuard from '@/components/layout/RoleGuard'
 import ClubForm from '@/components/admin/ClubForm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,24 +12,46 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Link from 'next/link'
 import { applyOverrides } from '@/lib/user-store'
-import { getClubsByMember } from '@/lib/mock-data'
 import Avatar from '@/components/Avatar'
-import { Users, Shield, Vote, Plus, XCircle, GraduationCap } from 'lucide-react'
+import { Users, Shield, Vote, Plus, XCircle, GraduationCap, MessageSquare, CheckCircle, Clock } from 'lucide-react'
 
 export default function AdminPage() {
   const { currentUser } = useMockAuth()
   const [clubs, setClubs] = useState<Club[]>([])
   const [elections, setElections] = useState<SchoolElection[]>([])
-  const [allUsers, setAllUsers] = useState<User[]>(USERS)
+  const [allUsers, setAllUsers] = useState<User[]>([])
+  const [membershipsByUser, setMembershipsByUser] = useState<Record<string, string[]>>({})
+  const [issueReports, setIssueReports] = useState<{ id: string; reporter_name: string; reporter_email: string; message: string; status: string; created_at: string }[]>([])
 
   useEffect(() => {
     if (!currentUser.schoolId) return
-    // Load users for this school only
-    supabase.from('users').select('id, name, email, role').eq('school_id', currentUser.schoolId).then(({ data }) => {
+    // Load users and their club memberships for this school
+    supabase.from('users').select('id, name, email, role').eq('school_id', currentUser.schoolId).then(async ({ data }) => {
       if (!data?.length) return
-      setAllUsers(data.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role as Role })))
+      const users = data.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role as Role }))
+      setAllUsers(users)
+
+      const userIds = users.map((u) => u.id)
+      const { data: memData } = await supabase.from('memberships').select('user_id, club_id').in('user_id', userIds)
+      if (memData) {
+        const map: Record<string, string[]> = {}
+        for (const m of memData) {
+          if (!map[m.user_id]) map[m.user_id] = []
+          map[m.user_id].push(m.club_id)
+        }
+        setMembershipsByUser(map)
+      }
+    })
+    // Load issue reports for this school
+    supabase.from('issue_reports').select('*').eq('school_id', currentUser.schoolId).order('created_at', { ascending: false }).then(({ data }) => {
+      if (data) setIssueReports(data)
     })
   }, [currentUser.schoolId])
+
+  async function resolveIssue(id: string) {
+    await supabase.from('issue_reports').update({ status: 'resolved' }).eq('id', id)
+    setIssueReports((prev) => prev.map((r) => r.id === id ? { ...r, status: 'resolved' } : r))
+  }
 
   useEffect(() => {
     if (!currentUser.schoolId) return
@@ -212,7 +233,8 @@ export default function AdminPage() {
               </thead>
               <tbody className="divide-y">
                 {allUsers.filter((u) => u.role === 'student').map(applyOverrides).map((student) => {
-                  const clubs = getClubsByMember(student.id)
+                  const studentClubIds = membershipsByUser[student.id] ?? []
+                  const studentClubs = studentClubIds.map((cid) => clubs.find((c) => c.id === cid)).filter(Boolean) as Club[]
                   return (
                     <tr key={student.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
@@ -225,11 +247,11 @@ export default function AdminPage() {
                       </td>
                       <td className="px-4 py-3 text-gray-500">{student.email}</td>
                       <td className="px-4 py-3">
-                        {clubs.length === 0 ? (
+                        {studentClubs.length === 0 ? (
                           <span className="text-gray-400 italic">No clubs</span>
                         ) : (
                           <div className="flex flex-wrap gap-1">
-                            {clubs.map((c) => (
+                            {studentClubs.map((c) => (
                               <span key={c.id} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
                                 {c.iconUrl} {c.name}
                               </span>
@@ -393,6 +415,61 @@ export default function AdminPage() {
                   </Card>
                 )
               })}
+            </div>
+          )}
+        </div>
+
+        {/* Issue Reports section */}
+        <div className="border-t pt-8 mt-4">
+          <div className="flex items-center gap-3 mb-4">
+            <MessageSquare className="w-5 h-5 text-orange-500" />
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Issue Reports</h2>
+              <p className="text-sm text-gray-500">Issues submitted by students and staff.</p>
+            </div>
+            {issueReports.filter((r) => r.status === 'open').length > 0 && (
+              <span className="ml-auto text-xs font-bold bg-orange-100 text-orange-700 px-2.5 py-1 rounded-full">
+                {issueReports.filter((r) => r.status === 'open').length} open
+              </span>
+            )}
+          </div>
+
+          {issueReports.length === 0 ? (
+            <p className="text-sm text-gray-400">No issue reports yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {issueReports.map((report) => (
+                <Card key={report.id} className={report.status === 'resolved' ? 'opacity-60' : ''}>
+                  <CardContent className="py-4 px-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-sm font-semibold text-gray-900">{report.reporter_name}</span>
+                          <span className="text-xs text-gray-400">{report.reporter_email}</span>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                            report.status === 'open'
+                              ? 'bg-orange-100 text-orange-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            {report.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-700 leading-relaxed">{report.message}</p>
+                        <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {new Date(report.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      {report.status === 'open' && (
+                        <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs gap-1.5" onClick={() => resolveIssue(report.id)}>
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          Resolve
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </div>

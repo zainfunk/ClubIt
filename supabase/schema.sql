@@ -473,3 +473,19 @@ create table if not exists school_invites (
 --   for all using (
 --     school_id = (select school_id from users where id = auth.uid())
 --   );
+
+
+-- ============================================================
+-- Issue Reports
+-- ============================================================
+
+create table if not exists issue_reports (
+  id uuid primary key default gen_random_uuid(),
+  school_id uuid references schools(id) on delete cascade,
+  reporter_id text references users(id) on delete set null,
+  reporter_name text not null,
+  reporter_email text not null,
+  message text not null,
+  status text not null default 'open' check (status in ('open', 'resolved')),
+  created_at timestamptz default now()
+);
