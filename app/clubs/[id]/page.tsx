@@ -268,8 +268,8 @@ export default function ClubDetailPage({ params }: PageProps) {
   const advisor = resolveUser(club.advisorId)
   const members = club.memberIds.map((mid) => resolveUser(mid)).filter(Boolean)
 
-  const isMember = club.memberIds.includes(currentUser.id) || isAdvisor
   const isAdvisor = currentUser.role === 'advisor' && (devRole === 'advisor' || club.advisorId === currentUser.id)
+  const isMember = club.memberIds.includes(currentUser.id) || isAdvisor
   const canCreateContent = isAdvisor || club.eventCreatorIds.includes(currentUser.id)
   const isFull = club.capacity !== null && club.memberIds.length >= club.capacity
 
