@@ -48,7 +48,7 @@ const FORM_TYPE_TEXT: Record<string, string> = {
 type FilterTab = 'all' | 'elections' | 'forms'
 
 export default function FormsPage() {
-  const { currentUser } = useMockAuth()
+  const { currentUser, devRole } = useMockAuth()
   const [filter, setFilter] = useState<FilterTab>('all')
   // doneIds is populated client-side only to avoid SSR/localStorage hydration mismatch
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set())
@@ -57,8 +57,10 @@ export default function FormsPage() {
   const openElections = SCHOOL_ELECTIONS.filter((e) => e.isOpen)
   const closedElections = SCHOOL_ELECTIONS.filter((e) => !e.isOpen)
 
-  // Club polls (only for clubs the user is in)
-  const myClubIds = CLUBS.filter((c) => c.memberIds.includes(currentUser.id) || c.advisorId === currentUser.id).map((c) => c.id)
+  // Club polls (only for clubs the user is in; dev-advisor sees all)
+  const myClubIds = (devRole === 'advisor' || devRole === 'admin')
+    ? CLUBS.map((c) => c.id)
+    : CLUBS.filter((c) => c.memberIds.includes(currentUser.id) || c.advisorId === currentUser.id).map((c) => c.id)
   const openPolls = POLLS.filter((p) => p.isOpen && myClubIds.includes(p.clubId))
 
   // Club forms

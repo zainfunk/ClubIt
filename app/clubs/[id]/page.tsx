@@ -49,7 +49,7 @@ interface PageProps {
 
 export default function ClubDetailPage({ params }: PageProps) {
   const { id } = use(params)
-  const { currentUser } = useMockAuth()
+  const { currentUser, devRole } = useMockAuth()
 
   // Core state — seeded from mock, merged with Supabase on mount
   const [clubs, setClubs] = useState(CLUBS)
@@ -268,8 +268,8 @@ export default function ClubDetailPage({ params }: PageProps) {
   const advisor = resolveUser(club.advisorId)
   const members = club.memberIds.map((mid) => resolveUser(mid)).filter(Boolean)
 
-  const isMember = club.memberIds.includes(currentUser.id)
-  const isAdvisor = currentUser.role === 'advisor' && club.advisorId === currentUser.id
+  const isMember = club.memberIds.includes(currentUser.id) || isAdvisor
+  const isAdvisor = currentUser.role === 'advisor' && (devRole === 'advisor' || club.advisorId === currentUser.id)
   const canCreateContent = isAdvisor || club.eventCreatorIds.includes(currentUser.id)
   const isFull = club.capacity !== null && club.memberIds.length >= club.capacity
 

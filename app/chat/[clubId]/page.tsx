@@ -30,7 +30,7 @@ function formatDateGroup(iso: string) {
 export default function ClubChatPage({ params }: { params: Promise<{ clubId: string }> }) {
   const { clubId } = use(params)
   const router = useRouter()
-  const { currentUser } = useMockAuth()
+  const { currentUser, devRole } = useMockAuth()
   const { messages, sendMessage } = useChatStore()
   const [draft, setDraft] = useState('')
   const [myClubIds, setMyClubIds] = useState<string[]>([])
@@ -73,6 +73,7 @@ export default function ClubChatPage({ params }: { params: Promise<{ clubId: str
 
   const canAccess =
     currentUser.role === 'admin' ||
+    devRole === 'advisor' ||
     myClubIds.includes(clubId) ||
     club?.memberIds.includes(currentUser.id) ||
     club?.advisorId === currentUser.id
@@ -93,7 +94,7 @@ export default function ClubChatPage({ params }: { params: Promise<{ clubId: str
     return USERS.find((u) => u.id === userId) ?? supabaseUsers[userId]
   }
 
-  const accessibleClubs = currentUser.role === 'admin'
+  const accessibleClubs = (currentUser.role === 'admin' || devRole === 'advisor')
     ? CLUBS
     : CLUBS.filter((c) => myClubIds.includes(c.id) || c.memberIds.includes(currentUser.id) || c.advisorId === currentUser.id)
   const clubMessages = messages.filter((m) => m.clubId === clubId)
