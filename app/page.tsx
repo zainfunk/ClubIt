@@ -8,9 +8,10 @@ import {
 } from 'lucide-react'
 
 const ROLE_BADGE: Record<string, { bg: string; text: string }> = {
-  student: { bg: 'rgba(16,185,129,0.1)', text: '#059669' },
-  advisor: { bg: 'rgba(0,88,190,0.1)',   text: '#0058be' },
-  admin:   { bg: 'rgba(186,26,26,0.1)',   text: '#ba1a1a' },
+  student:    { bg: 'rgba(16,185,129,0.1)',  text: '#059669' },
+  advisor:    { bg: 'rgba(0,88,190,0.1)',    text: '#0058be' },
+  admin:      { bg: 'rgba(186,26,26,0.1)',   text: '#ba1a1a' },
+  superadmin: { bg: 'rgba(109,40,217,0.1)',  text: '#7c3aed' },
 }
 
 type NavCard = {
@@ -92,8 +93,10 @@ const NAV_CARDS: NavCard[] = [
 export default function HomePage() {
   const { currentUser } = useMockAuth()
   const firstName = currentUser.name.split(' ')[0]
-  const badge = ROLE_BADGE[currentUser.role]
-  const cards = NAV_CARDS.filter((c) => c.roles.includes(currentUser.role))
+  const badge = ROLE_BADGE[currentUser.role] ?? ROLE_BADGE.student
+  const cards = currentUser.role === 'superadmin'
+    ? [{ href: '/superadmin', label: 'Super Admin', description: 'Manage all schools and tenants.', icon: ShieldCheck, iconBg: 'rgba(109,40,217,0.08)', iconColor: '#7c3aed', roles: ['superadmin'] }]
+    : NAV_CARDS.filter((c) => c.roles.includes(currentUser.role))
 
   return (
     <div className="max-w-2xl mx-auto">

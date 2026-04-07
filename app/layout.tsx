@@ -4,8 +4,7 @@ import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { MockAuthProvider } from "@/lib/mock-auth";
 import { ChatProvider } from "@/lib/chat-store";
-import Navbar from "@/components/layout/Navbar";
-import TopBar from "@/components/layout/TopBar";
+import AppShell from "@/components/layout/AppShell";
 import SettingsProvider from "@/components/SettingsProvider";
 import TourWrapper from "@/components/TourWrapper";
 
@@ -52,9 +51,7 @@ export default function RootLayout({
           <ChatProvider>
             <SettingsProvider>
               <TourWrapper>
-                <Navbar />
-                <TopBar />
-                <main className="ml-64 pt-16 min-h-screen px-8 py-8 overflow-y-auto">{children}</main>
+                <AppShell>{children}</AppShell>
               </TourWrapper>
             </SettingsProvider>
           </ChatProvider>

@@ -377,3 +377,99 @@ on conflict (id) do nothing;
 
 insert into admin_settings (id) values (1)
 on conflict (id) do nothing;
+
+-- ============================================================
+-- Multi-tenant: Schools (tenant boundary)
+-- ============================================================
+
+create table if not exists schools (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  district text,
+  contact_name text not null,
+  contact_email text not null,
+  status text not null default 'pending' check (status in ('pending', 'active', 'suspended')),
+  student_invite_code text unique,
+  admin_invite_code text unique,
+  -- One-time IT setup link token
+  setup_token text unique,
+  setup_token_expires_at timestamptz,
+  setup_completed_at timestamptz,
+  created_at timestamptz default now()
+);
+
+-- Add school_id to users (nullable: superadmin users have no school)
+alter table users add column if not exists school_id uuid references schools(id) on delete set null;
+
+-- Add school_id to clubs and school elections
+alter table clubs add column if not exists school_id uuid references schools(id) on delete cascade;
+alter table school_elections add column if not exists school_id uuid references schools(id) on delete cascade;
+alter table admin_settings add column if not exists school_id uuid references schools(id) on delete cascade;
+
+-- Add superadmin to allowed roles
+alter table users drop constraint if exists users_role_check;
+alter table users add constraint users_role_check
+  check (role in ('superadmin', 'admin', 'advisor', 'student'));
+
+-- ============================================================
+-- Seed: Demo school for existing seed data
+-- ============================================================
+
+insert into schools (id, name, district, contact_name, contact_email, status, student_invite_code, admin_invite_code, setup_completed_at) values
+  ('00000000-0000-0000-0000-000000000001', 'Demo High School', 'Demo District', 'Principal Hayes', 'hayes@clubit.edu', 'active', 'DEMO-STU-0001', 'DEMO-ADM-0001', now())
+on conflict (id) do nothing;
+
+-- Assign existing seed users to the demo school
+update users set school_id = '00000000-0000-0000-0000-000000000001'
+where id in ('user-admin-1', 'user-advisor-1', 'user-advisor-2', 'user-student-1', 'user-student-2', 'user-student-3')
+  and school_id is null;
+
+-- Assign existing seed clubs to the demo school
+update clubs set school_id = '00000000-0000-0000-0000-000000000001'
+where school_id is null;
+
+-- Assign existing seed elections to the demo school
+update school_elections set school_id = '00000000-0000-0000-0000-000000000001'
+where school_id is null;
+
+-- ============================================================
+-- School invites (superadmin-generated onboarding links)
+-- ============================================================
+
+create table if not exists school_invites (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  token text unique not null,
+  created_at timestamptz default now(),
+  used_at timestamptz,
+  school_id uuid references schools(id) on delete set null
+);
+
+-- ============================================================
+-- Row-Level Security (requires Clerk → Supabase JWT bridge)
+-- See: https://clerk.com/docs/integrations/databases/supabase
+-- Uncomment after configuring the JWT template in Clerk dashboard.
+-- ============================================================
+
+-- alter table schools enable row level security;
+-- alter table users enable row level security;
+-- alter table clubs enable row level security;
+-- alter table school_elections enable row level security;
+
+-- -- Users can only see users in their own school
+-- create policy "school_isolation_users" on users
+--   for all using (
+--     school_id = (select school_id from users where id = auth.uid())
+--   );
+
+-- -- Users can only see clubs in their own school
+-- create policy "school_isolation_clubs" on clubs
+--   for all using (
+--     school_id = (select school_id from users where id = auth.uid())
+--   );
+
+-- -- Users can only see elections in their own school
+-- create policy "school_isolation_elections" on school_elections
+--   for all using (
+--     school_id = (select school_id from users where id = auth.uid())
+--   );

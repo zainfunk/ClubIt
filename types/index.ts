@@ -1,4 +1,21 @@
-export type Role = 'admin' | 'advisor' | 'student'
+export type Role = 'superadmin' | 'admin' | 'advisor' | 'student'
+
+export type SchoolStatus = 'pending' | 'active' | 'suspended'
+
+export interface School {
+  id: string
+  name: string
+  district?: string
+  contactName: string
+  contactEmail: string
+  status: SchoolStatus
+  studentInviteCode?: string
+  adminInviteCode?: string
+  setupToken?: string
+  setupTokenExpiresAt?: string
+  setupCompletedAt?: string
+  createdAt: string
+}
 
 export type JoinRequestStatus = 'pending' | 'approved' | 'rejected'
 
@@ -16,6 +33,7 @@ export interface User {
   email: string
   role: Role
   avatarUrl?: string
+  schoolId?: string
 }
 
 export interface LeadershipPosition {
