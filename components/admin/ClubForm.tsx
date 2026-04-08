@@ -19,6 +19,7 @@ export default function ClubForm({ advisors, onSubmit }: ClubFormProps) {
   const [capacity, setCapacity] = useState(20)
   const [advisorId, setAdvisorId] = useState(advisors[0]?.id ?? '')
   const [tags, setTags] = useState('')
+  const hasAdminFallbackOnly = advisors.length === 1 && advisors[0]?.role === 'admin'
   const selectedAdvisorId = advisors.some((advisor) => advisor.id === advisorId)
     ? advisorId
     : (advisors[0]?.id ?? '')
@@ -89,19 +90,20 @@ export default function ClubForm({ advisors, onSubmit }: ClubFormProps) {
                 onChange={(e) => setAdvisorId(e.target.value)}
                 className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
-                disabled={advisors.length === 0}
               >
                 {advisors.length === 0 && (
                   <option value="">No advisors or admins available yet</option>
                 )}
                 {advisors.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
+                    {a.name}{a.role === 'admin' ? ' (admin owner)' : ''}
                   </option>
                 ))}
               </select>
               <p className="text-[11px] text-gray-400 mt-1">
-                Promote a user to advisor, or assign the club to an admin while the school is setting up.
+                {hasAdminFallbackOnly
+                  ? 'No advisors have joined yet, so you can assign this club to your admin account for testing and reassign it later.'
+                  : 'Promote a user to advisor, or assign the club to an admin while the school is setting up.'}
               </p>
             </div>
             <div>

@@ -94,7 +94,14 @@ export default function AdminPage() {
   const [electionDescription, setElectionDescription] = useState('')
   const [electionCandidateIds, setElectionCandidateIds] = useState<string[]>([])
 
-  const staffOwners = allUsers.filter((u) => u.role === 'advisor' || u.role === 'admin')
+  const staffOwners = Array.from(new Map(
+    [
+      ...(currentUser.id && (currentUser.role === 'admin' || currentUser.role === 'advisor')
+        ? [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role }]
+        : []),
+      ...allUsers.filter((u) => u.role === 'advisor' || u.role === 'admin'),
+    ].map((user) => [user.id, user])
+  ).values())
   const students = allUsers.filter((u) => u.role === 'student')
 
   async function updateUserRole(userId: string, role: Exclude<Role, 'superadmin'>) {
@@ -126,9 +133,20 @@ export default function AdminPage() {
   async function handleCreateClub(
     data: Omit<Club, 'id' | 'memberIds' | 'leadershipPositions' | 'socialLinks' | 'meetingTimes' | 'createdAt'>
   ) {
+    const ownerId = data.advisorId || currentUser.id
+
+    await supabase.from('users').upsert({
+      id: currentUser.id,
+      name: currentUser.name,
+      email: currentUser.email,
+      role: currentUser.role,
+      school_id: currentUser.schoolId,
+    }, { onConflict: 'id' })
+
     const newClub: Club = {
       ...data,
       id: `club-${Date.now()}`,
+      advisorId: ownerId,
       memberIds: [],
       leadershipPositions: [],
       socialLinks: [],
@@ -139,7 +157,7 @@ export default function AdminPage() {
     await supabase.from('clubs').insert({
       id: newClub.id, name: newClub.name, description: newClub.description,
       icon_url: newClub.iconUrl, capacity: newClub.capacity,
-      advisor_id: newClub.advisorId || null, auto_accept: false,
+      advisor_id: ownerId, auto_accept: false,
       tags: newClub.tags ?? [], event_creator_ids: [], created_at: newClub.createdAt,
       school_id: currentUser.schoolId,
     })
@@ -205,6 +223,7 @@ export default function AdminPage() {
             <div className="space-y-3">
               {clubs.map((club) => {
                 const advisor = allUsers.find((u) => u.id === club.advisorId)
+                  ?? (club.advisorId === currentUser.id ? currentUser : undefined)
                 const spotsLeft = club.capacity !== null ? club.capacity - club.memberIds.length : null
                 return (
                   <Card key={club.id}>
