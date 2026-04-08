@@ -6,21 +6,16 @@ import { notFound } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { supabase } from '@/lib/supabase'
 import {
-  getUserById, getAttendanceByClub,
-} from '@/lib/mock-data'
-import {
-  getSessionsByClub, saveSession, upsertRecord, getRecordsByClub,
+  saveSession, upsertRecord,
 } from '@/lib/attendance-store'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { castPollVote } from '@/lib/election-store'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  Users, Clock, MapPin, Globe, Calendar, Crown, CheckCircle, XCircle,
+  Users, Clock, MapPin, Globe, Crown, CheckCircle, XCircle,
   ClockIcon, Vote, Plus, Trash2, UserCheck, Pencil, Newspaper, Camera,
   MessageCircle, Tv, Video, Link as LinkIcon, QrCode, Copy, ArrowLeft, Mail,
 } from 'lucide-react'
-import { User, Role, Club, Membership, JoinRequest, LeadershipPosition, Poll, ClubEvent, ClubNews, SocialLink, SocialPlatform, MeetingTime, AttendanceRecord, AttendanceSession } from '@/types'
+import { User, Club, JoinRequest, LeadershipPosition, Poll, ClubEvent, ClubNews, SocialLink, SocialPlatform, MeetingTime, AttendanceRecord, AttendanceSession } from '@/types'
 import Avatar from '@/components/Avatar'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -52,137 +47,82 @@ export default function ClubDetailPage({ params }: PageProps) {
 
   // Core state — loaded from Supabase on mount
   const [clubs, setClubs] = useState<Club[]>([])
-  const [memberships, setMemberships] = useState<Membership[]>([])
   const [requests, setRequests] = useState<JoinRequest[]>([])
   const [polls, setPolls] = useState<Poll[]>([])
   const [clubLoading, setClubLoading] = useState(true)
-  // Users fetched from Supabase for IDs not in mock data (e.g. real Clerk accounts)
-  const [supabaseUsers, setSupabaseUsers] = useState<Record<string, User>>({})
+  const [usersById, setUsersById] = useState<Record<string, User>>({})
 
-  useEffect(() => {
-    // Merge Supabase memberships into local club state
-    supabase.from('memberships').select('*').eq('club_id', id).then(({ data }) => {
-      if (!data?.length) return
-      const newMemberships = data.map((r) => ({ id: r.id, clubId: r.club_id, userId: r.user_id, joinedAt: r.joined_at }))
-      setMemberships((prev) => {
-        const merged = [...prev]
-        for (const m of newMemberships) {
-          if (!merged.find((x) => x.clubId === m.clubId && x.userId === m.userId)) merged.push(m)
-        }
-        return merged
-      })
-      setClubs((prev) => prev.map((c) => {
-        if (c.id !== id) return c
-        const newMemberIds = data.map((r) => r.user_id).filter((uid) => !c.memberIds.includes(uid))
-        return newMemberIds.length ? { ...c, memberIds: [...c.memberIds, ...newMemberIds] } : c
-      }))
-      // Fetch user data for any member IDs not in mock data
-      const unknownIds = data.map((r) => r.user_id).filter((uid) => !getUserById(uid))
-      if (unknownIds.length > 0) {
-        supabase.from('users').select('id, name, email, role').in('id', unknownIds).then(({ data: userData }) => {
-          if (userData?.length) {
-            setSupabaseUsers((prev) => {
-              const next = { ...prev }
-              for (const u of userData) next[u.id] = { id: u.id, name: u.name, email: u.email, role: u.role as Role }
-              return next
-            })
-          }
-        })
-      }
-    })
-    // Merge Supabase join requests
-    supabase.from('join_requests').select('*').eq('club_id', id).then(({ data }) => {
-      if (!data?.length) return
-      const newRequests = data.map((r) => ({ id: r.id, clubId: r.club_id, userId: r.user_id, requestedAt: r.requested_at, status: r.status }))
-      setRequests((prev) => {
-        const merged = [...prev]
-        for (const r of newRequests) {
-          if (!merged.find((x) => x.id === r.id)) merged.push(r)
-        }
-        return merged
-      })
-      // Fetch user data for any requester IDs not in mock data
-      const unknownIds = data.map((r) => r.user_id).filter((uid) => !getUserById(uid))
-      if (unknownIds.length > 0) {
-        supabase.from('users').select('id, name, email, role').in('id', unknownIds).then(({ data: userData }) => {
-          if (userData?.length) {
-            setSupabaseUsers((prev) => {
-              const next = { ...prev }
-              for (const u of userData) next[u.id] = { id: u.id, name: u.name, email: u.email, role: u.role as Role }
-              return next
-            })
-          }
-        })
-      }
-    })
-  }, [id])
   const [clubEvents, setClubEvents] = useState<ClubEvent[]>([])
   const [clubNews, setClubNews] = useState<ClubNews[]>([])
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([])
 
-  // Load club structural data from Supabase on mount
-  useEffect(() => {
-    supabase.from('clubs').select('*').eq('id', id).maybeSingle().then(({ data }) => {
-      if (!data) { setClubLoading(false); return }
-      const base: Club = {
-        id: data.id, name: data.name, description: data.description ?? '',
-        iconUrl: data.icon_url ?? undefined, advisorId: data.advisor_id ?? '',
-        memberIds: [], leadershipPositions: [], socialLinks: [], meetingTimes: [],
-        tags: data.tags ?? [], eventCreatorIds: data.event_creator_ids ?? [],
-        capacity: data.capacity ?? null, autoAccept: data.auto_accept ?? false,
-        createdAt: data.created_at ?? '',
-      }
-      setClubs((prev) => {
-        const exists = prev.find((c) => c.id === id)
-        return exists ? prev.map((c) => c.id !== id ? c : { ...c, ...base }) : [...prev, base]
-      })
+  async function loadDetail(signal: AbortSignal) {
+    const res = await fetch(`/api/school/clubs/${id}`, { cache: 'no-store', signal })
+    if (signal.aborted) return
+    if (!res.ok) {
+      setClubs([])
+      setRequests([])
+      setPolls([])
+      setUsersById({})
+      setClubEvents([])
+      setClubNews([])
+      setAttendanceRecords([])
       setClubLoading(false)
+      return
+    }
+    const detail = await res.json()
+    setClubs([detail.club])
+    setRequests(detail.requests)
+    setPolls(detail.polls)
+    setUsersById(detail.usersById)
+    setClubEvents(detail.events)
+    setClubNews(detail.news)
+    setAttendanceRecords(detail.attendanceRecords)
+    setClubLoading(false)
+  }
+
+  useEffect(() => {
+    // Guard on id, not schoolId — the server resolves school context itself.
+    if (!currentUser.id) {
+      setClubLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    setClubLoading(true)
+    loadDetail(controller.signal).catch((e) => {
+      if (e.name !== 'AbortError') {
+        setClubs([])
+        setClubLoading(false)
+      }
     })
-    supabase.from('leadership_positions').select('*').eq('club_id', id).then(({ data }) => {
-      if (data?.length) setClubs((prev) => prev.map((c) => c.id !== id ? c : {
-        ...c, leadershipPositions: data.map((p) => ({ id: p.id, title: p.title, userId: p.user_id ?? undefined })),
-      }))
-    })
-    supabase.from('club_social_links').select('*').eq('club_id', id).then(({ data }) => {
-      if (data) setClubs((prev) => prev.map((c) => c.id !== id ? c : {
-        ...c, socialLinks: data.map((sl) => ({ platform: sl.platform as SocialLink['platform'], url: sl.url })),
-      }))
-    })
-    supabase.from('meeting_times').select('*').eq('club_id', id).then(({ data }) => {
-      if (data?.length) setClubs((prev) => prev.map((c) => c.id !== id ? c : {
-        ...c, meetingTimes: data.map((mt) => ({
-          id: mt.id, dayOfWeek: mt.day_of_week as MeetingTime['dayOfWeek'],
-          startTime: mt.start_time, endTime: mt.end_time, location: mt.location ?? undefined,
-        })),
-      }))
-    })
-    supabase.from('events').select('*').eq('club_id', id).then(({ data }) => {
-      if (data) setClubEvents(data.map((e) => ({
-        id: e.id, clubId: e.club_id, title: e.title, description: e.description ?? '',
-        date: e.date, location: e.location ?? undefined, isPublic: e.is_public, createdBy: e.created_by,
-      })).sort((a, b) => a.date.localeCompare(b.date)))
-    })
-    supabase.from('club_news').select('*').eq('club_id', id).then(({ data }) => {
-      if (data) setClubNews(data.map((n) => ({
-        id: n.id, clubId: n.club_id, title: n.title, content: n.content,
-        authorId: n.author_id, createdAt: n.created_at, isPinned: n.is_pinned,
-      })).sort((a, b) => {
-        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      }))
-    })
-    supabase.from('polls').select('*, poll_candidates(*), poll_votes(*)').eq('club_id', id).then(({ data }) => {
-      if (data) setPolls(data.map((p) => ({
-        id: p.id, clubId: p.club_id, positionTitle: p.position_title,
-        createdAt: p.created_at, isOpen: p.is_open,
-        candidates: (p.poll_candidates as {user_id: string}[]).map((c) => ({
-          userId: c.user_id,
-          votes: (p.poll_votes as {candidate_user_id: string; voter_user_id: string}[])
-            .filter((v) => v.candidate_user_id === c.user_id)
-            .map((v) => v.voter_user_id),
-        })),
-      })))
-    })
-  }, [id])
+
+    return () => controller.abort()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, currentUser.id])
+
+  // Poll for join-request status changes when the student has a pending request.
+  // The admin approves server-side; the student's page has no real-time channel,
+  // so we re-fetch every 8 seconds until the request resolves.
+  const myPendingRequest = requests.find(
+    (r) => r.userId === currentUser.id && r.status === 'pending'
+  )
+  useEffect(() => {
+    if (!myPendingRequest || !currentUser.id) return
+
+    const controller = new AbortController()
+    const interval = setInterval(() => {
+      loadDetail(controller.signal).catch((e) => {
+        if (e.name !== 'AbortError') console.error('poll error', e)
+      })
+    }, 8000)
+
+    return () => {
+      clearInterval(interval)
+      controller.abort()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!myPendingRequest, currentUser.id, id])
 
   // Edit mode for club header info (advisor)
   const [editMode, setEditMode] = useState(false)
@@ -228,28 +168,7 @@ export default function ClubDetailPage({ params }: PageProps) {
   const [pollPositionTitle, setPollPositionTitle] = useState('')
   const [pollCandidateIds, setPollCandidateIds] = useState<string[]>([])
 
-  // Attendance state (merges static mock data + Supabase records)
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(getAttendanceByClub(id))
-
-  useEffect(() => {
-    getRecordsByClub(id).then((stored) => {
-      setAttendanceRecords((prev) => {
-        const merged = [...prev]
-        for (const r of stored) {
-          const idx = merged.findIndex(
-            (m) => m.clubId === r.clubId && m.userId === r.userId && m.meetingDate === r.meetingDate
-          )
-          if (idx >= 0) merged[idx] = r
-          else merged.push(r)
-        }
-        return merged
-      })
-    })
-  }, [id])
-
   // QR / attendance session state (advisor)
-  const [sessions, setSessions] = useState<AttendanceSession[]>([])
-  useEffect(() => { getSessionsByClub(id).then(setSessions) }, [id])
   const [showQrForm, setShowQrForm] = useState(false)
   const [qrDate, setQrDate] = useState(() => new Date().toISOString().split('T')[0])
   const [qrExpiry, setQrExpiry] = useState(30) // minutes
@@ -268,14 +187,17 @@ export default function ClubDetailPage({ params }: PageProps) {
   const club = foundClub!
 
   function resolveUser(userId: string): User | undefined {
-    return getUserById(userId) ?? supabaseUsers[userId]
+    return usersById[userId] ?? (currentUser.id === userId ? currentUser : undefined)
   }
 
   const advisor = resolveUser(club.advisorId)
   const members = club.memberIds.map((mid) => resolveUser(mid)).filter(Boolean)
 
-  const isAdvisor = currentUser.role === 'admin' ||
-    (currentUser.role === 'advisor' && (devRole === 'advisor' || club.advisorId === currentUser.id))
+  const isAdvisor =
+    currentUser.role === 'admin' ||
+    devRole === 'admin' ||
+    club.advisorId === currentUser.id ||
+    devRole === 'advisor'
   const isMember = club.memberIds.includes(currentUser.id) || isAdvisor
   const canCreateContent = isAdvisor || club.eventCreatorIds.includes(currentUser.id)
   const isFull = club.capacity !== null && club.memberIds.length >= club.capacity
@@ -305,6 +227,7 @@ export default function ClubDetailPage({ params }: PageProps) {
 
   // --- Join request handlers ---
   async function handleRequest() {
+    if (myRequest || isMember) return
     const autoApprove = club.autoAccept && !isFull
     const reqId = `req-${Date.now()}`
     const membershipId = `m-${Date.now()}`
@@ -317,7 +240,6 @@ export default function ClubDetailPage({ params }: PageProps) {
     if (autoApprove) {
       await supabase.from('memberships').insert({ id: membershipId, club_id: id, user_id: currentUser.id, joined_at: now.split('T')[0] })
       setClubs((prev) => prev.map((c) => c.id === id ? { ...c, memberIds: [...c.memberIds, currentUser.id] } : c))
-      setMemberships((prev) => [...prev, { id: membershipId, clubId: id, userId: currentUser.id, joinedAt: now.split('T')[0] }])
     }
   }
 
@@ -325,20 +247,18 @@ export default function ClubDetailPage({ params }: PageProps) {
     await supabase.from('memberships').delete().eq('club_id', id).eq('user_id', currentUser.id)
     await supabase.from('join_requests').delete().eq('club_id', id).eq('user_id', currentUser.id)
     setClubs((prev) => prev.map((c) => c.id === id ? { ...c, memberIds: c.memberIds.filter((mid) => mid !== currentUser.id) } : c))
-    setMemberships((prev) => prev.filter((m) => !(m.clubId === id && m.userId === currentUser.id)))
     setRequests((prev) => prev.filter((r) => !(r.clubId === id && r.userId === currentUser.id)))
   }
 
   async function handleApprove(requestId: string) {
     const req = requests.find((r) => r.id === requestId)
-    if (!req) return
-    const membershipId = `m-${Date.now()}`
+    if (!req || club.memberIds.includes(req.userId) || isFull) return
+    const membershipId = `m-${requestId}`
     const joinedAt = new Date().toISOString().split('T')[0]
     await supabase.from('join_requests').update({ status: 'approved' }).eq('id', requestId)
     await supabase.from('memberships').insert({ id: membershipId, club_id: id, user_id: req.userId, joined_at: joinedAt })
     setRequests((prev) => prev.map((r) => r.id === requestId ? { ...r, status: 'approved' } : r))
     setClubs((prev) => prev.map((c) => c.id === id ? { ...c, memberIds: [...c.memberIds, req.userId] } : c))
-    setMemberships((prev) => [...prev, { id: membershipId, clubId: id, userId: req.userId, joinedAt }])
   }
 
   async function handleReject(requestId: string) {
@@ -532,7 +452,7 @@ export default function ClubDetailPage({ params }: PageProps) {
   }
 
   async function castVote(pollId: string, candidateUserId: string) {
-    await supabase.from('poll_votes').insert({ poll_id: pollId, candidate_user_id: candidateUserId, voter_user_id: currentUser.id })
+    await castPollVote(pollId, candidateUserId, currentUser.id)
     setPolls((prev) => prev.map((p) => p.id === pollId ? {
       ...p, candidates: p.candidates.map((c) => c.userId === candidateUserId ? { ...c, votes: [...c.votes, currentUser.id] } : c),
     } : p))
@@ -543,16 +463,46 @@ export default function ClubDetailPage({ params }: PageProps) {
     setPolls((prev) => prev.map((p) => p.id === pollId ? { ...p, isOpen: false } : p))
   }
 
-  function appointPollWinner(pollId: string) {
+  async function appointPollWinner(pollId: string) {
     const poll = polls.find((p) => p.id === pollId)
     if (!poll) return
     const winner = poll.candidates.reduce((a, b) => a.votes.length >= b.votes.length ? a : b)
-    setClubs((prev) => prev.map((c) => c.id === id ? {
-      ...c, leadershipPositions: c.leadershipPositions.map((p) =>
-        p.title.toLowerCase() === poll.positionTitle.toLowerCase() ? { ...p, userId: winner.userId } : p
-      ),
-    } : c))
-    closePoll(pollId)
+    const existingPosition = club.leadershipPositions.find(
+      (position) => position.title.trim().toLowerCase() === poll.positionTitle.trim().toLowerCase()
+    )
+
+    if (existingPosition) {
+      await supabase
+        .from('leadership_positions')
+        .update({ user_id: winner.userId })
+        .eq('id', existingPosition.id)
+
+      setClubs((prev) => prev.map((c) => c.id === id ? {
+        ...c,
+        leadershipPositions: c.leadershipPositions.map((position) =>
+          position.id === existingPosition.id ? { ...position, userId: winner.userId } : position
+        ),
+      } : c))
+    } else {
+      const posId = `lp-${pollId}`
+      const newPosition: LeadershipPosition = {
+        id: posId,
+        title: poll.positionTitle,
+        userId: winner.userId,
+      }
+      await supabase.from('leadership_positions').insert({
+        id: posId,
+        club_id: id,
+        title: poll.positionTitle,
+        user_id: winner.userId,
+      })
+      setClubs((prev) => prev.map((c) => c.id === id ? {
+        ...c,
+        leadershipPositions: [...c.leadershipPositions, newPosition],
+      } : c))
+    }
+
+    await closePoll(pollId)
   }
 
   // --- QR / attendance session handlers ---
@@ -580,8 +530,7 @@ export default function ClubDetailPage({ params }: PageProps) {
       advisorLng: lng,
       recordedUserIds: [],
     }
-    saveSession(session)
-    setSessions((prev) => [...prev, session])
+    await saveSession(session)
     setActiveSession(session)
     setShowQrForm(false)
   }

@@ -22,6 +22,20 @@ export async function POST(
   const { id } = await params
   const db = createServiceClient()
 
+  const { data: school } = await db
+    .from('schools')
+    .select('id, status')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (!school) {
+    return NextResponse.json({ error: 'School not found' }, { status: 404 })
+  }
+
+  if (school.status !== 'pending') {
+    return NextResponse.json({ error: 'Only pending schools can be approved' }, { status: 409 })
+  }
+
   const studentCode = generateInviteCode('STU')
   const adminCode = generateInviteCode('ADM')
   const token = generateSetupToken()
@@ -37,6 +51,7 @@ export async function POST(
       setup_token_expires_at: tokenExpiry,
     })
     .eq('id', id)
+    .eq('status', 'pending')
     .select()
     .single()
 

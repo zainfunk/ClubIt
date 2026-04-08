@@ -2,11 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { generateInviteCode } from '@/lib/schools-store'
 
+function ensureDevelopmentOnly() {
+  if (process.env.NODE_ENV !== 'development') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  return null
+}
+
 // GET — validate token and return invite data
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  const blocked = ensureDevelopmentOnly()
+  if (blocked) return blocked
+
   const { token } = await params
   const db = createServiceClient()
 
@@ -32,6 +43,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  const blocked = ensureDevelopmentOnly()
+  if (blocked) return blocked
+
   const { token } = await params
   const db = createServiceClient()
 

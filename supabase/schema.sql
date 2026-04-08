@@ -473,3 +473,669 @@ create table if not exists school_invites (
 --   for all using (
 --     school_id = (select school_id from users where id = auth.uid())
 --   );
+
+
+-- ============================================================
+-- Issue Reports
+-- ============================================================
+
+create table if not exists issue_reports (
+  id uuid primary key default gen_random_uuid(),
+  school_id uuid references schools(id) on delete cascade,
+  reporter_id text references users(id) on delete set null,
+  reporter_name text not null,
+  reporter_email text not null,
+  message text not null,
+  status text not null default 'open' check (status in ('open', 'resolved')),
+  created_at timestamptz default now()
+);
+
+-- ============================================================
+-- Row-Level Security (requires Clerk session tokens in Supabase)
+-- See:
+--   https://supabase.com/docs/guides/auth/third-party/clerk
+--   https://clerk.com/docs/integrations/databases/supabase
+-- ============================================================
+
+create schema if not exists app;
+
+create or replace function app.current_user_id()
+returns text
+language sql
+stable
+as $$
+  select nullif(auth.jwt()->>'sub', '');
+$$;
+
+create or replace function app.current_role()
+returns text
+language sql
+stable
+as $$
+  select role
+  from users
+  where id = app.current_user_id();
+$$;
+
+create or replace function app.current_school_id()
+returns uuid
+language sql
+stable
+as $$
+  select school_id
+  from users
+  where id = app.current_user_id();
+$$;
+
+create or replace function app.is_superadmin()
+returns boolean
+language sql
+stable
+as $$
+  select coalesce(app.current_role() = 'superadmin', false);
+$$;
+
+create or replace function app.is_school_admin()
+returns boolean
+language sql
+stable
+as $$
+  select coalesce(app.current_role() = 'admin', false) or app.is_superadmin();
+$$;
+
+create or replace function app.user_in_scope(target_user_id text)
+returns boolean
+language sql
+stable
+as $$
+  select
+    app.is_superadmin()
+    or exists (
+      select 1
+      from users u
+      where u.id = target_user_id
+        and (u.school_id = app.current_school_id() or u.id = app.current_user_id())
+    );
+$$;
+
+create or replace function app.club_in_scope(target_club_id text)
+returns boolean
+language sql
+stable
+as $$
+  select
+    app.is_superadmin()
+    or exists (
+      select 1
+      from clubs c
+      where c.id = target_club_id
+        and c.school_id = app.current_school_id()
+    );
+$$;
+
+create or replace function app.club_manager(target_club_id text)
+returns boolean
+language sql
+stable
+as $$
+  select
+    app.is_superadmin()
+    or exists (
+      select 1
+      from clubs c
+      where c.id = target_club_id
+        and c.school_id = app.current_school_id()
+        and (
+          app.current_role() = 'admin'
+          or c.advisor_id = app.current_user_id()
+        )
+    );
+$$;
+
+create or replace function app.club_event_creator(target_club_id text)
+returns boolean
+language sql
+stable
+as $$
+  select
+    app.club_manager(target_club_id)
+    or exists (
+      select 1
+      from clubs c
+      where c.id = target_club_id
+        and c.school_id = app.current_school_id()
+        and app.current_user_id() = any(c.event_creator_ids)
+    );
+$$;
+
+create or replace function app.club_member(target_club_id text, target_user_id text default app.current_user_id())
+returns boolean
+language sql
+stable
+as $$
+  select
+    app.club_manager(target_club_id)
+    or exists (
+      select 1
+      from memberships m
+      join clubs c on c.id = m.club_id
+      where m.club_id = target_club_id
+        and m.user_id = target_user_id
+        and c.school_id = app.current_school_id()
+    );
+$$;
+
+create or replace function app.poll_in_scope(target_poll_id text)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from polls p
+    join clubs c on c.id = p.club_id
+    where p.id = target_poll_id
+      and (app.is_superadmin() or c.school_id = app.current_school_id())
+  );
+$$;
+
+create or replace function app.poll_manager(target_poll_id text)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from polls p
+    where p.id = target_poll_id
+      and app.club_manager(p.club_id)
+  );
+$$;
+
+create or replace function app.election_in_scope(target_election_id text)
+returns boolean
+language sql
+stable
+as $$
+  select
+    app.is_superadmin()
+    or exists (
+      select 1
+      from school_elections e
+      where e.id = target_election_id
+        and e.school_id = app.current_school_id()
+    );
+$$;
+
+create or replace function app.form_in_scope(target_form_id text)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from club_forms f
+    join clubs c on c.id = f.club_id
+    where f.id = target_form_id
+      and (app.is_superadmin() or c.school_id = app.current_school_id())
+  );
+$$;
+
+create or replace function app.form_manager(target_form_id text)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from club_forms f
+    where f.id = target_form_id
+      and app.club_manager(f.club_id)
+  );
+$$;
+
+alter table schools enable row level security;
+alter table users enable row level security;
+alter table clubs enable row level security;
+alter table memberships enable row level security;
+alter table join_requests enable row level security;
+alter table leadership_positions enable row level security;
+alter table club_social_links enable row level security;
+alter table meeting_times enable row level security;
+alter table events enable row level security;
+alter table attendance_records enable row level security;
+alter table attendance_sessions enable row level security;
+alter table club_news enable row level security;
+alter table polls enable row level security;
+alter table poll_candidates enable row level security;
+alter table poll_votes enable row level security;
+alter table school_elections enable row level security;
+alter table election_candidates enable row level security;
+alter table election_votes enable row level security;
+alter table chat_messages enable row level security;
+alter table club_forms enable row level security;
+alter table form_responses enable row level security;
+alter table user_profiles enable row level security;
+alter table user_overrides enable row level security;
+alter table user_privacy_settings enable row level security;
+alter table admin_settings enable row level security;
+alter table issue_reports enable row level security;
+
+drop policy if exists schools_select on schools;
+create policy schools_select on schools
+  for select to authenticated
+  using (app.is_superadmin() or id = app.current_school_id());
+
+drop policy if exists users_select on users;
+create policy users_select on users
+  for select to authenticated
+  using (app.user_in_scope(id));
+
+drop policy if exists users_insert_self on users;
+create policy users_insert_self on users
+  for insert to authenticated
+  with check (id = app.current_user_id());
+
+drop policy if exists clubs_select on clubs;
+create policy clubs_select on clubs
+  for select to authenticated
+  using (app.club_in_scope(id));
+
+drop policy if exists clubs_insert on clubs;
+create policy clubs_insert on clubs
+  for insert to authenticated
+  with check (
+    school_id = app.current_school_id()
+    and (
+      app.is_school_admin()
+      or (app.current_role() = 'advisor' and advisor_id = app.current_user_id())
+    )
+  );
+
+drop policy if exists clubs_update on clubs;
+create policy clubs_update on clubs
+  for update to authenticated
+  using (app.club_manager(id))
+  with check (app.club_manager(id));
+
+drop policy if exists memberships_select on memberships;
+create policy memberships_select on memberships
+  for select to authenticated
+  using (app.club_in_scope(club_id));
+
+drop policy if exists memberships_insert on memberships;
+create policy memberships_insert on memberships
+  for insert to authenticated
+  with check (
+    app.club_in_scope(club_id)
+    and app.user_in_scope(user_id)
+    and (
+      app.club_manager(club_id)
+      or user_id = app.current_user_id()
+    )
+  );
+
+drop policy if exists memberships_delete on memberships;
+create policy memberships_delete on memberships
+  for delete to authenticated
+  using (
+    app.club_in_scope(club_id)
+    and (
+      app.club_manager(club_id)
+      or user_id = app.current_user_id()
+    )
+  );
+
+drop policy if exists join_requests_select on join_requests;
+create policy join_requests_select on join_requests
+  for select to authenticated
+  using (app.club_in_scope(club_id));
+
+drop policy if exists join_requests_insert on join_requests;
+create policy join_requests_insert on join_requests
+  for insert to authenticated
+  with check (
+    app.club_in_scope(club_id)
+    and user_id = app.current_user_id()
+  );
+
+drop policy if exists join_requests_update on join_requests;
+create policy join_requests_update on join_requests
+  for update to authenticated
+  using (app.club_manager(club_id))
+  with check (app.club_manager(club_id));
+
+drop policy if exists join_requests_delete on join_requests;
+create policy join_requests_delete on join_requests
+  for delete to authenticated
+  using (
+    app.club_manager(club_id)
+    or user_id = app.current_user_id()
+  );
+
+drop policy if exists leadership_positions_select on leadership_positions;
+create policy leadership_positions_select on leadership_positions
+  for select to authenticated
+  using (app.club_in_scope(club_id));
+
+drop policy if exists leadership_positions_manage on leadership_positions;
+create policy leadership_positions_manage on leadership_positions
+  for all to authenticated
+  using (app.club_manager(club_id))
+  with check (app.club_manager(club_id));
+
+drop policy if exists club_social_links_select on club_social_links;
+create policy club_social_links_select on club_social_links
+  for select to authenticated
+  using (app.club_in_scope(club_id));
+
+drop policy if exists club_social_links_manage on club_social_links;
+create policy club_social_links_manage on club_social_links
+  for all to authenticated
+  using (app.club_manager(club_id))
+  with check (app.club_manager(club_id));
+
+drop policy if exists meeting_times_select on meeting_times;
+create policy meeting_times_select on meeting_times
+  for select to authenticated
+  using (app.club_in_scope(club_id));
+
+drop policy if exists meeting_times_manage on meeting_times;
+create policy meeting_times_manage on meeting_times
+  for all to authenticated
+  using (app.club_manager(club_id))
+  with check (app.club_manager(club_id));
+
+drop policy if exists events_select on events;
+create policy events_select on events
+  for select to authenticated
+  using (app.club_in_scope(club_id));
+
+drop policy if exists events_manage on events;
+create policy events_manage on events
+  for all to authenticated
+  using (app.club_event_creator(club_id))
+  with check (
+    app.club_event_creator(club_id)
+    and created_by = app.current_user_id()
+  );
+
+drop policy if exists attendance_records_select on attendance_records;
+create policy attendance_records_select on attendance_records
+  for select to authenticated
+  using (app.club_in_scope(club_id));
+
+drop policy if exists attendance_records_insert on attendance_records;
+create policy attendance_records_insert on attendance_records
+  for insert to authenticated
+  with check (
+    app.club_in_scope(club_id)
+    and (
+      app.club_manager(club_id)
+      or (
+        user_id = app.current_user_id()
+        and app.club_member(club_id, user_id)
+      )
+    )
+  );
+
+drop policy if exists attendance_records_update on attendance_records;
+create policy attendance_records_update on attendance_records
+  for update to authenticated
+  using (
+    app.club_in_scope(club_id)
+    and (
+      app.club_manager(club_id)
+      or (
+        user_id = app.current_user_id()
+        and app.club_member(club_id, user_id)
+      )
+    )
+  )
+  with check (
+    app.club_in_scope(club_id)
+    and (
+      app.club_manager(club_id)
+      or (
+        user_id = app.current_user_id()
+        and app.club_member(club_id, user_id)
+      )
+    )
+  );
+
+drop policy if exists attendance_sessions_select on attendance_sessions;
+create policy attendance_sessions_select on attendance_sessions
+  for select to authenticated
+  using (app.club_in_scope(club_id));
+
+drop policy if exists attendance_sessions_manage on attendance_sessions;
+create policy attendance_sessions_manage on attendance_sessions
+  for all to authenticated
+  using (app.club_manager(club_id))
+  with check (app.club_manager(club_id));
+
+drop policy if exists club_news_select on club_news;
+create policy club_news_select on club_news
+  for select to authenticated
+  using (app.club_in_scope(club_id));
+
+drop policy if exists club_news_manage on club_news;
+create policy club_news_manage on club_news
+  for all to authenticated
+  using (app.club_event_creator(club_id))
+  with check (
+    app.club_event_creator(club_id)
+    and author_id = app.current_user_id()
+  );
+
+drop policy if exists polls_select on polls;
+create policy polls_select on polls
+  for select to authenticated
+  using (app.club_in_scope(club_id));
+
+drop policy if exists polls_manage on polls;
+create policy polls_manage on polls
+  for all to authenticated
+  using (app.club_manager(club_id))
+  with check (app.club_manager(club_id));
+
+drop policy if exists poll_candidates_select on poll_candidates;
+create policy poll_candidates_select on poll_candidates
+  for select to authenticated
+  using (app.poll_in_scope(poll_id));
+
+drop policy if exists poll_candidates_manage on poll_candidates;
+create policy poll_candidates_manage on poll_candidates
+  for all to authenticated
+  using (app.poll_manager(poll_id))
+  with check (app.poll_manager(poll_id));
+
+drop policy if exists poll_votes_select on poll_votes;
+create policy poll_votes_select on poll_votes
+  for select to authenticated
+  using (app.poll_in_scope(poll_id));
+
+drop policy if exists poll_votes_insert on poll_votes;
+create policy poll_votes_insert on poll_votes
+  for insert to authenticated
+  with check (
+    app.poll_in_scope(poll_id)
+    and voter_user_id = app.current_user_id()
+    and exists (
+      select 1
+      from polls p
+      where p.id = poll_id
+        and app.club_member(p.club_id, app.current_user_id())
+    )
+  );
+
+drop policy if exists school_elections_select on school_elections;
+create policy school_elections_select on school_elections
+  for select to authenticated
+  using (app.election_in_scope(id));
+
+drop policy if exists school_elections_manage on school_elections;
+create policy school_elections_manage on school_elections
+  for all to authenticated
+  using (app.is_school_admin() and school_id = app.current_school_id())
+  with check (app.is_school_admin() and school_id = app.current_school_id());
+
+drop policy if exists election_candidates_select on election_candidates;
+create policy election_candidates_select on election_candidates
+  for select to authenticated
+  using (app.election_in_scope(election_id));
+
+drop policy if exists election_candidates_manage on election_candidates;
+create policy election_candidates_manage on election_candidates
+  for all to authenticated
+  using (app.is_school_admin() and app.election_in_scope(election_id))
+  with check (app.is_school_admin() and app.election_in_scope(election_id));
+
+drop policy if exists election_votes_select on election_votes;
+create policy election_votes_select on election_votes
+  for select to authenticated
+  using (app.election_in_scope(election_id));
+
+drop policy if exists election_votes_insert on election_votes;
+create policy election_votes_insert on election_votes
+  for insert to authenticated
+  with check (
+    app.election_in_scope(election_id)
+    and voter_user_id = app.current_user_id()
+  );
+
+drop policy if exists chat_messages_select on chat_messages;
+create policy chat_messages_select on chat_messages
+  for select to authenticated
+  using (app.club_in_scope(club_id));
+
+drop policy if exists chat_messages_insert on chat_messages;
+create policy chat_messages_insert on chat_messages
+  for insert to authenticated
+  with check (
+    app.club_in_scope(club_id)
+    and sender_id = app.current_user_id()
+    and app.club_member(club_id, app.current_user_id())
+  );
+
+drop policy if exists club_forms_select on club_forms;
+create policy club_forms_select on club_forms
+  for select to authenticated
+  using (app.club_in_scope(club_id));
+
+drop policy if exists club_forms_manage on club_forms;
+create policy club_forms_manage on club_forms
+  for all to authenticated
+  using (app.club_manager(club_id))
+  with check (app.club_manager(club_id));
+
+drop policy if exists form_responses_select on form_responses;
+create policy form_responses_select on form_responses
+  for select to authenticated
+  using (app.form_in_scope(form_id));
+
+drop policy if exists form_responses_insert on form_responses;
+create policy form_responses_insert on form_responses
+  for insert to authenticated
+  with check (
+    app.form_in_scope(form_id)
+    and user_id = app.current_user_id()
+  );
+
+drop policy if exists user_profiles_select on user_profiles;
+create policy user_profiles_select on user_profiles
+  for select to authenticated
+  using (app.user_in_scope(user_id));
+
+drop policy if exists user_profiles_insert on user_profiles;
+create policy user_profiles_insert on user_profiles
+  for insert to authenticated
+  with check (
+    app.user_in_scope(user_id)
+    and (
+      user_id = app.current_user_id()
+      or app.is_school_admin()
+    )
+  );
+
+drop policy if exists user_profiles_update on user_profiles;
+create policy user_profiles_update on user_profiles
+  for update to authenticated
+  using (
+    app.user_in_scope(user_id)
+    and (
+      user_id = app.current_user_id()
+      or app.is_school_admin()
+    )
+  )
+  with check (
+    app.user_in_scope(user_id)
+    and (
+      user_id = app.current_user_id()
+      or app.is_school_admin()
+    )
+  );
+
+drop policy if exists user_overrides_select on user_overrides;
+create policy user_overrides_select on user_overrides
+  for select to authenticated
+  using (app.user_in_scope(user_id));
+
+drop policy if exists user_overrides_manage on user_overrides;
+create policy user_overrides_manage on user_overrides
+  for all to authenticated
+  using (
+    app.user_in_scope(user_id)
+    and (
+      user_id = app.current_user_id()
+      or app.is_school_admin()
+    )
+  )
+  with check (
+    app.user_in_scope(user_id)
+    and (
+      user_id = app.current_user_id()
+      or app.is_school_admin()
+    )
+  );
+
+drop policy if exists user_privacy_settings_select on user_privacy_settings;
+create policy user_privacy_settings_select on user_privacy_settings
+  for select to authenticated
+  using (app.user_in_scope(user_id));
+
+drop policy if exists user_privacy_settings_manage on user_privacy_settings;
+create policy user_privacy_settings_manage on user_privacy_settings
+  for all to authenticated
+  using (user_id = app.current_user_id())
+  with check (user_id = app.current_user_id());
+
+drop policy if exists admin_settings_select on admin_settings;
+create policy admin_settings_select on admin_settings
+  for select to authenticated
+  using (school_id = app.current_school_id() or app.is_superadmin());
+
+drop policy if exists admin_settings_manage on admin_settings;
+create policy admin_settings_manage on admin_settings
+  for all to authenticated
+  using (app.is_school_admin() and school_id = app.current_school_id())
+  with check (app.is_school_admin() and school_id = app.current_school_id());
+
+drop policy if exists issue_reports_select on issue_reports;
+create policy issue_reports_select on issue_reports
+  for select to authenticated
+  using (school_id = app.current_school_id() or app.is_superadmin());
+
+drop policy if exists issue_reports_insert on issue_reports;
+create policy issue_reports_insert on issue_reports
+  for insert to authenticated
+  with check (
+    school_id = app.current_school_id()
+    and reporter_id = app.current_user_id()
+  );
+
+drop policy if exists issue_reports_update on issue_reports;
+create policy issue_reports_update on issue_reports
+  for update to authenticated
+  using (app.is_school_admin() and school_id = app.current_school_id())
+  with check (app.is_school_admin() and school_id = app.current_school_id());

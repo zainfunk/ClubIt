@@ -26,6 +26,20 @@ export async function POST(
   const token = generateSetupToken()
   const expiry = setupTokenExpiresAt()
 
+  const { data: school } = await db
+    .from('schools')
+    .select('id, status')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (!school) {
+    return NextResponse.json({ error: 'School not found' }, { status: 404 })
+  }
+
+  if (school.status !== 'active') {
+    return NextResponse.json({ error: 'Setup links can only be generated for active schools' }, { status: 409 })
+  }
+
   const { error } = await db
     .from('schools')
     .update({
@@ -34,6 +48,7 @@ export async function POST(
       setup_completed_at: null, // reset completion so IT can re-visit
     })
     .eq('id', id)
+    .eq('status', 'active')
 
   if (error) return NextResponse.json({ error: 'Failed to generate setup link' }, { status: 500 })
 

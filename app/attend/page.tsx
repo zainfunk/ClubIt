@@ -4,13 +4,22 @@ import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
-import { CLUBS, USERS } from '@/lib/mock-data'
-import { getSessionById, markSessionCheckin, upsertRecord, haversineMeters } from '@/lib/attendance-store'
+import { getSessionById, haversineMeters, markSessionCheckin, upsertRecord } from '@/lib/attendance-store'
+import { supabase } from '@/lib/supabase'
 import Avatar from '@/components/Avatar'
-import { CheckCircle, XCircle, MapPin, Clock, AlertTriangle } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Clock, MapPin, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-type Status = 'idle' | 'checking' | 'success' | 'expired' | 'already' | 'distance' | 'no-session' | 'location-error'
+type Status =
+  | 'idle'
+  | 'checking'
+  | 'success'
+  | 'expired'
+  | 'already'
+  | 'distance'
+  | 'no-session'
+  | 'location-error'
+  | 'forbidden'
 
 function AttendContent() {
   const { currentUser } = useMockAuth()
@@ -20,41 +29,93 @@ function AttendContent() {
   const [status, setStatus] = useState<Status>('idle')
   const [distanceM, setDistanceM] = useState<number | null>(null)
   const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionById>> | null | undefined>(undefined)
+  const [club, setClub] = useState<{ id: string; name: string; icon_url?: string | null; school_id?: string | null; advisor_id?: string | null } | null>(null)
+  const [canCheckIn, setCanCheckIn] = useState(false)
 
-  useEffect(() => { getSessionById(token).then(setSession) }, [token])
+  useEffect(() => {
+    getSessionById(token).then(setSession)
+  }, [token])
 
-  const club = session ? CLUBS.find((c) => c.id === session.clubId) : undefined
+  useEffect(() => {
+    if (!session || !currentUser.id || !currentUser.schoolId) return
+
+    let cancelled = false
+
+    Promise.all([
+      supabase
+        .from('clubs')
+        .select('id, name, icon_url, school_id, advisor_id')
+        .eq('id', session.clubId)
+        .maybeSingle(),
+      supabase
+        .from('memberships')
+        .select('user_id')
+        .eq('club_id', session.clubId)
+        .eq('user_id', currentUser.id)
+        .maybeSingle(),
+    ]).then(([clubRes, membershipRes]) => {
+      if (cancelled) return
+
+      setClub(clubRes.data ?? null)
+
+      const sameSchool = clubRes.data?.school_id === currentUser.schoolId
+      const isAdvisor = clubRes.data?.advisor_id === currentUser.id
+      const isMember = Boolean(membershipRes.data)
+      const isAdmin = currentUser.role === 'admin'
+
+      setCanCheckIn(Boolean(sameSchool && (isAdmin || isAdvisor || isMember)))
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser.id, currentUser.role, currentUser.schoolId, session])
 
   async function checkIn() {
-    if (!session) { setStatus('no-session'); return }
+    if (!session) {
+      setStatus('no-session')
+      return
+    }
 
-    // Expiry check
-    if (new Date() > new Date(session.expiresAt)) { setStatus('expired'); return }
+    if (!canCheckIn) {
+      setStatus('forbidden')
+      return
+    }
 
-    // Duplicate check
-    if (session.recordedUserIds.includes(currentUser.id)) { setStatus('already'); return }
+    if (new Date() > new Date(session.expiresAt)) {
+      setStatus('expired')
+      return
+    }
+
+    if (session.recordedUserIds.includes(currentUser.id)) {
+      setStatus('already')
+      return
+    }
 
     setStatus('checking')
 
-    // Distance check
     if (session.maxDistanceMeters > 0 && session.advisorLat !== undefined && session.advisorLng !== undefined) {
       try {
         const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
           navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 })
         )
         const dist = haversineMeters(
-          session.advisorLat!, session.advisorLng!,
-          pos.coords.latitude, pos.coords.longitude
+          session.advisorLat,
+          session.advisorLng,
+          pos.coords.latitude,
+          pos.coords.longitude
         )
         setDistanceM(Math.round(dist))
-        if (dist > session.maxDistanceMeters) { setStatus('distance'); return }
+        if (dist > session.maxDistanceMeters) {
+          setStatus('distance')
+          return
+        }
       } catch {
         setStatus('location-error')
         return
       }
     }
 
-    // Record attendance
     await upsertRecord(session.clubId, currentUser.id, session.meetingDate, true)
     await markSessionCheckin(token, currentUser.id)
     setStatus('success')
@@ -77,9 +138,8 @@ function AttendContent() {
   return (
     <div className="max-w-sm mx-auto py-12">
       <div className="bg-white rounded-2xl border p-8 text-center shadow-sm">
-        {/* Club info */}
         <div className="mb-6">
-          <span className="text-5xl">{club?.iconUrl ?? '📌'}</span>
+          <span className="text-5xl">{club?.icon_url ?? '📌'}</span>
           <h1 className="text-xl font-bold text-gray-900 mt-3">{club?.name ?? 'Club'}</h1>
           <p className="text-sm text-gray-500 mt-1">Attendance check-in</p>
           <div className="flex items-center justify-center gap-4 mt-3 text-xs text-gray-400">
@@ -96,7 +156,6 @@ function AttendContent() {
           </div>
         </div>
 
-        {/* Current user */}
         <div className="flex items-center gap-3 justify-center mb-4 p-3 bg-gray-50 rounded-xl">
           <Avatar name={currentUser.name} size="sm" />
           <div className="text-left">
@@ -105,12 +164,10 @@ function AttendContent() {
           </div>
         </div>
 
-        {/* Switch user note */}
         <p className="text-xs text-gray-400 mb-6">
           Not you? Use the user selector in the top bar to switch accounts.
         </p>
 
-        {/* Status messages */}
         {status === 'success' && (
           <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl">
             <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
@@ -123,7 +180,9 @@ function AttendContent() {
           <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <CheckCircle className="w-8 h-8 text-blue-400 mx-auto mb-2" />
             <p className="font-semibold text-blue-800">Already checked in</p>
-            <p className="text-sm text-blue-600 mt-1">Your attendance for {session.meetingDate} is already recorded.</p>
+            <p className="text-sm text-blue-600 mt-1">
+              Your attendance for {session.meetingDate} is already recorded.
+            </p>
           </div>
         )}
 
@@ -131,7 +190,9 @@ function AttendContent() {
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
             <XCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
             <p className="font-semibold text-red-800">Link expired</p>
-            <p className="text-sm text-red-600 mt-1">This check-in link expired at {expiresAt.toLocaleTimeString()}.</p>
+            <p className="text-sm text-red-600 mt-1">
+              This check-in link expired at {expiresAt.toLocaleTimeString()}.
+            </p>
           </div>
         )}
 
@@ -155,6 +216,16 @@ function AttendContent() {
           </div>
         )}
 
+        {status === 'forbidden' && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <XCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+            <p className="font-semibold text-red-800">You cannot check in to this club</p>
+            <p className="text-sm text-red-600 mt-1">
+              This attendance link only works for members, the club advisor, or school admins in the same school.
+            </p>
+          </div>
+        )}
+
         {status === 'no-session' && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
             <XCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
@@ -162,21 +233,19 @@ function AttendContent() {
           </div>
         )}
 
-        {/* Expiry countdown info */}
         {!isExpired && status !== 'success' && status !== 'already' && (
           <p className="text-xs text-gray-400 mb-4">
             Expires at {expiresAt.toLocaleTimeString()}
           </p>
         )}
 
-        {/* Check-in button */}
         {status !== 'success' && status !== 'already' && !isExpired && (
           <Button
             className="w-full"
             onClick={checkIn}
             disabled={status === 'checking'}
           >
-            {status === 'checking' ? 'Checking location…' : 'Mark me present'}
+            {status === 'checking' ? 'Checking location...' : 'Mark me present'}
           </Button>
         )}
 
@@ -190,7 +259,7 @@ function AttendContent() {
 
 export default function AttendPage() {
   return (
-    <Suspense fallback={<div className="text-center py-20 text-gray-400">Loading…</div>}>
+    <Suspense fallback={<div className="text-center py-20 text-gray-400">Loading...</div>}>
       <AttendContent />
     </Suspense>
   )

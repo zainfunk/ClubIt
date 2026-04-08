@@ -49,12 +49,16 @@ export async function POST(
 
   const { data: school } = await db
     .from('schools')
-    .select('id, setup_token_expires_at')
+    .select('id, status, setup_token_expires_at')
     .eq('setup_token', token)
     .maybeSingle()
 
   if (!school) {
     return NextResponse.json({ error: 'Invalid setup link' }, { status: 404 })
+  }
+
+  if (school.status !== 'active') {
+    return NextResponse.json({ error: 'This school is not active' }, { status: 403 })
   }
 
   if (school.setup_token_expires_at && new Date(school.setup_token_expires_at) < new Date()) {

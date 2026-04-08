@@ -299,7 +299,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
                 />
               </div>
               <p className="text-xs text-gray-400 mt-1.5">
-                They&apos;ll use this link to fill out their school details and get their invite codes.
+                Development-only shortcut. This bypasses the normal onboarding review flow so you can test a full school setup quickly.
               </p>
             </div>
             {error && <p className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">{error}</p>}
@@ -336,7 +336,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
             </div>
 
             <p className="text-xs text-gray-400 text-center">
-              Single-use link — expires once the school fills out the form.
+              Single-use development link only.
             </p>
           </div>
         )}
@@ -346,6 +346,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function SuperAdminPage() {
+  const devQuickInviteEnabled = process.env.NODE_ENV === 'development'
   const { user, isLoaded } = useUser()
   const router = useRouter()
   const [schools, setSchools] = useState<SchoolType[]>([])
@@ -370,8 +371,24 @@ export default function SuperAdminPage() {
   }
 
   useEffect(() => {
-    if (isLoaded && user?.publicMetadata?.role === 'superadmin') loadSchools()
-  }, [isLoaded, user]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!isLoaded || user?.publicMetadata?.role !== 'superadmin') return
+
+    let cancelled = false
+
+    async function loadSchoolsForPage() {
+      const res = await fetch('/api/superadmin/schools')
+      const data = await res.json()
+      if (cancelled) return
+      setSchools(data.schools ?? [])
+      setLoading(false)
+    }
+
+    void loadSchoolsForPage()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isLoaded, user])
 
   const filtered = filter === 'all' ? schools : schools.filter(s => s.status === filter)
 
@@ -388,7 +405,7 @@ export default function SuperAdminPage() {
 
   return (
     <div className="max-w-3xl mx-auto py-10 px-4">
-      {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
+      {devQuickInviteEnabled && showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
@@ -404,13 +421,15 @@ export default function SuperAdminPage() {
             <RefreshCw className="w-4 h-4" />
             Refresh
           </button>
-          <button
-            onClick={() => setShowInvite(true)}
-            className="flex items-center gap-1.5 text-sm bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-800 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Invite school
-          </button>
+          {devQuickInviteEnabled && (
+            <button
+              onClick={() => setShowInvite(true)}
+              className="flex items-center gap-1.5 text-sm bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-800 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Quick invite (Dev)
+            </button>
+          )}
         </div>
       </div>
 

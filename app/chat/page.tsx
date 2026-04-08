@@ -1,12 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
 import { useChatStore } from '@/lib/chat-store'
+import { fetchSchoolClubs, fetchUsersByIds } from '@/lib/school-data'
 import { supabase } from '@/lib/supabase'
-import { USERS } from '@/lib/mock-data'
-import { Club, User, Role } from '@/types'
+import { Club, User } from '@/types'
 import Avatar from '@/components/Avatar'
 import { MessageSquare } from 'lucide-react'
 
@@ -15,46 +15,54 @@ export default function ChatPage() {
   const { messages } = useChatStore()
   const [myClubIds, setMyClubIds] = useState<string[]>([])
   const [schoolClubs, setSchoolClubs] = useState<Club[]>([])
-  const [supabaseUsers, setSupabaseUsers] = useState<Record<string, User>>({})
+  const [usersById, setUsersById] = useState<Record<string, User>>({})
 
   useEffect(() => {
     if (!currentUser.id || !currentUser.schoolId) return
-    supabase.from('memberships').select('club_id').eq('user_id', currentUser.id).then(({ data }) => {
-      setMyClubIds((data ?? []).map((r) => r.club_id))
-    })
-    // Load all clubs in this school for admin view
-    supabase.from('clubs').select('id, name, icon_url, advisor_id').eq('school_id', currentUser.schoolId).then(({ data }) => {
-      if (data) setSchoolClubs(data.map((d) => ({
-        id: d.id, name: d.name, iconUrl: d.icon_url ?? undefined, advisorId: d.advisor_id ?? '',
-        description: '', memberIds: [], leadershipPositions: [], socialLinks: [], meetingTimes: [],
-        tags: [], eventCreatorIds: [], capacity: null, autoAccept: false, createdAt: '',
-      })))
-    })
+
+    supabase
+      .from('memberships')
+      .select('club_id')
+      .eq('user_id', currentUser.id)
+      .then(({ data }) => {
+        setMyClubIds((data ?? []).map((row) => row.club_id))
+      })
+
+    fetchSchoolClubs(currentUser.schoolId).then(setSchoolClubs)
   }, [currentUser.id, currentUser.schoolId])
 
   useEffect(() => {
-    // Fetch user data for any message sender IDs not in mock data
-    const senderIds = Array.from(new Set(messages.map((m) => m.senderId)))
-    const unknownIds = senderIds.filter((uid) => !USERS.find((u) => u.id === uid))
-    if (unknownIds.length === 0) return
-    supabase.from('users').select('id, name, email, role').in('id', unknownIds).then(({ data }) => {
-      if (data?.length) {
-        setSupabaseUsers((prev) => {
-          const next = { ...prev }
-          for (const u of data) next[u.id] = { id: u.id, name: u.name, email: u.email, role: u.role as Role }
-          return next
-        })
+    let cancelled = false
+    const userIds = Array.from(new Set([
+      ...messages.map((message) => message.senderId),
+      ...schoolClubs.map((club) => club.advisorId),
+    ].filter(Boolean)))
+
+    if (userIds.length === 0) {
+      Promise.resolve().then(() => {
+        if (!cancelled) setUsersById({})
+      })
+      return () => {
+        cancelled = true
       }
+    }
+
+    fetchUsersByIds(userIds).then((users) => {
+      if (!cancelled) setUsersById(users)
     })
-  }, [messages])
+
+    return () => {
+      cancelled = true
+    }
+  }, [messages, schoolClubs])
 
   function resolveUser(userId: string): User | undefined {
-    return USERS.find((u) => u.id === userId) ?? supabaseUsers[userId]
+    return usersById[userId] ?? (currentUser.id === userId ? currentUser : undefined)
   }
 
   const clubs = currentUser.role === 'admin'
     ? schoolClubs
-    : schoolClubs.filter((c) => myClubIds.includes(c.id) || c.advisorId === currentUser.id)
+    : schoolClubs.filter((club) => myClubIds.includes(club.id) || club.advisorId === currentUser.id)
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -67,22 +75,22 @@ export default function ChatPage() {
         </h2>
         <p className="text-gray-500 mt-1 text-sm">
           {currentUser.role === 'admin'
-            ? 'You have access to all club chats.'
-            : 'Chats for clubs you belong to.'}
+            ? 'You have access to all club chats in your school.'
+            : 'Chats for clubs you belong to or advise.'}
         </p>
       </div>
 
       {clubs.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-xl border border-gray-100">
           <MessageSquare className="w-8 h-8 text-gray-200 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">You haven't joined any clubs yet.</p>
+          <p className="text-gray-400 text-sm">You haven&apos;t joined any clubs yet.</p>
         </div>
       ) : (
         <div className="space-y-2">
           {clubs.map((club) => {
-            const clubMessages = messages.filter((m) => m.clubId === club.id)
-            const last = clubMessages[clubMessages.length - 1]
-            const lastSender = last ? resolveUser(last.senderId) : null
+            const clubMessages = messages.filter((message) => message.clubId === club.id)
+            const lastMessage = clubMessages[clubMessages.length - 1]
+            const lastSender = lastMessage ? resolveUser(lastMessage.senderId) : null
             const advisor = resolveUser(club.advisorId)
 
             return (
@@ -96,22 +104,22 @@ export default function ChatPage() {
                       <p className="font-semibold text-gray-900 truncate" style={{ fontFamily: 'var(--font-manrope)' }}>
                         {club.name}
                       </p>
-                      {last && (
+                      {lastMessage && (
                         <span className="text-[10px] text-gray-400 shrink-0">
-                          {new Date(last.sentAt).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                          {new Date(lastMessage.sentAt).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
                         </span>
                       )}
                     </div>
                     <p className="text-xs text-gray-400 truncate mt-0.5">
-                      {last
-                        ? `${lastSender?.name ?? 'Someone'}: ${last.content}`
-                        : 'No messages yet — say hello!'}
+                      {lastMessage
+                        ? `${lastSender?.name ?? 'Someone'}: ${lastMessage.content}`
+                        : 'No messages yet. Say hello!'}
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {advisor && <Avatar name={advisor.name} size="sm" />}
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                      {club.memberIds.length + 1}
+                      {club.memberIds.length}
                     </span>
                   </div>
                 </div>

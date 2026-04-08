@@ -1,15 +1,15 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
-import { USERS, getClubsByAdvisor, getAttendanceByUserAndClub, getUserById } from '@/lib/mock-data'
+import { fetchClubsByIds, fetchSchoolClubs, fetchSchoolUsers } from '@/lib/school-data'
 import { supabase } from '@/lib/supabase'
-import { setName, setEmail, applyOverrides } from '@/lib/user-store'
+import { setName, setEmail } from '@/lib/user-store'
 import { getProfile, setProfile, SOCIAL_PLATFORMS, PersonalSocialLink } from '@/lib/profile-store'
 import { getAdminSettings } from '@/lib/settings-store'
 import { getRecordsByClub } from '@/lib/attendance-store'
-import { AttendanceRecord } from '@/types'
+import { AttendanceRecord, Club, User } from '@/types'
 import Avatar from '@/components/Avatar'
 import { Input } from '@/components/ui/input'
 import AttendanceCalendar from '@/components/profile/AttendanceCalendar'
@@ -23,12 +23,6 @@ const ROLE_BADGE: Record<string, string> = {
   admin:   'bg-red-100 text-red-700 border-red-200',
   advisor: 'bg-blue-100 text-blue-700 border-blue-200',
   student: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-}
-
-const ROLE_GRADIENT: Record<string, string> = {
-  admin:   'linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.04) 100%)',
-  advisor: 'linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(59,130,246,0.04) 100%)',
-  student: 'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.04) 100%)',
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -46,9 +40,6 @@ function computeAchievements(
   const totalMeetings = allRecords.length
   const presentCount = allRecords.filter((r) => r.present).length
   const pct = totalMeetings > 0 ? presentCount / totalMeetings : 0
-  const leadershipCount = memberClubs.filter((c) =>
-    c.leadershipPositions.some((lp) => lp.userId !== undefined),
-  ).length
 
   achievements.push({
     icon: <BookOpen className="w-5 h-5" />,
@@ -94,16 +85,20 @@ export default function ProfilePage() {
 
   const isAdmin = currentUser.role === 'admin'
 
-  // For admin browsing other (mock) users; own profile always uses real currentUser
+  // Admins can browse other users in the current school
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
-  const mockUsers = USERS.map(applyOverrides)
+  const [schoolUsers, setSchoolUsers] = useState<User[]>([])
+
+  useEffect(() => {
+    if (!currentUser.schoolId) return
+    fetchSchoolUsers(currentUser.schoolId).then(setSchoolUsers)
+  }, [currentUser.schoolId])
 
   const profileUser = isAdmin && selectedUserId
-    ? (mockUsers.find((u) => u.id === selectedUserId) ?? currentUser)
+    ? (schoolUsers.find((u) => u.id === selectedUserId) ?? currentUser)
     : currentUser
 
   const canEdit = isAdmin || profileUser.id === currentUser.id
-  const isOwnProfile = profileUser.id === currentUser.id
 
   const [profile, setProfileState] = useState({ bio: '', skills: [] as string[], interests: [] as string[], socials: [] as PersonalSocialLink[] })
   useEffect(() => { getProfile(profileUser.id).then(setProfileState) }, [profileUser.id])
@@ -114,20 +109,22 @@ export default function ProfilePage() {
   }
 
   // ---- Name editing ----
-  const [nameInput, setNameInput] = useState(profileUser.name)
-  useEffect(() => { setNameInput(profileUser.name) }, [profileUser.id])
+  const [nameInput, setNameInput] = useState('')
+  useEffect(() => {
+    Promise.resolve().then(() => setNameInput(profileUser.name))
+  }, [profileUser.name])
   function saveName() {
     if (!nameInput.trim() || nameInput.trim() === profileUser.name) return
-    setName(profileUser.id, nameInput.trim())
-      }
+    void setName(profileUser.id, nameInput.trim())
+  }
 
   // ---- Email editing ----
   const [editingEmail, setEditingEmail] = useState(false)
   const [emailInput, setEmailInput] = useState('')
   function saveEmail() {
     if (!emailInput.trim()) return
-    setEmail(profileUser.id, emailInput.trim())
-        setEditingEmail(false)
+    void setEmail(profileUser.id, emailInput.trim())
+    setEditingEmail(false)
   }
 
   // ---- Bio editing ----
@@ -152,61 +149,54 @@ export default function ProfilePage() {
   }
 
   // ---- Clubs & attendance ----
-  const [myClubIds, setMyClubIds] = useState<string[]>([])
-  const [supabaseClubs, setSupabaseClubs] = useState<import('@/types').Club[]>([])
+  const [memberClubs, setMemberClubs] = useState<Club[]>([])
+  const [advisingClubs, setAdvisingClubs] = useState<Club[]>([])
   useEffect(() => {
-    if (!profileUser.id) return
+    if (!profileUser.id || !currentUser.schoolId) return
     supabase.from('memberships').select('club_id').eq('user_id', profileUser.id).then(({ data }) => {
       const ids = (data ?? []).map((r) => r.club_id)
-      setMyClubIds(ids)
       if (ids.length > 0) {
-        supabase.from('clubs').select('id, name, icon_url, advisor_id').in('id', ids).then(({ data: clubData }) => {
-          if (clubData) {
-            setSupabaseClubs(clubData.map((d) => ({
-              id: d.id, name: d.name, iconUrl: d.icon_url ?? undefined, advisorId: d.advisor_id ?? '',
-              description: '', memberIds: [], leadershipPositions: [], socialLinks: [], meetingTimes: [],
-              tags: [], eventCreatorIds: [], capacity: null, autoAccept: false, createdAt: '',
-            })))
-          }
-        })
+        fetchClubsByIds(ids).then(setMemberClubs)
+      } else {
+        setMemberClubs([])
       }
     })
-  }, [profileUser.id])
+    if (profileUser.role === 'advisor' || profileUser.role === 'admin') {
+      fetchSchoolClubs(currentUser.schoolId).then((clubs) => {
+        setAdvisingClubs(clubs.filter((club) => club.advisorId === profileUser.id))
+      })
+    } else {
+      Promise.resolve().then(() => setAdvisingClubs([]))
+    }
+  }, [currentUser.schoolId, profileUser.id, profileUser.role])
 
-  const memberClubs = supabaseClubs
-
-  const advisingClubs = profileUser.role === 'advisor' || profileUser.role === 'admin'
-    ? getClubsByAdvisor(profileUser.id) : []
   const displayClubs = profileUser.role === 'advisor' ? advisingClubs : memberClubs
+  const usersById = Object.fromEntries(schoolUsers.map((user) => [user.id, user]))
+
+  function resolveUser(userId: string) {
+    return usersById[userId] ?? (currentUser.id === userId ? currentUser : undefined)
+  }
 
   const [supabaseAttendance, setSupabaseAttendance] = useState<AttendanceRecord[]>([])
   useEffect(() => {
     Promise.all(memberClubs.map((c) => getRecordsByClub(c.id))).then((results) => {
       setSupabaseAttendance(results.flat().filter((r) => r.userId === profileUser.id))
     })
-  }, [profileUser.id, memberClubs.length])
+  }, [profileUser.id, memberClubs])
 
   function getClubAttendance(clubId: string): AttendanceRecord[] {
-    const mock = getAttendanceByUserAndClub(profileUser.id, clubId)
-    const stored = supabaseAttendance.filter((r) => r.clubId === clubId)
-    const merged = new Map<string, AttendanceRecord>()
-    for (const r of mock) merged.set(r.meetingDate, r)
-    for (const r of stored) merged.set(r.meetingDate, r)
-    return Array.from(merged.values()).sort((a, b) => a.meetingDate.localeCompare(b.meetingDate))
+    return supabaseAttendance
+      .filter((r) => r.clubId === clubId)
+      .sort((a, b) => a.meetingDate.localeCompare(b.meetingDate))
   }
 
-  const allAttendanceRecords = useMemo(() => {
-    return memberClubs.flatMap((c) => getClubAttendance(c.id))
-  }, [profileUser.id, memberClubs.length, supabaseAttendance.length])
+  const allAttendanceRecords = memberClubs.flatMap((c) => getClubAttendance(c.id))
 
   const totalMeetings = allAttendanceRecords.length
   const presentCount = allAttendanceRecords.filter((r) => r.present).length
   const attendancePct = totalMeetings > 0 ? Math.round((presentCount / totalMeetings) * 100) : 0
 
-  const achievements = useMemo(
-    () => computeAchievements(memberClubs, allAttendanceRecords),
-    [memberClubs.length, allAttendanceRecords.length],
-  )
+  const achievements = computeAchievements(memberClubs, allAttendanceRecords)
   const earnedCount = achievements.filter((a) => a.earned).length
 
   const [tab, setTab] = useState<Tab>('overview')
@@ -247,7 +237,7 @@ export default function ProfilePage() {
             }}
             className="text-sm rounded-lg px-2 py-1 bg-white text-gray-700 cursor-pointer flex-1 border-0"
           >
-            {mockUsers.map((u) => (
+            {schoolUsers.map((u) => (
               <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
             ))}
           </select>
@@ -470,7 +460,7 @@ export default function ProfilePage() {
                 </h3>
                 <div className="space-y-3">
                   {displayClubs.map((club) => {
-                    const advisor = getUserById(club.advisorId)
+                    const advisor = resolveUser(club.advisorId)
                     const position = club.leadershipPositions.find((lp) => lp.userId === profileUser.id)
                     return (
                       <Link key={club.id} href={`/clubs/${club.id}`}>
@@ -549,7 +539,7 @@ export default function ProfilePage() {
               </p>
             ) : (
               displayClubs.map((club) => {
-                const advisor = getUserById(club.advisorId)
+                const advisor = resolveUser(club.advisorId)
                 const position = club.leadershipPositions.find((lp) => lp.userId === profileUser.id)
                 return (
                   <Link key={club.id} href={`/clubs/${club.id}`}>

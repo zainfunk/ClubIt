@@ -9,6 +9,7 @@ const isPublicRoute = createRouteMatcher([
   '/invite(.*)',
   '/join',
   '/api/invite/(.*)',
+  '/api/setup/(.*)',
   '/api/onboard',
 ])
 

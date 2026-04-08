@@ -1,9 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { Role } from '@/types'
 import { GraduationCap, LayoutDashboard, Calendar, FileText, Compass, User, ShieldCheck, MessageSquare, Settings } from 'lucide-react'
 import Avatar from '@/components/Avatar'
 import { HelpButton } from '@/components/HelpTour'
@@ -25,11 +24,10 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar() {
-  const { currentUser, devRole, setDevRole } = useMockAuth()
+  const { actualUser, schoolName } = useMockAuth()
   const pathname = usePathname()
-  const router = useRouter()
 
-  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(currentUser.role))
+  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(actualUser.role))
 
   function isActive(href: string) {
     if (href === '/profile') return pathname === '/profile' || pathname.startsWith('/profile/')
@@ -53,8 +51,8 @@ export default function Sidebar() {
               Clubit
             </h2>
           </Link>
-          <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-widest mt-1">
-            Academic Curator
+          <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-widest mt-1 truncate max-w-[140px]">
+            {schoolName ?? 'Academic Curator'}
           </p>
         </div>
       </div>
@@ -98,38 +96,23 @@ export default function Sidebar() {
         </Link>
 
         {/* Help button — only shown for non-admin */}
-        {currentUser.role !== 'admin' && <HelpButton />}
+        {actualUser.role !== 'admin' && <HelpButton />}
       </nav>
 
       {/* User section */}
       <div className="border-t border-slate-200/50 pt-6 space-y-3 px-4">
         <div className="flex items-center gap-3">
           <Link href="/profile" className="shrink-0">
-            <Avatar name={currentUser.name} size="sm" />
+            <Avatar name={actualUser.name} size="sm" />
           </Link>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-slate-900 truncate leading-tight" style={{ fontFamily: 'var(--font-manrope)' }}>
-              {currentUser.name}
+              {actualUser.name}
             </p>
-            <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${ROLE_BADGE[currentUser.role]}`}>
-              {currentUser.role}
+            <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${ROLE_BADGE[actualUser.role]}`}>
+              {actualUser.role}
             </span>
           </div>
-        </div>
-
-        {/* Dev: role override for UI testing (your identity/data never changes) */}
-        <div>
-          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Preview Role (Dev)</p>
-          <select
-            value={devRole ?? ''}
-            onChange={(e) => { setDevRole((e.target.value as Role) || null); router.push('/') }}
-            className="w-full text-xs rounded-lg px-2 py-1.5 cursor-pointer text-slate-500 bg-slate-100 border-none outline-none"
-          >
-            <option value="">— My Role —</option>
-            <option value="student">Student</option>
-            <option value="advisor">Advisor</option>
-            <option value="admin">Admin</option>
-          </select>
         </div>
       </div>
     </aside>

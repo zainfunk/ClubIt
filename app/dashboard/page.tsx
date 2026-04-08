@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
 import { supabase } from '@/lib/supabase'
-import { Users, BookOpen, Pin, Calendar } from 'lucide-react'
+import { Users, BookOpen, Pin, Calendar, MessageSquare, CheckCircle, Clock } from 'lucide-react'
 import type { Club, ClubEvent, ClubNews, JoinRequest } from '@/types'
 
 function getPattern(club: Club): 'chess' | 'art' | 'robotics' {
@@ -27,6 +27,7 @@ export default function DashboardPage() {
   const [pinnedNews, setPinnedNews] = useState<Record<string, ClubNews>>({})
   const [nextEvents, setNextEvents] = useState<Record<string, ClubEvent>>({})
   const [pendingRequests, setPendingRequests] = useState<JoinRequest[]>([])
+  const [issueReports, setIssueReports] = useState<{ id: string; reporter_name: string; reporter_email: string; message: string; status: string; created_at: string }[]>([])
 
   useEffect(() => {
     if (!currentUser.id || !currentUser.schoolId) return
@@ -96,6 +97,11 @@ export default function DashboardPage() {
     }
 
     if (currentUser.role === 'advisor') {
+      // Load issue reports for this school
+      supabase.from('issue_reports').select('*').eq('school_id', currentUser.schoolId!).order('created_at', { ascending: false }).then(({ data }) => {
+        if (data) setIssueReports(data)
+      })
+
       // Load clubs I advise
       supabase.from('clubs').select('*').eq('advisor_id', currentUser.id).eq('school_id', currentUser.schoolId!).then(async ({ data: clubData }) => {
         if (!clubData?.length) return
@@ -147,6 +153,11 @@ export default function DashboardPage() {
       })
     }
   }, [currentUser.id, currentUser.schoolId, currentUser.role])
+
+  async function resolveIssue(id: string) {
+    await supabase.from('issue_reports').update({ status: 'resolved' }).eq('id', id)
+    setIssueReports((prev) => prev.map((r) => r.id === id ? { ...r, status: 'resolved' } : r))
+  }
 
   const firstName = currentUser.name.split(' ')[0]
 
@@ -269,6 +280,54 @@ export default function DashboardPage() {
             </button>
           </Link>
         </div>
+
+        {/* Issue reports — visible to advisors */}
+        {currentUser.role === 'advisor' && (
+          <div className="mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare className="w-4 h-4 text-orange-500" />
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Issue Reports</h3>
+              {issueReports.filter((r) => r.status === 'open').length > 0 && (
+                <span className="text-xs font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                  {issueReports.filter((r) => r.status === 'open').length} open
+                </span>
+              )}
+            </div>
+            {issueReports.length === 0 ? (
+              <p className="text-sm text-gray-400">No issue reports yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {issueReports.map((report) => (
+                  <div key={report.id} className={`bg-white rounded-xl border border-gray-100 p-4 ${report.status === 'resolved' ? 'opacity-60' : ''}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-sm font-semibold text-gray-900">{report.reporter_name}</span>
+                          <span className="text-xs text-gray-400">{report.reporter_email}</span>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${report.status === 'open' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                            {report.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-700">{report.message}</p>
+                        <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {new Date(report.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      {report.status === 'open' && (
+                        <button onClick={() => resolveIssue(report.id)}
+                          className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          Resolve
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

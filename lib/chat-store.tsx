@@ -1,8 +1,10 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { ChatMessage } from '@/types'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useMockAuth } from '@/lib/mock-auth'
+import { fetchSchoolClubs } from '@/lib/school-data'
 import { supabase } from '@/lib/supabase'
+import { ChatMessage } from '@/types'
 
 interface ChatContextValue {
   messages: ChatMessage[]
@@ -11,64 +13,127 @@ interface ChatContextValue {
 
 const ChatContext = createContext<ChatContextValue | null>(null)
 
+function mapMessage(r: Record<string, unknown>): ChatMessage {
+  return {
+    id: r.id as string,
+    clubId: r.club_id as string,
+    senderId: r.sender_id as string,
+    content: r.content as string,
+    sentAt: r.sent_at as string,
+  }
+}
+
 export function ChatProvider({ children }: { children: ReactNode }) {
+  const { currentUser } = useMockAuth()
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [clubIds, setClubIds] = useState<string[]>([])
+
+  const clubKey = useMemo(() => clubIds.slice().sort().join('|'), [clubIds])
 
   function mergeMessages(incoming: ChatMessage[]) {
     setMessages((prev) => {
-      const map = new Map(prev.map((m) => [m.id, m]))
-      for (const m of incoming) map.set(m.id, m)
+      const map = new Map(prev.map((message) => [message.id, message]))
+      for (const message of incoming) {
+        if (clubIds.length === 0 || clubIds.includes(message.clubId)) {
+          map.set(message.id, message)
+        }
+      }
       return Array.from(map.values()).sort((a, b) => a.sentAt.localeCompare(b.sentAt))
     })
   }
 
-  function fetchAll() {
-    supabase.from('chat_messages').select('*').order('sent_at').then(({ data }) => {
-      if (data) mergeMessages(data.map(mapMessage))
-    })
+  async function fetchMessages(nextClubIds: string[]) {
+    if (nextClubIds.length === 0) {
+      setMessages([])
+      return
+    }
+
+    const { data } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .in('club_id', nextClubIds)
+      .order('sent_at')
+
+    if (data) {
+      setMessages(data.map(mapMessage))
+    }
   }
 
   useEffect(() => {
-    fetchAll()
-
-    // Real-time subscription (requires table added to Supabase Realtime publication)
-    const channel = supabase
-      .channel('chat_messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
-        mergeMessages([mapMessage(payload.new as Record<string, unknown>)])
+    if (!currentUser.schoolId) {
+      Promise.resolve().then(() => {
+        setClubIds([])
+        setMessages([])
       })
+      return
+    }
+
+    let cancelled = false
+
+    fetchSchoolClubs(currentUser.schoolId).then((clubs) => {
+      if (cancelled) return
+      const ids = clubs.map((club) => club.id)
+      setClubIds(ids)
+      void fetchMessages(ids)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser.schoolId])
+
+  useEffect(() => {
+    if (!currentUser.schoolId || clubIds.length === 0) return
+
+    const channel = supabase
+      .channel(`chat_messages_${currentUser.schoolId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        (payload) => {
+          const message = mapMessage(payload.new as Record<string, unknown>)
+          if (clubIds.includes(message.clubId)) {
+            mergeMessages([message])
+          }
+        }
+      )
       .subscribe()
 
-    // Polling fallback — keeps messages in sync even if Realtime isn't enabled
-    const interval = setInterval(fetchAll, 4000)
+    const interval = setInterval(() => {
+      void fetchMessages(clubIds)
+    }, 4000)
 
     return () => {
       supabase.removeChannel(channel)
       clearInterval(interval)
     }
-  }, [])
+  }, [clubKey, clubIds, currentUser.schoolId])
 
   async function sendMessage(clubId: string, senderId: string, content: string) {
-    const msg: ChatMessage = {
+    const trimmed = content.trim()
+    if (!trimmed) return
+
+    const message: ChatMessage = {
       id: `msg-${Date.now()}`,
       clubId,
       senderId,
-      content: content.trim(),
+      content: trimmed,
       sentAt: new Date().toISOString(),
     }
-    // Optimistically add to local state
-    setMessages((prev) => [...prev, msg])
-    // Persist to Supabase and remove optimistic message on failure
+
+    setMessages((prev) => [...prev, message])
+
     const { error } = await supabase.from('chat_messages').insert({
-      id: msg.id,
-      club_id: msg.clubId,
-      sender_id: msg.senderId,
-      content: msg.content,
-      sent_at: msg.sentAt,
+      id: message.id,
+      club_id: message.clubId,
+      sender_id: message.senderId,
+      content: message.content,
+      sent_at: message.sentAt,
     })
+
     if (error) {
       console.error('Failed to send message:', error)
-      setMessages((prev) => prev.filter((m) => m.id !== msg.id))
+      setMessages((prev) => prev.filter((entry) => entry.id !== message.id))
     }
   }
 
@@ -83,14 +148,4 @@ export function useChatStore() {
   const ctx = useContext(ChatContext)
   if (!ctx) throw new Error('useChatStore must be used inside ChatProvider')
   return ctx
-}
-
-function mapMessage(r: Record<string, unknown>): ChatMessage {
-  return {
-    id: r.id as string,
-    clubId: r.club_id as string,
-    senderId: r.sender_id as string,
-    content: r.content as string,
-    sentAt: r.sent_at as string,
-  }
 }

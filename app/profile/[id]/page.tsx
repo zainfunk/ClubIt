@@ -1,15 +1,12 @@
 'use client'
 
-import { use, useState, useEffect, useMemo } from 'react'
+import { use, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import {
-  USERS, CLUBS, getClubsByMember, getClubsByAdvisor,
-  getAttendanceByUserAndClub, getUserById,
-} from '@/lib/mock-data'
+import { fetchClubsByIds, fetchSchoolClubs, fetchUsersByIds } from '@/lib/school-data'
 import { supabase } from '@/lib/supabase'
-import { applyOverrides, setName, setEmail } from '@/lib/user-store'
+import { setName, setEmail } from '@/lib/user-store'
 import {
   getProfile, setProfile as saveProfileStore,
   SOCIAL_PLATFORMS, PersonalSocialLink,
@@ -18,7 +15,7 @@ import {
   getAdminSettings, canViewAchievements, canViewAttendance, canViewClubs,
 } from '@/lib/settings-store'
 import { getRecordsByClub } from '@/lib/attendance-store'
-import { AttendanceRecord, User, Role } from '@/types'
+import { AttendanceRecord, Club, User, Role } from '@/types'
 import Avatar from '@/components/Avatar'
 import { Input } from '@/components/ui/input'
 import AttendanceCalendar from '@/components/profile/AttendanceCalendar'
@@ -45,7 +42,7 @@ const roleAccent: Record<string, string> = {
 type Tab = 'overview' | 'clubs' | 'attendance' | 'achievements'
 
 function computeAchievements(
-  memberClubs: ReturnType<typeof getClubsByMember>,
+  memberClubs: Club[],
   allRecords: AttendanceRecord[],
 ) {
   const presentCount = allRecords.filter((r) => r.present).length
@@ -70,29 +67,27 @@ export default function ViewProfilePage({ params }: PageProps) {
   const { id } = use(params)
   const { currentUser } = useMockAuth()
 
-  if (!currentUser.id) return null
-
-  // Resolve user: check mock data first, then Supabase for real Clerk accounts
-  const [rawUser, setRawUser] = useState<User | null>(() => USERS.find((u) => u.id === id) ?? null)
-  const [userLoading, setUserLoading] = useState(!USERS.find((u) => u.id === id))
+  const [rawUser, setRawUser] = useState<User | null>(null)
+  const [userLoading, setUserLoading] = useState(true)
 
   useEffect(() => {
-    if (!userLoading) return
-    supabase.from('users').select('id, name, email, role').eq('id', id).maybeSingle().then(({ data }) => {
-      if (data) setRawUser({ id: data.id, name: data.name, email: data.email, role: data.role as Role })
+    if (!currentUser.schoolId) {
+      Promise.resolve().then(() => setUserLoading(false))
+      return
+    }
+
+    fetchUsersByIds([id]).then((users) => {
+      setRawUser(users[id] ?? null)
       setUserLoading(false)
     })
-  }, [id])
+  }, [currentUser.schoolId, id])
 
   // Safe placeholder so hooks below can always derive values (shown only during load)
-  const profileUser = rawUser ? applyOverrides(rawUser) : { id, name: '', email: '', role: 'student' as Role }
-
-  const [, forceRefresh] = useState(0)
+  const profileUser = rawUser ?? { id, name: '', email: '', role: 'student' as Role }
 
   const isAdmin = currentUser.role === 'admin'
   const isAdvisor = currentUser.role === 'advisor'
   const isOwnProfile = currentUser.id === profileUser.id
-  const canEdit = isAdmin
 
   const accent = roleAccent[profileUser.role] ?? roleAccent.student
 
@@ -117,13 +112,15 @@ export default function ViewProfilePage({ params }: PageProps) {
 
   useEffect(() => {
     if (!rawUser) return
-    setDisplayName(applyOverrides(rawUser).name)
-    setDisplayEmail(applyOverrides(rawUser).email)
+    Promise.resolve().then(() => {
+      setDisplayName(rawUser.name)
+      setDisplayEmail(rawUser.email)
+    })
   }, [id, rawUser])
 
   function saveName() {
     if (!nameInput.trim()) return
-    setName(profileUser.id, nameInput.trim())
+    void setName(profileUser.id, nameInput.trim())
     setDisplayName(nameInput.trim())
     setEditingName(false)
   }
@@ -134,7 +131,7 @@ export default function ViewProfilePage({ params }: PageProps) {
 
   function saveEmail() {
     if (!emailInput.trim()) return
-    setEmail(profileUser.id, emailInput.trim())
+    void setEmail(profileUser.id, emailInput.trim())
     setDisplayEmail(emailInput.trim())
     setEditingEmail(false)
   }
@@ -164,24 +161,62 @@ export default function ViewProfilePage({ params }: PageProps) {
   }
 
   // ---- Clubs & attendance ----
-  const memberClubs = getClubsByMember(profileUser.id)
-  const advisingClubs = getClubsByAdvisor(profileUser.id)
+  const [memberClubs, setMemberClubs] = useState<Club[]>([])
+  const [advisingClubs, setAdvisingClubs] = useState<Club[]>([])
+  const [usersById, setUsersById] = useState<Record<string, User>>({})
   const displayClubs = profileUser.role === 'advisor' ? advisingClubs : memberClubs
+
+  useEffect(() => {
+    if (!profileUser.id || !currentUser.schoolId) return
+
+    supabase.from('memberships').select('club_id').eq('user_id', profileUser.id).then(({ data }) => {
+      const clubIds = (data ?? []).map((row) => row.club_id)
+      if (clubIds.length > 0) {
+        fetchClubsByIds(clubIds).then(setMemberClubs)
+      } else {
+        setMemberClubs([])
+      }
+    })
+
+    if (profileUser.role === 'advisor' || profileUser.role === 'admin') {
+      fetchSchoolClubs(currentUser.schoolId).then((clubs) => {
+        setAdvisingClubs(clubs.filter((club) => club.advisorId === profileUser.id))
+      })
+    } else {
+      Promise.resolve().then(() => setAdvisingClubs([]))
+    }
+  }, [currentUser.schoolId, profileUser.id, profileUser.role])
+
+  useEffect(() => {
+    const relatedUserIds = Array.from(new Set([
+      rawUser?.id ?? '',
+      ...memberClubs.flatMap((club) => [club.advisorId, ...club.memberIds]),
+      ...advisingClubs.flatMap((club) => [club.advisorId, ...club.memberIds]),
+    ].filter(Boolean)))
+
+    if (relatedUserIds.length === 0) {
+      Promise.resolve().then(() => setUsersById({}))
+      return
+    }
+
+    fetchUsersByIds(relatedUserIds).then(setUsersById)
+  }, [advisingClubs, memberClubs, rawUser?.id])
 
   const [supabaseAttendance, setSupabaseAttendance] = useState<AttendanceRecord[]>([])
   useEffect(() => {
     Promise.all(memberClubs.map((c) => getRecordsByClub(c.id))).then((results) => {
       setSupabaseAttendance(results.flat().filter((r) => r.userId === profileUser.id))
     })
-  }, [profileUser.id, memberClubs.length])
+  }, [profileUser.id, memberClubs])
 
   function getClubAttendance(clubId: string): AttendanceRecord[] {
-    const mock = getAttendanceByUserAndClub(profileUser.id, clubId)
-    const stored = supabaseAttendance.filter((r) => r.clubId === clubId)
-    const merged = new Map<string, AttendanceRecord>()
-    for (const r of mock) merged.set(r.meetingDate, r)
-    for (const r of stored) merged.set(r.meetingDate, r)
-    return Array.from(merged.values()).sort((a, b) => a.meetingDate.localeCompare(b.meetingDate))
+    return supabaseAttendance
+      .filter((r) => r.clubId === clubId)
+      .sort((a, b) => a.meetingDate.localeCompare(b.meetingDate))
+  }
+
+  function resolveUser(userId: string) {
+    return usersById[userId] ?? (currentUser.id === userId ? currentUser : rawUser?.id === userId ? rawUser : undefined)
   }
 
   // Shared club IDs between advisor and this student (for attendance visibility)
@@ -202,18 +237,13 @@ export default function ViewProfilePage({ params }: PageProps) {
   const showAchievements = canViewAchievements(currentUser.id, profileUser.id, currentUser.role)
   const adminSettings = getAdminSettings()
 
-  const allAttendanceRecords = useMemo(() => {
-    return memberClubs.flatMap((c) => getClubAttendance(c.id))
-  }, [profileUser.id, memberClubs.length])
+  const allAttendanceRecords = memberClubs.flatMap((c) => getClubAttendance(c.id))
 
   const totalMeetings = allAttendanceRecords.length
   const presentCount = allAttendanceRecords.filter((r) => r.present).length
   const attendancePct = totalMeetings > 0 ? Math.round((presentCount / totalMeetings) * 100) : 0
 
-  const achievements = useMemo(
-    () => computeAchievements(memberClubs, allAttendanceRecords),
-    [memberClubs.length, allAttendanceRecords.length],
-  )
+  const achievements = computeAchievements(memberClubs, allAttendanceRecords)
   const earnedCount = achievements.filter((a) => a.earned).length
 
   const canSeeEmail = isAdmin || isAdvisor || isOwnProfile
@@ -475,7 +505,7 @@ export default function ViewProfilePage({ params }: PageProps) {
                 </h3>
                 <div className="space-y-3">
                   {displayClubs.map((club) => {
-                    const advisor = getUserById(club.advisorId)
+                    const advisor = resolveUser(club.advisorId)
                     const position = club.leadershipPositions.find((lp) => lp.userId === profileUser.id)
                     return (
                       <Link key={club.id} href={`/clubs/${club.id}`}>
@@ -540,7 +570,7 @@ export default function ViewProfilePage({ params }: PageProps) {
               </p>
             ) : (
               displayClubs.map((club) => {
-                const advisor = getUserById(club.advisorId)
+                const advisor = resolveUser(club.advisorId)
                 const position = club.leadershipPositions.find((lp) => lp.userId === profileUser.id)
                 return (
                   <Link key={club.id} href={`/clubs/${club.id}`}>
