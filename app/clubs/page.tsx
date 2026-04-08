@@ -119,7 +119,10 @@ export default function ClubsPage() {
   }
 
   useEffect(() => {
-    if (!actualUser.schoolId) return
+    // Guard on id (not schoolId) — the server resolves school context itself.
+    // Guarding on schoolId causes clubs to never load when the client-side
+    // Supabase queries in syncSchoolContext are slow or blocked by RLS.
+    if (!actualUser.id) return
 
     let cancelled = false
 
@@ -139,7 +142,7 @@ export default function ClubsPage() {
     return () => {
       cancelled = true
     }
-  }, [actualUser.schoolId, actualUser.id])
+  }, [actualUser.id])
 
   const allTags = Array.from(new Set(clubs.flatMap((c) => c.tags ?? [])))
 

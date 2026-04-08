@@ -56,60 +56,73 @@ export default function ClubDetailPage({ params }: PageProps) {
   const [clubNews, setClubNews] = useState<ClubNews[]>([])
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([])
 
+  async function loadDetail(signal: AbortSignal) {
+    const res = await fetch(`/api/school/clubs/${id}`, { cache: 'no-store', signal })
+    if (signal.aborted) return
+    if (!res.ok) {
+      setClubs([])
+      setRequests([])
+      setPolls([])
+      setUsersById({})
+      setClubEvents([])
+      setClubNews([])
+      setAttendanceRecords([])
+      setClubLoading(false)
+      return
+    }
+    const detail = await res.json()
+    setClubs([detail.club])
+    setRequests(detail.requests)
+    setPolls(detail.polls)
+    setUsersById(detail.usersById)
+    setClubEvents(detail.events)
+    setClubNews(detail.news)
+    setAttendanceRecords(detail.attendanceRecords)
+    setClubLoading(false)
+  }
+
   useEffect(() => {
-    if (!currentUser.schoolId) {
-      Promise.resolve().then(() => {
-        setClubs([])
-        setRequests([])
-        setPolls([])
-        setUsersById({})
-        setClubEvents([])
-        setClubNews([])
-        setAttendanceRecords([])
-        setClubLoading(false)
-      })
+    // Guard on id, not schoolId — the server resolves school context itself.
+    if (!currentUser.id) {
+      setClubLoading(false)
       return
     }
 
-    let cancelled = false
-    Promise.resolve().then(() => {
-      if (!cancelled) setClubLoading(true)
-    })
-
-    fetch(`/api/school/clubs/${id}`, { cache: 'no-store' })
-      .then(async (res) => {
-        if (cancelled) return
-        if (!res.ok) {
-          setClubs([])
-          setRequests([])
-          setPolls([])
-          setUsersById({})
-          setClubEvents([])
-          setClubNews([])
-          setAttendanceRecords([])
-          setClubLoading(false)
-          return
-        }
-        const detail = await res.json()
-        setClubs([detail.club])
-        setRequests(detail.requests)
-        setPolls(detail.polls)
-        setUsersById(detail.usersById)
-        setClubEvents(detail.events)
-        setClubNews(detail.news)
-        setAttendanceRecords(detail.attendanceRecords)
-        setClubLoading(false)
-      })
-      .catch(() => {
-        if (cancelled) return
+    const controller = new AbortController()
+    setClubLoading(true)
+    loadDetail(controller.signal).catch((e) => {
+      if (e.name !== 'AbortError') {
         setClubs([])
         setClubLoading(false)
+      }
+    })
+
+    return () => controller.abort()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, currentUser.id])
+
+  // Poll for join-request status changes when the student has a pending request.
+  // The admin approves server-side; the student's page has no real-time channel,
+  // so we re-fetch every 8 seconds until the request resolves.
+  const myPendingRequest = requests.find(
+    (r) => r.userId === currentUser.id && r.status === 'pending'
+  )
+  useEffect(() => {
+    if (!myPendingRequest || !currentUser.id) return
+
+    const controller = new AbortController()
+    const interval = setInterval(() => {
+      loadDetail(controller.signal).catch((e) => {
+        if (e.name !== 'AbortError') console.error('poll error', e)
       })
+    }, 8000)
 
     return () => {
-      cancelled = true
+      clearInterval(interval)
+      controller.abort()
     }
-  }, [id, currentUser.schoolId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!myPendingRequest, currentUser.id, id])
 
   // Edit mode for club header info (advisor)
   const [editMode, setEditMode] = useState(false)
