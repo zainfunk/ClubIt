@@ -93,5 +93,18 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to update role' }, { status: 500 })
   }
 
+  try {
+    const client = await clerkClient()
+    const targetClerkUser = await client.users.getUser(target.id)
+    await client.users.updateUserMetadata(target.id, {
+      publicMetadata: {
+        ...targetClerkUser.publicMetadata,
+        role,
+      },
+    })
+  } catch (metadataError) {
+    console.warn('role metadata sync warning', metadataError)
+  }
+
   return NextResponse.json({ ok: true, userId: target.id, role })
 }

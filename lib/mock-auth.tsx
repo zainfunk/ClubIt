@@ -42,7 +42,7 @@ const NO_SCHOOL_REQUIRED = [
   '/dev',
 ]
 
-const ENTRY_ROUTES = ['/join', '/onboard', '/school/suspended']
+const ENTRY_ROUTES = ['/onboard', '/school/suspended']
 
 function getRequiredRoute(pathname: string, role: Role, schoolId?: string, schoolStatus?: SchoolStatus | null) {
   if (role === 'superadmin') return null

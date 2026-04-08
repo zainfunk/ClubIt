@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
@@ -14,6 +14,8 @@ export async function POST(request: NextRequest) {
   }
 
   const db = createServiceClient()
+  const client = await clerkClient()
+  const clerkUser = await client.users.getUser(userId)
 
   // Check if this user already has a pending/active school
   const { data: existingUser } = await db
@@ -45,9 +47,34 @@ export async function POST(request: NextRequest) {
   }
 
   // Tag the submitting user as admin of this school (pending)
-  await db
+  const { error: userError } = await db
     .from('users')
-    .upsert({ id: userId, school_id: school.id, role: 'admin' }, { onConflict: 'id' })
+    .upsert(
+      {
+        id: userId,
+        name: clerkUser.fullName ?? clerkUser.username ?? contactName.trim(),
+        email: clerkUser.primaryEmailAddress?.emailAddress ?? contactEmail.trim().toLowerCase(),
+        school_id: school.id,
+        role: 'admin',
+      },
+      { onConflict: 'id' }
+    )
+
+  if (userError) {
+    console.error('onboard user save error', userError)
+    return NextResponse.json({ error: 'Failed to save your school admin role' }, { status: 500 })
+  }
+
+  try {
+    await client.users.updateUserMetadata(userId, {
+      publicMetadata: {
+        ...clerkUser.publicMetadata,
+        role: 'admin',
+      },
+    })
+  } catch (metadataError) {
+    console.warn('onboard metadata sync warning', metadataError)
+  }
 
   return NextResponse.json({ schoolId: school.id })
 }

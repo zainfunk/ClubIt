@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { Role } from '@/types'
 
@@ -65,11 +65,40 @@ export async function POST(request: NextRequest) {
   }
 
   const role = keepHigherRole(existingUser?.role as Role | undefined, incomingRole)
+  const client = await clerkClient()
+  const clerkUser = await client.users.getUser(userId)
+  const name = clerkUser.fullName ?? clerkUser.username ?? existingUser?.role ?? 'New User'
+  const email = clerkUser.primaryEmailAddress?.emailAddress ?? ''
 
-  // Assign user to this school
-  await db
+  // Assign user to this school and persist the promoted role.
+  const { error } = await db
     .from('users')
-    .upsert({ id: userId, school_id: school.id, role }, { onConflict: 'id' })
+    .upsert(
+      {
+        id: userId,
+        name,
+        email,
+        school_id: school.id,
+        role,
+      },
+      { onConflict: 'id' }
+    )
+
+  if (error) {
+    console.error('join upsert error', error)
+    return NextResponse.json({ error: 'Failed to save your school role. Please try the code again.' }, { status: 500 })
+  }
+
+  try {
+    await client.users.updateUserMetadata(userId, {
+      publicMetadata: {
+        ...clerkUser.publicMetadata,
+        role,
+      },
+    })
+  } catch (metadataError) {
+    console.warn('join metadata sync warning', metadataError)
+  }
 
   return NextResponse.json({
     schoolId: school.id,

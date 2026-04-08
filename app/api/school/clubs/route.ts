@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
   if (requester.role !== 'admin' && requester.role !== 'advisor' && requester.role !== 'superadmin') {
     return NextResponse.json(
       {
-        error: `Only saved school admins or advisors can create clubs. Your current saved role is "${requester.role}". If Preview Role (Dev) is set, clear it first.`,
+        error: `Only saved school admins or advisors can create clubs. Your current saved role is "${requester.role}". Re-enter your school's admin invite code on /join if this account should be admin.`,
       },
       { status: 403 }
     )
