@@ -33,7 +33,7 @@ const ROLE_OPTIONS = [
 ]
 
 export default function Sidebar() {
-  const { currentUser, schoolName, devRole, setDevRole } = useMockAuth()
+  const { actualUser, currentUser, schoolName, devRole, setDevRole } = useMockAuth()
   const pathname = usePathname()
   const router = useRouter()
   const [roleOpen, setRoleOpen] = useState(false)
@@ -47,7 +47,7 @@ export default function Sidebar() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(currentUser.role))
+  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(actualUser.role))
 
   function isActive(href: string) {
     if (href === '/profile') return pathname === '/profile' || pathname.startsWith('/profile/')
@@ -116,7 +116,7 @@ export default function Sidebar() {
         </Link>
 
         {/* Help button — only shown for non-admin */}
-        {currentUser.role !== 'admin' && <HelpButton />}
+        {actualUser.role !== 'admin' && <HelpButton />}
       </nav>
 
       {/* User section */}

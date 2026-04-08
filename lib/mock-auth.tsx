@@ -15,6 +15,7 @@ interface SchoolSession {
 }
 
 interface AuthContextValue {
+  actualUser: User
   currentUser: User
   schoolName: string | null
   schoolStatus: SchoolStatus | null
@@ -264,6 +265,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
+        actualUser: baseUser,
         currentUser,
         schoolName,
         schoolStatus,

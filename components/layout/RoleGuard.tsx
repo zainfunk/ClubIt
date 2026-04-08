@@ -12,16 +12,18 @@ interface RoleGuardProps {
 }
 
 export default function RoleGuard({ allowed, children }: RoleGuardProps) {
-  const { currentUser } = useMockAuth()
+  const { actualUser } = useMockAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!allowed.includes(currentUser.role)) {
+    if (!actualUser.id) return
+    if (!allowed.includes(actualUser.role)) {
       router.replace('/')
     }
-  }, [currentUser.role, allowed, router])
+  }, [actualUser.id, actualUser.role, allowed, router])
 
-  if (!allowed.includes(currentUser.role)) return null
+  if (!actualUser.id) return null
+  if (!allowed.includes(actualUser.role)) return null
 
   return <>{children}</>
 }

@@ -16,7 +16,7 @@ import Avatar from '@/components/Avatar'
 import { Users, Shield, Vote, Plus, GraduationCap, MessageSquare, CheckCircle, Clock } from 'lucide-react'
 
 export default function AdminPage() {
-  const { currentUser } = useMockAuth()
+  const { actualUser } = useMockAuth()
   const [clubs, setClubs] = useState<Club[]>([])
   const [elections, setElections] = useState<SchoolElection[]>([])
   const [allUsers, setAllUsers] = useState<User[]>([])
@@ -26,9 +26,9 @@ export default function AdminPage() {
   const [roleError, setRoleError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!currentUser.schoolId) return
+    if (!actualUser.schoolId) return
     // Load users and their club memberships for this school
-    supabase.from('users').select('id, name, email, role').eq('school_id', currentUser.schoolId).then(async ({ data }) => {
+    supabase.from('users').select('id, name, email, role').eq('school_id', actualUser.schoolId).then(async ({ data }) => {
       if (!data?.length) return
       const users = data.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role as Role }))
       setAllUsers(users)
@@ -45,10 +45,10 @@ export default function AdminPage() {
       }
     })
     // Load issue reports for this school
-    supabase.from('issue_reports').select('*').eq('school_id', currentUser.schoolId).order('created_at', { ascending: false }).then(({ data }) => {
+    supabase.from('issue_reports').select('*').eq('school_id', actualUser.schoolId).order('created_at', { ascending: false }).then(({ data }) => {
       if (data) setIssueReports(data)
     })
-  }, [currentUser.schoolId])
+  }, [actualUser.schoolId])
 
   async function resolveIssue(id: string) {
     await supabase.from('issue_reports').update({ status: 'resolved' }).eq('id', id)
@@ -56,9 +56,9 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (!currentUser.schoolId) return
+    if (!actualUser.schoolId) return
     // Load this school's elections
-    supabase.from('school_elections').select('*, election_candidates(*), election_votes(*)').eq('school_id', currentUser.schoolId).then(({ data }) => {
+    supabase.from('school_elections').select('*, election_candidates(*), election_votes(*)').eq('school_id', actualUser.schoolId).then(({ data }) => {
       if (data) setElections(data.map((e) => ({
         id: e.id, positionTitle: e.position_title, description: e.description ?? '',
         createdAt: e.created_at, isOpen: e.is_open,
@@ -71,7 +71,7 @@ export default function AdminPage() {
       })))
     })
     // Load this school's clubs
-    supabase.from('clubs').select('*').eq('school_id', currentUser.schoolId).then(({ data }) => {
+    supabase.from('clubs').select('*').eq('school_id', actualUser.schoolId).then(({ data }) => {
       if (data) setClubs((prev) => {
         const supaIds = new Set(data.map((c) => c.id))
         const filtered = prev.filter((c) => supaIds.has(c.id))
@@ -86,7 +86,7 @@ export default function AdminPage() {
         return filtered
       })
     })
-  }, [currentUser.schoolId])
+  }, [actualUser.schoolId])
 
   // Election form state
   const [showElectionForm, setShowElectionForm] = useState(false)
@@ -96,8 +96,8 @@ export default function AdminPage() {
 
   const staffOwners = Array.from(new Map(
     [
-      ...(currentUser.id && (currentUser.role === 'admin' || currentUser.role === 'advisor')
-        ? [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: currentUser.role }]
+      ...(actualUser.id && (actualUser.role === 'admin' || actualUser.role === 'advisor')
+        ? [{ id: actualUser.id, name: actualUser.name, email: actualUser.email, role: actualUser.role }]
         : []),
       ...allUsers.filter((u) => u.role === 'advisor' || u.role === 'admin'),
     ].map((user) => [user.id, user])
@@ -147,9 +147,9 @@ export default function AdminPage() {
     const newClub = payload.club as Club
     setClubs((prev) => [...prev, newClub])
     setAllUsers((prev) => (
-      prev.some((user) => user.id === currentUser.id)
+      prev.some((user) => user.id === actualUser.id)
         ? prev
-        : [...prev, { ...currentUser }]
+        : [...prev, { ...actualUser }]
     ))
   }
 
@@ -170,7 +170,7 @@ export default function AdminPage() {
       createdAt: new Date().toISOString(),
       isOpen: true,
     }
-    await supabase.from('school_elections').insert({ id: elecId, position_title: newElection.positionTitle, description: newElection.description, created_at: newElection.createdAt, is_open: true, school_id: currentUser.schoolId })
+    await supabase.from('school_elections').insert({ id: elecId, position_title: newElection.positionTitle, description: newElection.description, created_at: newElection.createdAt, is_open: true, school_id: actualUser.schoolId })
     await supabase.from('election_candidates').insert(electionCandidateIds.map((uid) => ({ election_id: elecId, user_id: uid })))
     setElections((prev) => [...prev, newElection])
     setElectionTitle('')
@@ -212,7 +212,7 @@ export default function AdminPage() {
             <div className="space-y-3">
               {clubs.map((club) => {
                 const advisor = allUsers.find((u) => u.id === club.advisorId)
-                  ?? (club.advisorId === currentUser.id ? currentUser : undefined)
+                  ?? (club.advisorId === actualUser.id ? actualUser : undefined)
                 const spotsLeft = club.capacity !== null ? club.capacity - club.memberIds.length : null
                 return (
                   <Card key={club.id}>
@@ -276,7 +276,7 @@ export default function AdminPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-gray-900">{user.name}</span>
                         <Badge variant="secondary" className="text-xs capitalize">{user.role}</Badge>
-                        {user.id === currentUser.id && (
+                        {user.id === actualUser.id && (
                           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">You</span>
                         )}
                       </div>

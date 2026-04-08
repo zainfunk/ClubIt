@@ -80,7 +80,12 @@ export async function POST(request: NextRequest) {
   }
 
   if (requester.role !== 'admin' && requester.role !== 'advisor' && requester.role !== 'superadmin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    return NextResponse.json(
+      {
+        error: `Only saved school admins or advisors can create clubs. Your current saved role is "${requester.role}". If Preview Role (Dev) is set, clear it first.`,
+      },
+      { status: 403 }
+    )
   }
 
   if (!requester.schoolId) {
@@ -133,7 +138,7 @@ export async function POST(request: NextRequest) {
   if (ownerId !== requester.userId) {
     if (requester.role !== 'admin' && requester.role !== 'superadmin') {
       return NextResponse.json(
-        { error: 'Only admins can assign clubs to another advisor or admin' },
+        { error: 'Only saved school admins can assign clubs to another advisor or admin' },
         { status: 403 }
       )
     }
@@ -169,7 +174,7 @@ export async function POST(request: NextRequest) {
 
   if (requester.role === 'advisor' && ownerRole !== 'advisor') {
     return NextResponse.json(
-      { error: 'Advisors can only create clubs owned by their own advisor account' },
+      { error: 'Saved advisor accounts can only create clubs owned by their own advisor account' },
       { status: 403 }
     )
   }

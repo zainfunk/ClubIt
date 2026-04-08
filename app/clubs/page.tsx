@@ -38,7 +38,7 @@ function capacityDot(memberCount: number, capacity: number | null): string {
 }
 
 export default function ClubsPage() {
-  const { currentUser } = useMockAuth()
+  const { actualUser, currentUser } = useMockAuth()
   const [clubs, setClubs] = useState<Club[]>([])
   const [myMembershipClubIds, setMyMembershipClubIds] = useState<string[]>([])
   const [advisorNames, setAdvisorNames] = useState<Record<string, string>>({})
@@ -52,41 +52,50 @@ export default function ClubsPage() {
   const [newCapacity, setNewCapacity] = useState(20)
   const [newUnlimited, setNewUnlimited] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
-  const canCreateClub = currentUser.role === 'advisor' || currentUser.role === 'admin'
+  const canCreateClub = actualUser.role === 'advisor' || actualUser.role === 'admin'
 
   async function handleCreateClub(e: React.FormEvent) {
     e.preventDefault()
-    if (!newName.trim() || !newDesc.trim() || !currentUser.schoolId) return
+    if (!newName.trim() || !newDesc.trim() || !actualUser.schoolId) return
     setCreating(true)
-    const id = `club-${Date.now()}`
-    const now = new Date().toISOString().split('T')[0]
-    await supabase.from('clubs').insert({
-      id, name: newName.trim(), description: newDesc.trim(),
-      icon_url: newIcon.trim() || null,
-      capacity: newUnlimited ? null : newCapacity,
-      advisor_id: currentUser.id,
-      auto_accept: false,
-      tags: newTags ? newTags.split(',').map((t) => t.trim()).filter(Boolean) : [],
-      event_creator_ids: [],
-      created_at: now,
-      school_id: currentUser.schoolId,
-    })
-    const newClub: Club = {
-      id, name: newName.trim(), description: newDesc.trim(),
-      iconUrl: newIcon.trim() || undefined,
-      capacity: newUnlimited ? null : newCapacity,
-      advisorId: currentUser.id,
-      memberIds: [], leadershipPositions: [], socialLinks: [], meetingTimes: [],
-      tags: newTags ? newTags.split(',').map((t) => t.trim()).filter(Boolean) : [],
-      eventCreatorIds: [], autoAccept: false, createdAt: now,
+    setCreateError(null)
+
+    try {
+      const res = await fetch('/api/school/clubs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newName.trim(),
+          description: newDesc.trim(),
+          iconUrl: newIcon.trim() || undefined,
+          capacity: newUnlimited ? null : newCapacity,
+          advisorId: actualUser.id,
+          tags: newTags ? newTags.split(',').map((t) => t.trim()).filter(Boolean) : [],
+        }),
+      })
+
+      const payload = await res.json()
+      if (!res.ok) {
+        throw new Error(payload.error ?? 'Failed to create club')
+      }
+
+      const newClub = payload.club as Club
+      setClubs((prev) => [...prev, newClub])
+      setAdvisorNames((prev) => ({ ...prev, [actualUser.id]: actualUser.name }))
+      setNewName('')
+      setNewDesc('')
+      setNewIcon('')
+      setNewTags('')
+      setNewCapacity(20)
+      setNewUnlimited(false)
+      setShowCreateForm(false)
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to create club')
+    } finally {
+      setCreating(false)
     }
-    setClubs((prev) => [...prev, newClub])
-    setAdvisorNames((prev) => ({ ...prev, [currentUser.id]: currentUser.name }))
-    setNewName(''); setNewDesc(''); setNewIcon(''); setNewTags('')
-    setNewCapacity(20); setNewUnlimited(false)
-    setShowCreateForm(false)
-    setCreating(false)
   }
 
   useEffect(() => {
@@ -188,23 +197,28 @@ export default function ClubsPage() {
         {showCreateForm && (
           <form onSubmit={handleCreateClub} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6 space-y-4">
             <h3 className="text-base font-bold text-gray-900" style={{ fontFamily: 'var(--font-manrope)' }}>Create New Club</h3>
+            {createError && (
+              <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {createError}
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="sm:col-span-2">
                 <label className="text-xs font-medium text-gray-700 block mb-1">Club Name *</label>
-                <input required value={newName} onChange={(e) => setNewName(e.target.value)}
+                <input required value={newName} onChange={(e) => setNewName(e.target.value)} disabled={creating}
                   placeholder="e.g. Photography Club"
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-700 block mb-1">Icon (emoji)</label>
-                <input value={newIcon} onChange={(e) => setNewIcon(e.target.value)}
+                <input value={newIcon} onChange={(e) => setNewIcon(e.target.value)} disabled={creating}
                   placeholder="e.g. 📷"
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
               </div>
             </div>
             <div>
               <label className="text-xs font-medium text-gray-700 block mb-1">Description *</label>
-              <textarea required value={newDesc} onChange={(e) => setNewDesc(e.target.value)}
+              <textarea required value={newDesc} onChange={(e) => setNewDesc(e.target.value)} disabled={creating}
                 placeholder="Describe what this club is about..."
                 rows={2}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
@@ -212,7 +226,7 @@ export default function ClubsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-medium text-gray-700 block mb-1">Tags <span className="text-gray-400">(comma separated)</span></label>
-                <input value={newTags} onChange={(e) => setNewTags(e.target.value)}
+                <input value={newTags} onChange={(e) => setNewTags(e.target.value)} disabled={creating}
                   placeholder="e.g. STEM, Art, Competition"
                   className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
               </div>
@@ -220,12 +234,12 @@ export default function ClubsPage() {
                 <label className="text-xs font-medium text-gray-700 block mb-1">Member Limit</label>
                 <div className="flex items-center gap-3">
                   <label className="flex items-center gap-1.5 text-xs text-gray-600 shrink-0">
-                    <input type="checkbox" checked={newUnlimited} onChange={(e) => setNewUnlimited(e.target.checked)} />
+                    <input type="checkbox" checked={newUnlimited} onChange={(e) => setNewUnlimited(e.target.checked)} disabled={creating} />
                     Unlimited
                   </label>
                   {!newUnlimited && (
                     <input type="number" min={1} max={500} value={newCapacity}
-                      onChange={(e) => setNewCapacity(Number(e.target.value))}
+                      onChange={(e) => setNewCapacity(Number(e.target.value))} disabled={creating}
                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
                   )}
                 </div>
