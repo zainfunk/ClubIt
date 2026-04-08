@@ -302,5 +302,59 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
     return NextResponse.json({ ok: true })
   }
 
+  if (action === 'join') {
+    // Check already a member or already has a pending/approved request
+    const { data: existing } = await db
+      .from('join_requests')
+      .select('id, status')
+      .eq('club_id', clubId)
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (existing) return NextResponse.json({ ok: true, status: existing.status })
+
+    const { data: existingMembership } = await db
+      .from('memberships')
+      .select('id')
+      .eq('club_id', clubId)
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (existingMembership) return NextResponse.json({ ok: true, status: 'approved' })
+
+    const autoApprove = clubRow.auto_accept as boolean
+
+    // Check capacity for auto-approve path
+    if (autoApprove && clubRow.capacity !== null) {
+      const { count } = await db
+        .from('memberships')
+        .select('id', { count: 'exact', head: true })
+        .eq('club_id', clubId)
+      if ((count ?? 0) >= clubRow.capacity) {
+        // Club is full — fall through to pending request
+      } else {
+        const reqId = `req-${userId}-${Date.now()}`
+        const now = new Date().toISOString()
+        await db.from('join_requests').insert({ id: reqId, club_id: clubId, user_id: userId, requested_at: now, status: 'approved' })
+        await db.from('memberships').upsert(
+          { id: `m-${reqId}`, club_id: clubId, user_id: userId, joined_at: now.split('T')[0] },
+          { onConflict: 'club_id,user_id' }
+        )
+        return NextResponse.json({ ok: true, status: 'approved' })
+      }
+    }
+
+    const reqId = `req-${userId}-${Date.now()}`
+    const now = new Date().toISOString()
+    await db.from('join_requests').insert({ id: reqId, club_id: clubId, user_id: userId, requested_at: now, status: 'pending' })
+    return NextResponse.json({ ok: true, status: 'pending' })
+  }
+
+  if (action === 'leave') {
+    await db.from('memberships').delete().eq('club_id', clubId).eq('user_id', userId)
+    await db.from('join_requests').delete().eq('club_id', clubId).eq('user_id', userId)
+    return NextResponse.json({ ok: true })
+  }
+
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }

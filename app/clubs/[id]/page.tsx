@@ -226,26 +226,25 @@ export default function ClubDetailPage({ params }: PageProps) {
   // --- Join request handlers ---
   async function handleRequest() {
     if (myRequest || isMember) return
-    const autoApprove = club.autoAccept && !isFull
-    const reqId = `req-${Date.now()}`
-    const membershipId = `m-${Date.now()}`
-    const now = new Date().toISOString()
-    const status = autoApprove ? 'approved' : 'pending'
-
-    await supabase.from('join_requests').insert({ id: reqId, club_id: id, user_id: currentUser.id, requested_at: now, status })
-    setRequests((prev) => [...prev, { id: reqId, clubId: id, userId: currentUser.id, requestedAt: now, status }])
-
-    if (autoApprove) {
-      await supabase.from('memberships').insert({ id: membershipId, club_id: id, user_id: currentUser.id, joined_at: now.split('T')[0] })
-      setClubs((prev) => prev.map((c) => c.id === id ? { ...c, memberIds: [...c.memberIds, currentUser.id] } : c))
-    }
+    const res = await fetch(`/api/school/clubs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'join' }),
+    })
+    if (!res.ok) return
+    const controller = new AbortController()
+    await loadDetail(controller.signal)
   }
 
   async function handleLeave() {
-    await supabase.from('memberships').delete().eq('club_id', id).eq('user_id', currentUser.id)
-    await supabase.from('join_requests').delete().eq('club_id', id).eq('user_id', currentUser.id)
-    setClubs((prev) => prev.map((c) => c.id === id ? { ...c, memberIds: c.memberIds.filter((mid) => mid !== currentUser.id) } : c))
-    setRequests((prev) => prev.filter((r) => !(r.clubId === id && r.userId === currentUser.id)))
+    const res = await fetch(`/api/school/clubs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'leave' }),
+    })
+    if (!res.ok) return
+    const controller = new AbortController()
+    await loadDetail(controller.signal)
   }
 
   async function handleApprove(requestId: string) {
