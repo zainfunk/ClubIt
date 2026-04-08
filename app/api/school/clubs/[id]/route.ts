@@ -244,7 +244,7 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
 
   const { data: clubRow } = await db
     .from('clubs')
-    .select('id, advisor_id, capacity, auto_accept')
+    .select('id, advisor_id, capacity, auto_accept, event_creator_ids')
     .eq('id', clubId)
     .eq('school_id', schoolId)
     .maybeSingle()
@@ -256,7 +256,7 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
     userRow?.role === 'admin' ||
     userRow?.role === 'superadmin'
 
-  const body = await request.json() as { action: string; requestId?: string }
+  const body = await request.json() as Record<string, unknown>
   const { action, requestId } = body
 
   if (action === 'approve') {
@@ -353,6 +353,178 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
   if (action === 'leave') {
     await db.from('memberships').delete().eq('club_id', clubId).eq('user_id', userId)
     await db.from('join_requests').delete().eq('club_id', clubId).eq('user_id', userId)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'toggle_auto_accept') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { data: current } = await db.from('clubs').select('auto_accept').eq('id', clubId).maybeSingle()
+    await db.from('clubs').update({ auto_accept: !current?.auto_accept }).eq('id', clubId)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'save_edit') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { iconUrl, description, tags, socialLinks } = body as { iconUrl?: string; description?: string; tags?: string[]; socialLinks?: { platform: string; url: string }[] }
+    await db.from('clubs').update({ icon_url: iconUrl ?? null, description: description ?? '', tags: tags ?? [] }).eq('id', clubId)
+    await db.from('club_social_links').delete().eq('club_id', clubId)
+    if (socialLinks && socialLinks.length > 0) {
+      await db.from('club_social_links').insert(socialLinks.map((sl) => ({ club_id: clubId, platform: sl.platform, url: sl.url })))
+    }
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'save_capacity') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { capacity } = body as { capacity: number | null }
+    await db.from('clubs').update({ capacity: capacity ?? null }).eq('id', clubId)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'set_event_creators') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { eventCreatorIds } = body as { eventCreatorIds: string[] }
+    await db.from('clubs').update({ event_creator_ids: eventCreatorIds }).eq('id', clubId)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'add_leadership_position') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { title } = body as { title: string }
+    const posId = `lp-${Date.now()}`
+    await db.from('leadership_positions').insert({ id: posId, club_id: clubId, title, user_id: null })
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'remove_leadership_position') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { positionId } = body as { positionId: string }
+    await db.from('leadership_positions').delete().eq('id', positionId)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'appoint_leader') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { positionId, appointUserId } = body as { positionId: string; appointUserId: string }
+    await db.from('leadership_positions').update({ user_id: appointUserId }).eq('id', positionId)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'vacate_leader') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { positionId } = body as { positionId: string }
+    await db.from('leadership_positions').update({ user_id: null }).eq('id', positionId)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'add_meeting_time') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { dayOfWeek, startTime, endTime, location } = body as { dayOfWeek: number; startTime: string; endTime: string; location?: string }
+    const mtId = `mt-${Date.now()}`
+    await db.from('meeting_times').insert({ id: mtId, club_id: clubId, day_of_week: dayOfWeek, start_time: startTime, end_time: endTime, location: location ?? null })
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'remove_meeting_time') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { meetingTimeId } = body as { meetingTimeId: string }
+    await db.from('meeting_times').delete().eq('id', meetingTimeId)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'create_event') {
+    const isEventCreator = isManager || (clubRow.event_creator_ids as string[] ?? []).includes(userId)
+    if (!isEventCreator) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { title, description, date, location, isPublic } = body as { title: string; description?: string; date: string; location?: string; isPublic?: boolean }
+    const eventId = `event-${Date.now()}`
+    await db.from('events').insert({ id: eventId, club_id: clubId, title, description: description ?? '', date, location: location ?? null, is_public: isPublic ?? true, created_by: userId })
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'delete_event') {
+    const { eventId } = body as { eventId: string }
+    const { data: ev } = await db.from('events').select('created_by').eq('id', eventId).maybeSingle()
+    if (!ev) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    if (!isManager && ev.created_by !== userId) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    await db.from('events').delete().eq('id', eventId)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'post_news') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { title, content, isPinned } = body as { title: string; content: string; isPinned?: boolean }
+    const newsId = `news-${Date.now()}`
+    const createdAt = new Date().toISOString()
+    await db.from('club_news').insert({ id: newsId, club_id: clubId, title, content, author_id: userId, created_at: createdAt, is_pinned: isPinned ?? false })
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'delete_news') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { newsId } = body as { newsId: string }
+    await db.from('club_news').delete().eq('id', newsId)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'create_poll') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { positionTitle, candidateIds } = body as { positionTitle: string; candidateIds: string[] }
+    const pollId = `poll-${Date.now()}`
+    const createdAt = new Date().toISOString()
+    await db.from('polls').insert({ id: pollId, club_id: clubId, position_title: positionTitle, created_at: createdAt, is_open: true })
+    await db.from('poll_candidates').insert(candidateIds.map((uid) => ({ poll_id: pollId, user_id: uid })))
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'cast_poll_vote') {
+    const { pollId, candidateUserId } = body as { pollId: string; candidateUserId: string }
+    // Idempotent — ignore if already voted
+    const { count } = await db.from('poll_votes').select('*', { count: 'exact', head: true }).eq('poll_id', pollId).eq('voter_user_id', userId)
+    if ((count ?? 0) === 0) {
+      await db.from('poll_votes').insert({ poll_id: pollId, candidate_user_id: candidateUserId, voter_user_id: userId })
+    }
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'close_poll') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { pollId } = body as { pollId: string }
+    await db.from('polls').update({ is_open: false }).eq('id', pollId)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'appoint_poll_winner') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { pollId } = body as { pollId: string }
+    // Fetch poll + candidates + votes to determine winner server-side
+    const { data: pollRow2 } = await db
+      .from('polls')
+      .select('position_title, poll_candidates(user_id), poll_votes(candidate_user_id, voter_user_id)')
+      .eq('id', pollId)
+      .maybeSingle()
+    if (!pollRow2) return NextResponse.json({ error: 'Poll not found' }, { status: 404 })
+    const candidates = (pollRow2.poll_candidates as { user_id: string }[]) ?? []
+    const votes = (pollRow2.poll_votes as { candidate_user_id: string }[]) ?? []
+    const winner = candidates.reduce((best, c) => {
+      const count2 = votes.filter((v) => v.candidate_user_id === c.user_id).length
+      const bestCount = votes.filter((v) => v.candidate_user_id === best.user_id).length
+      return count2 >= bestCount ? c : best
+    }, candidates[0])
+    if (!winner) return NextResponse.json({ error: 'No candidates' }, { status: 400 })
+
+    const { data: existingPos } = await db
+      .from('leadership_positions')
+      .select('id')
+      .eq('club_id', clubId)
+      .ilike('title', pollRow2.position_title)
+      .maybeSingle()
+
+    if (existingPos) {
+      await db.from('leadership_positions').update({ user_id: winner.user_id }).eq('id', existingPos.id)
+    } else {
+      await db.from('leadership_positions').insert({ id: `lp-${pollId}`, club_id: clubId, title: pollRow2.position_title, user_id: winner.user_id })
+    }
+    await db.from('polls').update({ is_open: false }).eq('id', pollId)
     return NextResponse.json({ ok: true })
   }
 

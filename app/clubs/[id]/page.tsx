@@ -4,11 +4,9 @@ import { use, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { supabase } from '@/lib/supabase'
 import {
   saveSession, upsertRecord,
 } from '@/lib/attendance-store'
-import { castPollVote } from '@/lib/election-store'
 import { Input } from '@/components/ui/input'
 import {
   Users, Clock, MapPin, Globe, Crown, CheckCircle, XCircle,
@@ -250,21 +248,18 @@ export default function ClubDetailPage({ params }: PageProps) {
   async function handleApprove(requestId: string) {
     const req = requests.find((r) => r.id === requestId)
     if (!req || club.memberIds.includes(req.userId) || isFull) return
-    const res = await fetch(`/api/school/clubs/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'approve', requestId }),
-    })
-    if (!res.ok) return
-    const controller = new AbortController()
-    await loadDetail(controller.signal)
+    await patch({ action: 'approve', requestId })
   }
 
   async function handleReject(requestId: string) {
+    await patch({ action: 'reject', requestId })
+  }
+
+  async function patch(body: Record<string, unknown>) {
     const res = await fetch(`/api/school/clubs/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'reject', requestId }),
+      body: JSON.stringify(body),
     })
     if (!res.ok) return
     const controller = new AbortController()
@@ -272,9 +267,7 @@ export default function ClubDetailPage({ params }: PageProps) {
   }
 
   async function toggleAutoAccept() {
-    const newVal = !club.autoAccept
-    await supabase.from('clubs').update({ auto_accept: newVal }).eq('id', id)
-    setClubs((prev) => prev.map((c) => c.id === id ? { ...c, autoAccept: newVal } : c))
+    await patch({ action: 'toggle_auto_accept' })
   }
 
   // --- Edit mode ---
@@ -290,14 +283,7 @@ export default function ClubDetailPage({ params }: PageProps) {
     const newIcon = editIcon.trim() || club.iconUrl
     const newDesc = editDescription.trim() || club.description
     const newTags = editTags ? editTags.split(',').map((t) => t.trim()).filter(Boolean) : club.tags
-    await supabase.from('clubs').update({ icon_url: newIcon, description: newDesc, tags: newTags }).eq('id', id)
-    await supabase.from('club_social_links').delete().eq('club_id', id)
-    if (editSocialLinks.length > 0) {
-      await supabase.from('club_social_links').insert(editSocialLinks.map((sl) => ({ club_id: id, platform: sl.platform, url: sl.url })))
-    }
-    setClubs((prev) => prev.map((c) => c.id === id ? {
-      ...c, iconUrl: newIcon, description: newDesc, tags: newTags, socialLinks: editSocialLinks,
-    } : c))
+    await patch({ action: 'save_edit', iconUrl: newIcon, description: newDesc, tags: newTags, socialLinks: editSocialLinks })
     setEditMode(false)
   }
 
@@ -320,8 +306,7 @@ export default function ClubDetailPage({ params }: PageProps) {
 
   async function saveCapacity() {
     const newCap = capacityUnlimited ? null : Math.max(club.memberIds.length, parseInt(capacityInput) || 1)
-    await supabase.from('clubs').update({ capacity: newCap }).eq('id', id)
-    setClubs((prev) => prev.map((c) => c.id === id ? { ...c, capacity: newCap } : c))
+    await patch({ action: 'save_capacity', capacity: newCap })
     setEditingCapacity(false)
   }
 
@@ -329,52 +314,34 @@ export default function ClubDetailPage({ params }: PageProps) {
   async function addPosition() {
     const title = newPositionTitle.trim()
     if (!title) return
-    const posId = `lp-${Date.now()}`
-    const newPos: LeadershipPosition = { id: posId, title, userId: undefined }
-    await supabase.from('leadership_positions').insert({ id: posId, club_id: id, title, user_id: null })
-    setClubs((prev) => prev.map((c) => c.id === id ? { ...c, leadershipPositions: [...c.leadershipPositions, newPos] } : c))
+    await patch({ action: 'add_leadership_position', title })
     setNewPositionTitle('')
   }
 
   async function removePosition(posId: string) {
-    await supabase.from('leadership_positions').delete().eq('id', posId)
-    setClubs((prev) => prev.map((c) => c.id === id ? { ...c, leadershipPositions: c.leadershipPositions.filter((p) => p.id !== posId) } : c))
+    await patch({ action: 'remove_leadership_position', positionId: posId })
   }
 
   async function appointMember(posId: string) {
-    const userId = appointSelections[posId]
-    if (!userId) return
-    await supabase.from('leadership_positions').update({ user_id: userId }).eq('id', posId)
-    setClubs((prev) => prev.map((c) => c.id === id ? { ...c, leadershipPositions: c.leadershipPositions.map((p) => p.id === posId ? { ...p, userId } : p) } : c))
+    const uid = appointSelections[posId]
+    if (!uid) return
+    await patch({ action: 'appoint_leader', positionId: posId, appointUserId: uid })
     setAppointSelections((prev) => ({ ...prev, [posId]: '' }))
   }
 
   async function removeAppointment(posId: string) {
-    await supabase.from('leadership_positions').update({ user_id: null }).eq('id', posId)
-    setClubs((prev) => prev.map((c) => c.id === id ? { ...c, leadershipPositions: c.leadershipPositions.map((p) => p.id === posId ? { ...p, userId: undefined } : p) } : c))
+    await patch({ action: 'vacate_leader', positionId: posId })
   }
 
   // --- Meeting times ---
   async function addMeetingTime() {
     if (!newMeetingStart || !newMeetingEnd) return
-    const mtId = `mt-${Date.now()}`
-    const newMt: MeetingTime = {
-      id: mtId, dayOfWeek: newMeetingDay as MeetingTime['dayOfWeek'],
-      startTime: newMeetingStart, endTime: newMeetingEnd,
-      location: newMeetingLocation.trim() || undefined,
-    }
-    await supabase.from('meeting_times').insert({
-      id: mtId, club_id: id, day_of_week: newMeetingDay,
-      start_time: newMeetingStart, end_time: newMeetingEnd,
-      location: newMeetingLocation.trim() || null,
-    })
-    setClubs((prev) => prev.map((c) => c.id === id ? { ...c, meetingTimes: [...c.meetingTimes, newMt] } : c))
+    await patch({ action: 'add_meeting_time', dayOfWeek: newMeetingDay, startTime: newMeetingStart, endTime: newMeetingEnd, location: newMeetingLocation.trim() || undefined })
     setNewMeetingLocation('')
   }
 
   async function removeMeetingTime(mtId: string) {
-    await supabase.from('meeting_times').delete().eq('id', mtId)
-    setClubs((prev) => prev.map((c) => c.id === id ? { ...c, meetingTimes: c.meetingTimes.filter((m) => m.id !== mtId) } : c))
+    await patch({ action: 'remove_meeting_time', meetingTimeId: mtId })
   }
 
   // --- Event permissions ---
@@ -382,59 +349,31 @@ export default function ClubDetailPage({ params }: PageProps) {
     const newIds = club.eventCreatorIds.includes(userId)
       ? club.eventCreatorIds.filter((uid) => uid !== userId)
       : [...club.eventCreatorIds, userId]
-    await supabase.from('clubs').update({ event_creator_ids: newIds }).eq('id', id)
-    setClubs((prev) => prev.map((c) => c.id === id ? { ...c, eventCreatorIds: newIds } : c))
+    await patch({ action: 'set_event_creators', eventCreatorIds: newIds })
   }
 
   // --- Events ---
   async function createEvent() {
     if (!newEventTitle.trim() || !newEventDate) return
-    const ev: ClubEvent = {
-      id: `event-${Date.now()}`, clubId: id,
-      title: newEventTitle.trim(), description: newEventDesc.trim(),
-      date: newEventDate, location: newEventLocation.trim() || undefined,
-      isPublic: newEventPublic, createdBy: currentUser.id,
-    }
-    await supabase.from('events').insert({
-      id: ev.id, club_id: id, title: ev.title, description: ev.description,
-      date: ev.date, location: ev.location ?? null, is_public: ev.isPublic, created_by: ev.createdBy,
-    })
-    setClubEvents((prev) => [...prev, ev].sort((a, b) => a.date.localeCompare(b.date)))
+    await patch({ action: 'create_event', title: newEventTitle.trim(), description: newEventDesc.trim(), date: newEventDate, location: newEventLocation.trim() || undefined, isPublic: newEventPublic })
     setNewEventTitle(''); setNewEventDesc(''); setNewEventDate(''); setNewEventLocation(''); setNewEventPublic(true)
     setShowEventForm(false)
   }
 
   async function deleteEvent(eventId: string) {
-    await supabase.from('events').delete().eq('id', eventId)
-    setClubEvents((prev) => prev.filter((e) => e.id !== eventId))
+    await patch({ action: 'delete_event', eventId })
   }
 
   // --- News ---
   async function postNews() {
     if (!newNewsTitle.trim() || !newNewsContent.trim()) return
-    const news: ClubNews = {
-      id: `news-${Date.now()}`, clubId: id,
-      title: newNewsTitle.trim(), content: newNewsContent.trim(),
-      authorId: currentUser.id, createdAt: new Date().toISOString(), isPinned: newNewsPinned,
-    }
-    await supabase.from('club_news').insert({
-      id: news.id, club_id: id, title: news.title, content: news.content,
-      author_id: news.authorId, created_at: news.createdAt, is_pinned: news.isPinned,
-    })
-    setClubNews((prev) => {
-      const updated = [...prev, news].sort((a, b) => {
-        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      })
-      return updated
-    })
+    await patch({ action: 'post_news', title: newNewsTitle.trim(), content: newNewsContent.trim(), isPinned: newNewsPinned })
     setNewNewsTitle(''); setNewNewsContent(''); setNewNewsPinned(false)
     setShowNewsForm(false)
   }
 
   async function deleteNews(newsId: string) {
-    await supabase.from('club_news').delete().eq('id', newsId)
-    setClubNews((prev) => prev.filter((n) => n.id !== newsId))
+    await patch({ action: 'delete_news', newsId })
   }
 
   // --- Polls ---
@@ -444,70 +383,20 @@ export default function ClubDetailPage({ params }: PageProps) {
 
   async function createPoll() {
     if (!pollPositionTitle.trim() || pollCandidateIds.length < 2) return
-    const pollId = `poll-${Date.now()}`
-    const newPoll: Poll = {
-      id: pollId, clubId: id, positionTitle: pollPositionTitle.trim(),
-      candidates: pollCandidateIds.map((uid) => ({ userId: uid, votes: [] })),
-      createdAt: new Date().toISOString(), isOpen: true,
-    }
-    await supabase.from('polls').insert({ id: pollId, club_id: id, position_title: newPoll.positionTitle, created_at: newPoll.createdAt, is_open: true })
-    await supabase.from('poll_candidates').insert(pollCandidateIds.map((uid) => ({ poll_id: pollId, user_id: uid })))
-    setPolls((prev) => [...prev, newPoll])
+    await patch({ action: 'create_poll', positionTitle: pollPositionTitle.trim(), candidateIds: pollCandidateIds })
     setPollPositionTitle(''); setPollCandidateIds([]); setShowPollForm(false)
   }
 
   async function castVote(pollId: string, candidateUserId: string) {
-    await castPollVote(pollId, candidateUserId, currentUser.id)
-    setPolls((prev) => prev.map((p) => p.id === pollId ? {
-      ...p, candidates: p.candidates.map((c) => c.userId === candidateUserId ? { ...c, votes: [...c.votes, currentUser.id] } : c),
-    } : p))
+    await patch({ action: 'cast_poll_vote', pollId, candidateUserId })
   }
 
   async function closePoll(pollId: string) {
-    await supabase.from('polls').update({ is_open: false }).eq('id', pollId)
-    setPolls((prev) => prev.map((p) => p.id === pollId ? { ...p, isOpen: false } : p))
+    await patch({ action: 'close_poll', pollId })
   }
 
   async function appointPollWinner(pollId: string) {
-    const poll = polls.find((p) => p.id === pollId)
-    if (!poll) return
-    const winner = poll.candidates.reduce((a, b) => a.votes.length >= b.votes.length ? a : b)
-    const existingPosition = club.leadershipPositions.find(
-      (position) => position.title.trim().toLowerCase() === poll.positionTitle.trim().toLowerCase()
-    )
-
-    if (existingPosition) {
-      await supabase
-        .from('leadership_positions')
-        .update({ user_id: winner.userId })
-        .eq('id', existingPosition.id)
-
-      setClubs((prev) => prev.map((c) => c.id === id ? {
-        ...c,
-        leadershipPositions: c.leadershipPositions.map((position) =>
-          position.id === existingPosition.id ? { ...position, userId: winner.userId } : position
-        ),
-      } : c))
-    } else {
-      const posId = `lp-${pollId}`
-      const newPosition: LeadershipPosition = {
-        id: posId,
-        title: poll.positionTitle,
-        userId: winner.userId,
-      }
-      await supabase.from('leadership_positions').insert({
-        id: posId,
-        club_id: id,
-        title: poll.positionTitle,
-        user_id: winner.userId,
-      })
-      setClubs((prev) => prev.map((c) => c.id === id ? {
-        ...c,
-        leadershipPositions: [...c.leadershipPositions, newPosition],
-      } : c))
-    }
-
-    await closePoll(pollId)
+    await patch({ action: 'appoint_poll_winner', pollId })
   }
 
   // --- QR / attendance session handlers ---
