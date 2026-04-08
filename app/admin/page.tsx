@@ -18,12 +18,34 @@ import { Users, Shield, Vote, Plus, GraduationCap, MessageSquare, CheckCircle, C
 export default function AdminPage() {
   const { actualUser } = useMockAuth()
   const [clubs, setClubs] = useState<Club[]>([])
+  const [advisorNames, setAdvisorNames] = useState<Record<string, string>>({})
   const [elections, setElections] = useState<SchoolElection[]>([])
   const [allUsers, setAllUsers] = useState<User[]>([])
   const [membershipsByUser, setMembershipsByUser] = useState<Record<string, string[]>>({})
   const [issueReports, setIssueReports] = useState<{ id: string; reporter_name: string; reporter_email: string; message: string; status: string; created_at: string }[]>([])
   const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null)
   const [roleError, setRoleError] = useState<string | null>(null)
+
+  function applyClubsPayload(payload: {
+    clubs?: Club[]
+    advisorNames?: Record<string, string>
+  }) {
+    setClubs(payload.clubs ?? [])
+    setAdvisorNames(payload.advisorNames ?? {})
+  }
+
+  async function fetchClubsPayload() {
+    const res = await fetch('/api/school/clubs', { cache: 'no-store' })
+    const payload = await res.json()
+    if (!res.ok) {
+      throw new Error(payload.error ?? 'Failed to load clubs')
+    }
+
+    return payload as {
+      clubs?: Club[]
+      advisorNames?: Record<string, string>
+    }
+  }
 
   useEffect(() => {
     if (!actualUser.schoolId) return
@@ -70,22 +92,25 @@ export default function AdminPage() {
         })),
       })))
     })
-    // Load this school's clubs
-    supabase.from('clubs').select('*').eq('school_id', actualUser.schoolId).then(({ data }) => {
-      if (data) setClubs((prev) => {
-        const supaIds = new Set(data.map((c) => c.id))
-        const filtered = prev.filter((c) => supaIds.has(c.id))
-        for (const d of data) {
-          const idx = filtered.findIndex((c) => c.id === d.id)
-          if (idx >= 0) {
-            filtered[idx] = { ...filtered[idx], autoAccept: d.auto_accept, capacity: d.capacity, iconUrl: d.icon_url ?? filtered[idx].iconUrl, description: d.description ?? filtered[idx].description }
-          } else {
-            filtered.push({ id: d.id, name: d.name, description: d.description ?? '', iconUrl: d.icon_url ?? '', advisorId: d.advisor_id ?? '', memberIds: [], leadershipPositions: [], socialLinks: [], meetingTimes: [], tags: d.tags ?? [], eventCreatorIds: d.event_creator_ids ?? [], capacity: d.capacity, autoAccept: d.auto_accept ?? false, createdAt: d.created_at })
-          }
-        }
-        return filtered
-      })
-    })
+    let cancelled = false
+
+    async function loadClubs() {
+      try {
+        const payload = await fetchClubsPayload()
+        if (cancelled) return
+
+        applyClubsPayload(payload)
+      } catch (err) {
+        if (cancelled) return
+        console.error('admin clubs load error', err)
+      }
+    }
+
+    void loadClubs()
+
+    return () => {
+      cancelled = true
+    }
   }, [actualUser.schoolId])
 
   // Election form state
@@ -144,8 +169,7 @@ export default function AdminPage() {
       throw new Error(payload.error ?? 'Failed to create club')
     }
 
-    const newClub = payload.club as Club
-    setClubs((prev) => [...prev, newClub])
+    applyClubsPayload(await fetchClubsPayload())
     setAllUsers((prev) => (
       prev.some((user) => user.id === actualUser.id)
         ? prev
@@ -213,6 +237,7 @@ export default function AdminPage() {
               {clubs.map((club) => {
                 const advisor = allUsers.find((u) => u.id === club.advisorId)
                   ?? (club.advisorId === actualUser.id ? actualUser : undefined)
+                const advisorName = advisor?.name ?? advisorNames[club.advisorId] ?? 'Unassigned'
                 const spotsLeft = club.capacity !== null ? club.capacity - club.memberIds.length : null
                 return (
                   <Card key={club.id}>
@@ -223,7 +248,7 @@ export default function AdminPage() {
                           <div>
                             <p className="font-medium text-gray-900 text-sm">{club.name}</p>
                             <p className="text-xs text-gray-500">
-                              Advisor: {advisor?.name ?? 'Unassigned'}
+                              Advisor: {advisorName}
                             </p>
                           </div>
                         </div>

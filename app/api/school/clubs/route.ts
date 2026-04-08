@@ -3,6 +3,8 @@ import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { Club, Role } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 type ClubOwnerRole = Extract<Role, 'admin' | 'advisor' | 'superadmin'>
 
 interface RequesterContext {
@@ -71,6 +73,81 @@ function parseCapacity(value: unknown) {
   const parsed = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(parsed) || parsed < 1) return null
   return Math.round(parsed)
+}
+
+export async function GET() {
+  const requester = await getRequesterContext()
+  if (!requester) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!requester.schoolId) {
+    return NextResponse.json({
+      clubs: [],
+      advisorNames: {},
+      myMembershipClubIds: [],
+    })
+  }
+
+  const db = createServiceClient()
+  const { data: clubRows, error: clubsError } = await db
+    .from('clubs')
+    .select('id, name, description, icon_url, capacity, advisor_id, auto_accept, tags, event_creator_ids, created_at')
+    .eq('school_id', requester.schoolId)
+    .order('created_at', { ascending: false })
+
+  if (clubsError) {
+    console.error('clubs load error', clubsError)
+    return NextResponse.json({ error: 'Failed to load clubs' }, { status: 500 })
+  }
+
+  const clubIds = (clubRows ?? []).map((club) => club.id)
+  const advisorIds = [...new Set((clubRows ?? []).map((club) => club.advisor_id).filter(Boolean))]
+
+  const [{ data: memberships, error: membershipsError }, { data: advisorRows, error: advisorsError }] = await Promise.all([
+    clubIds.length > 0
+      ? db.from('memberships').select('club_id, user_id').in('club_id', clubIds)
+      : Promise.resolve({ data: [], error: null }),
+    advisorIds.length > 0
+      ? db.from('users').select('id, name').in('id', advisorIds)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+
+  if (membershipsError) {
+    console.error('club memberships load error', membershipsError)
+    return NextResponse.json({ error: 'Failed to load club memberships' }, { status: 500 })
+  }
+
+  if (advisorsError) {
+    console.error('club advisors load error', advisorsError)
+    return NextResponse.json({ error: 'Failed to load club advisors' }, { status: 500 })
+  }
+
+  const memberIdsByClub: Record<string, string[]> = {}
+  for (const membership of memberships ?? []) {
+    if (!memberIdsByClub[membership.club_id]) {
+      memberIdsByClub[membership.club_id] = []
+    }
+    memberIdsByClub[membership.club_id].push(membership.user_id)
+  }
+
+  const advisorNames: Record<string, string> = {}
+  for (const advisor of advisorRows ?? []) {
+    advisorNames[advisor.id] = advisor.name
+  }
+
+  const clubs = (clubRows ?? []).map((clubRow) => ({
+    ...mapClubRowToClub(clubRow),
+    memberIds: memberIdsByClub[clubRow.id] ?? [],
+  }))
+
+  return NextResponse.json({
+    clubs,
+    advisorNames,
+    myMembershipClubIds: (memberships ?? [])
+      .filter((membership) => membership.user_id === requester.userId)
+      .map((membership) => membership.club_id),
+  })
 }
 
 export async function POST(request: NextRequest) {

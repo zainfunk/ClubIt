@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
-import { supabase } from '@/lib/supabase'
 import { Club } from '@/types'
 import Avatar from '@/components/Avatar'
 import { Search, ArrowRight, Plus, X } from 'lucide-react'
@@ -38,7 +37,7 @@ function capacityDot(memberCount: number, capacity: number | null): string {
 }
 
 export default function ClubsPage() {
-  const { actualUser, currentUser } = useMockAuth()
+  const { actualUser } = useMockAuth()
   const [clubs, setClubs] = useState<Club[]>([])
   const [myMembershipClubIds, setMyMembershipClubIds] = useState<string[]>([])
   const [advisorNames, setAdvisorNames] = useState<Record<string, string>>({})
@@ -55,6 +54,29 @@ export default function ClubsPage() {
   const [createError, setCreateError] = useState<string | null>(null)
 
   const canCreateClub = actualUser.role === 'advisor' || actualUser.role === 'admin'
+
+  function applyClubsPayload(payload: {
+    clubs?: Club[]
+    advisorNames?: Record<string, string>
+    myMembershipClubIds?: string[]
+  }) {
+    setClubs(payload.clubs ?? [])
+    setAdvisorNames(payload.advisorNames ?? {})
+    setMyMembershipClubIds(payload.myMembershipClubIds ?? [])
+  }
+
+  async function fetchClubsPayload() {
+    const res = await fetch('/api/school/clubs', { cache: 'no-store' })
+    const payload = await res.json()
+    if (!res.ok) {
+      throw new Error(payload.error ?? 'Failed to load clubs')
+    }
+    return payload as {
+      clubs?: Club[]
+      advisorNames?: Record<string, string>
+      myMembershipClubIds?: string[]
+    }
+  }
 
   async function handleCreateClub(e: React.FormEvent) {
     e.preventDefault()
@@ -81,9 +103,7 @@ export default function ClubsPage() {
         throw new Error(payload.error ?? 'Failed to create club')
       }
 
-      const newClub = payload.club as Club
-      setClubs((prev) => [...prev, newClub])
-      setAdvisorNames((prev) => ({ ...prev, [actualUser.id]: actualUser.name }))
+      applyClubsPayload(await fetchClubsPayload())
       setNewName('')
       setNewDesc('')
       setNewIcon('')
@@ -99,49 +119,27 @@ export default function ClubsPage() {
   }
 
   useEffect(() => {
-    if (!currentUser.schoolId) return
+    if (!actualUser.schoolId) return
 
-    // Load this school's clubs
-    supabase.from('clubs').select('*').eq('school_id', currentUser.schoolId).then(({ data }) => {
-      if (!data) return
-      const mapped: Club[] = data.map((d) => ({
-        id: d.id, name: d.name, description: d.description ?? '',
-        iconUrl: d.icon_url ?? undefined, advisorId: d.advisor_id ?? '',
-        memberIds: [], leadershipPositions: [], socialLinks: [], meetingTimes: [],
-        tags: d.tags ?? [], eventCreatorIds: d.event_creator_ids ?? [],
-        capacity: d.capacity ?? null, autoAccept: d.auto_accept ?? false,
-        createdAt: d.created_at ?? '',
-      }))
-      setClubs(mapped)
+    let cancelled = false
 
-      // Load member counts
-      const clubIds = mapped.map((c) => c.id)
-      supabase.from('memberships').select('club_id, user_id').in('club_id', clubIds).then(({ data: mData }) => {
-        if (!mData) return
-        setClubs((prev) => prev.map((c) => ({
-          ...c,
-          memberIds: mData.filter((m) => m.club_id === c.id).map((m) => m.user_id),
-        })))
-      })
-
-      // Load advisor names
-      const advisorIds = [...new Set(mapped.map((c) => c.advisorId).filter(Boolean))]
-      if (advisorIds.length > 0) {
-        supabase.from('users').select('id, name').in('id', advisorIds).then(({ data: uData }) => {
-          if (uData) {
-            const map: Record<string, string> = {}
-            for (const u of uData) map[u.id] = u.name
-            setAdvisorNames(map)
-          }
-        })
+    async function loadClubs() {
+      try {
+        const payload = await fetchClubsPayload()
+        if (cancelled) return
+        applyClubsPayload(payload)
+      } catch (err) {
+        if (cancelled) return
+        console.error('clubs load error', err)
       }
-    })
+    }
 
-    // Load current user's memberships
-    supabase.from('memberships').select('club_id').eq('user_id', currentUser.id).then(({ data }) => {
-      setMyMembershipClubIds((data ?? []).map((r) => r.club_id))
-    })
-  }, [currentUser.schoolId, currentUser.id])
+    void loadClubs()
+
+    return () => {
+      cancelled = true
+    }
+  }, [actualUser.schoolId, actualUser.id])
 
   const allTags = Array.from(new Set(clubs.flatMap((c) => c.tags ?? [])))
 
