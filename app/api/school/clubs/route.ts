@@ -59,7 +59,7 @@ async function getRequesterContext(): Promise<RequesterContext | null> {
 
   return {
     userId,
-    role: (clerkUser.publicMetadata?.role as Role | undefined) ?? (userRow?.role as Role | undefined) ?? 'student',
+    role: (userRow?.role as Role | undefined) ?? (clerkUser.publicMetadata?.role as Role | undefined) ?? 'student',
     schoolId: userRow?.school_id ?? null,
     name: clerkUser.fullName ?? clerkUser.username ?? userRow?.name ?? 'New User',
     email: clerkUser.primaryEmailAddress?.emailAddress ?? userRow?.email ?? '',

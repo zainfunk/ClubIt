@@ -18,7 +18,7 @@ async function getRequesterRoleAndSchool() {
 
   const client = await clerkClient()
   const clerkUser = await client.users.getUser(userId)
-  const role = (clerkUser.publicMetadata?.role as Role | undefined) ?? (userRow?.role as Role | undefined) ?? 'student'
+  const role = (userRow?.role as Role | undefined) ?? (clerkUser.publicMetadata?.role as Role | undefined) ?? 'student'
 
   return {
     userId,

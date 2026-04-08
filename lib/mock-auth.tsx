@@ -201,7 +201,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
         .eq('id', id)
         .maybeSingle()
 
-      const role = clerkRole ?? (userData?.role as Role) ?? 'student'
+      const role = (userData?.role as Role | undefined) ?? clerkRole ?? 'student'
       const schoolId = userData?.school_id ?? undefined
 
       if (!schoolId) {
