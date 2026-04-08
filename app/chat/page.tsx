@@ -4,8 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
 import { useChatStore } from '@/lib/chat-store'
-import { fetchSchoolClubs, fetchUsersByIds } from '@/lib/school-data'
-import { supabase } from '@/lib/supabase'
+import { fetchUsersByIds } from '@/lib/school-data'
 import { Club, User } from '@/types'
 import Avatar from '@/components/Avatar'
 import { MessageSquare } from 'lucide-react'
@@ -18,18 +17,16 @@ export default function ChatPage() {
   const [usersById, setUsersById] = useState<Record<string, User>>({})
 
   useEffect(() => {
-    if (!currentUser.id || !currentUser.schoolId) return
+    if (!currentUser.id) return
 
-    supabase
-      .from('memberships')
-      .select('club_id')
-      .eq('user_id', currentUser.id)
-      .then(({ data }) => {
-        setMyClubIds((data ?? []).map((row) => row.club_id))
+    fetch('/api/school/clubs', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((payload: { clubs?: Club[]; myMembershipClubIds?: string[] }) => {
+        setSchoolClubs(payload.clubs ?? [])
+        setMyClubIds(payload.myMembershipClubIds ?? [])
       })
-
-    fetchSchoolClubs(currentUser.schoolId).then(setSchoolClubs)
-  }, [currentUser.id, currentUser.schoolId])
+      .catch(console.error)
+  }, [currentUser.id])
 
   useEffect(() => {
     let cancelled = false

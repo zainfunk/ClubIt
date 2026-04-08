@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
 import { useChatStore } from '@/lib/chat-store'
-import { fetchSchoolClubs, fetchUsersByIds } from '@/lib/school-data'
+import { fetchUsersByIds } from '@/lib/school-data'
 import { supabase } from '@/lib/supabase'
 import { Club, User } from '@/types'
 import Avatar from '@/components/Avatar'
@@ -43,31 +43,29 @@ export default function ClubChatPage({ params }: { params: Promise<{ clubId: str
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!currentUser.id || !currentUser.schoolId) return
+    if (!currentUser.id) return
 
     let cancelled = false
 
-    supabase
-      .from('memberships')
-      .select('club_id')
-      .eq('user_id', currentUser.id)
-      .then(({ data }) => {
+    fetch('/api/school/clubs', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((payload: { clubs?: Club[]; myMembershipClubIds?: string[] }) => {
         if (cancelled) return
-        setMyClubIds((data ?? []).map((row) => row.club_id))
+        const clubs = payload.clubs ?? []
+        setSchoolClubs(clubs)
+        setMyClubIds(payload.myMembershipClubIds ?? [])
+        setClub(clubs.find((entry) => entry.id === clubId) ?? null)
+        setClubLoading(false)
         setAccessChecked(true)
       })
-
-    fetchSchoolClubs(currentUser.schoolId).then((clubs) => {
-      if (cancelled) return
-      setSchoolClubs(clubs)
-      setClub(clubs.find((entry) => entry.id === clubId) ?? null)
-      setClubLoading(false)
-    })
+      .catch(() => {
+        if (!cancelled) setClubLoading(false)
+      })
 
     return () => {
       cancelled = true
     }
-  }, [clubId, currentUser.id, currentUser.schoolId])
+  }, [clubId, currentUser.id])
 
   useEffect(() => {
     let cancelled = false

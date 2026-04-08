@@ -82,11 +82,9 @@ export default function ClubDetailPage({ params }: PageProps) {
   }
 
   useEffect(() => {
-    // Guard on id, not schoolId — the server resolves school context itself.
-    if (!currentUser.id) {
-      setClubLoading(false)
-      return
-    }
+    // Wait for auth to initialise before fetching. Do NOT call setClubLoading(false)
+    // here — keeping it true prevents notFound() from firing before the fetch runs.
+    if (!currentUser.id) return
 
     const controller = new AbortController()
     setClubLoading(true)
@@ -253,17 +251,25 @@ export default function ClubDetailPage({ params }: PageProps) {
   async function handleApprove(requestId: string) {
     const req = requests.find((r) => r.id === requestId)
     if (!req || club.memberIds.includes(req.userId) || isFull) return
-    const membershipId = `m-${requestId}`
-    const joinedAt = new Date().toISOString().split('T')[0]
-    await supabase.from('join_requests').update({ status: 'approved' }).eq('id', requestId)
-    await supabase.from('memberships').insert({ id: membershipId, club_id: id, user_id: req.userId, joined_at: joinedAt })
-    setRequests((prev) => prev.map((r) => r.id === requestId ? { ...r, status: 'approved' } : r))
-    setClubs((prev) => prev.map((c) => c.id === id ? { ...c, memberIds: [...c.memberIds, req.userId] } : c))
+    const res = await fetch(`/api/school/clubs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'approve', requestId }),
+    })
+    if (!res.ok) return
+    const controller = new AbortController()
+    await loadDetail(controller.signal)
   }
 
   async function handleReject(requestId: string) {
-    await supabase.from('join_requests').update({ status: 'rejected' }).eq('id', requestId)
-    setRequests((prev) => prev.map((r) => r.id === requestId ? { ...r, status: 'rejected' } : r))
+    const res = await fetch(`/api/school/clubs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reject', requestId }),
+    })
+    if (!res.ok) return
+    const controller = new AbortController()
+    await loadDetail(controller.signal)
   }
 
   async function toggleAutoAccept() {

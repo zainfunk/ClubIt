@@ -30,129 +30,102 @@ export default function DashboardPage() {
   const [issueReports, setIssueReports] = useState<{ id: string; reporter_name: string; reporter_email: string; message: string; status: string; created_at: string }[]>([])
 
   useEffect(() => {
-    if (!currentUser.id || !currentUser.schoolId) return
+    // Guard on id — the server resolves school context.
+    if (!currentUser.id) return
 
     const today = new Date().toISOString().split('T')[0]
 
     if (currentUser.role === 'student') {
-      // Load clubs I'm a member of
-      supabase.from('memberships').select('club_id').eq('user_id', currentUser.id).then(async ({ data: memberData }) => {
-        const myClubIds = (memberData ?? []).map((r) => r.club_id)
-        if (myClubIds.length === 0) return
+      // Fetch clubs via server API (bypasses RLS, uses service client).
+      fetch('/api/school/clubs', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then(async (payload: { clubs?: Club[]; myMembershipClubIds?: string[]; advisorNames?: Record<string, string> }) => {
+          const allClubs = payload.clubs ?? []
+          const memberIds = payload.myMembershipClubIds ?? []
+          const joined = allClubs.filter((c) => memberIds.includes(c.id))
+          setMyClubs(joined)
+          setAdvisorNames(payload.advisorNames ?? {})
 
-        const { data: clubData } = await supabase.from('clubs').select('*').in('id', myClubIds).eq('school_id', currentUser.schoolId!)
-        if (!clubData) return
+          if (joined.length === 0) return
+          const myClubIds = joined.map((c) => c.id)
 
-        const clubs: Club[] = clubData.map((d) => ({
-          id: d.id, name: d.name, description: d.description ?? '',
-          iconUrl: d.icon_url ?? undefined, advisorId: d.advisor_id ?? '',
-          memberIds: myClubIds, leadershipPositions: [], socialLinks: [], meetingTimes: [],
-          tags: d.tags ?? [], eventCreatorIds: d.event_creator_ids ?? [],
-          capacity: d.capacity ?? null, autoAccept: d.auto_accept ?? false, createdAt: d.created_at ?? '',
-        }))
-        setMyClubs(clubs)
-
-        // Load advisor names
-        const advisorIds = [...new Set(clubs.map((c) => c.advisorId).filter(Boolean))]
-        if (advisorIds.length > 0) {
-          supabase.from('users').select('id, name').in('id', advisorIds).then(({ data: uData }) => {
-            if (uData) {
-              const map: Record<string, string> = {}
-              for (const u of uData) map[u.id] = u.name
-              setAdvisorNames(map)
+          // Pinned news (client-side — read-only, lower stakes)
+          supabase.from('club_news').select('*').in('club_id', myClubIds).eq('is_pinned', true).then(({ data: newsData }) => {
+            if (!newsData) return
+            const map: Record<string, ClubNews> = {}
+            for (const n of newsData) {
+              const existing = map[n.club_id]
+              if (!existing || new Date(n.created_at) > new Date(existing.createdAt)) {
+                map[n.club_id] = { id: n.id, clubId: n.club_id, title: n.title, content: n.content, authorId: n.author_id, createdAt: n.created_at, isPinned: n.is_pinned }
+              }
             }
+            setPinnedNews(map)
           })
-        }
 
-        // Load pinned news per club
-        supabase.from('club_news').select('*').in('club_id', myClubIds).eq('is_pinned', true).then(({ data: newsData }) => {
-          if (!newsData) return
-          const map: Record<string, ClubNews> = {}
-          for (const n of newsData) {
-            const existing = map[n.club_id]
-            if (!existing || new Date(n.created_at) > new Date(existing.createdAt)) {
-              map[n.club_id] = { id: n.id, clubId: n.club_id, title: n.title, content: n.content, authorId: n.author_id, createdAt: n.created_at, isPinned: n.is_pinned }
+          // Next upcoming event per club
+          supabase.from('events').select('*').in('club_id', myClubIds).gte('date', today).order('date').then(({ data: evData }) => {
+            if (!evData) return
+            const map: Record<string, ClubEvent> = {}
+            for (const e of evData) {
+              if (!map[e.club_id]) {
+                map[e.club_id] = { id: e.id, clubId: e.club_id, title: e.title, description: e.description ?? '', date: e.date, location: e.location ?? undefined, isPublic: e.is_public, createdBy: e.created_by }
+              }
             }
-          }
-          setPinnedNews(map)
+            setNextEvents(map)
+          })
         })
+        .catch(console.error)
 
-        // Load next upcoming event per club
-        supabase.from('events').select('*').in('club_id', myClubIds).gte('date', today).order('date').then(({ data: evData }) => {
-          if (!evData) return
-          const map: Record<string, ClubEvent> = {}
-          for (const e of evData) {
-            if (!map[e.club_id]) {
-              map[e.club_id] = { id: e.id, clubId: e.club_id, title: e.title, description: e.description ?? '', date: e.date, location: e.location ?? undefined, isPublic: e.is_public, createdBy: e.created_by }
-            }
-          }
-          setNextEvents(map)
-        })
-      })
-
-      // Load pending join requests
+      // Pending join requests (client-side)
       supabase.from('join_requests').select('*').eq('user_id', currentUser.id).eq('status', 'pending').then(({ data }) => {
         setPendingRequests((data ?? []).map((r) => ({ id: r.id, clubId: r.club_id, userId: r.user_id, requestedAt: r.requested_at, status: r.status })))
       })
     }
 
     if (currentUser.role === 'advisor') {
-      // Load issue reports for this school
+      // Issue reports
       supabase.from('issue_reports').select('*').eq('school_id', currentUser.schoolId!).order('created_at', { ascending: false }).then(({ data }) => {
         if (data) setIssueReports(data)
       })
 
-      // Load clubs I advise
-      supabase.from('clubs').select('*').eq('advisor_id', currentUser.id).eq('school_id', currentUser.schoolId!).then(async ({ data: clubData }) => {
-        if (!clubData?.length) return
+      // Fetch clubs via server API and filter to advised clubs
+      fetch('/api/school/clubs', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then(async (payload: { clubs?: Club[]; advisorNames?: Record<string, string> }) => {
+          const allClubs = payload.clubs ?? []
+          const advised = allClubs.filter((c) => c.advisorId === currentUser.id)
+          setMyClubs(advised)
+          setAdvisorNames(payload.advisorNames ?? {})
 
-        const clubIds = clubData.map((d) => d.id)
+          if (advised.length === 0) return
+          const clubIds = advised.map((c) => c.id)
 
-        // Load member counts
-        const { data: memberData } = await supabase.from('memberships').select('club_id, user_id').in('club_id', clubIds)
-        const memberMap: Record<string, string[]> = {}
-        for (const m of memberData ?? []) {
-          if (!memberMap[m.club_id]) memberMap[m.club_id] = []
-          memberMap[m.club_id].push(m.user_id)
-        }
-
-        const clubs: Club[] = clubData.map((d) => ({
-          id: d.id, name: d.name, description: d.description ?? '',
-          iconUrl: d.icon_url ?? undefined, advisorId: d.advisor_id ?? '',
-          memberIds: memberMap[d.id] ?? [], leadershipPositions: [], socialLinks: [], meetingTimes: [],
-          tags: d.tags ?? [], eventCreatorIds: d.event_creator_ids ?? [],
-          capacity: d.capacity ?? null, autoAccept: d.auto_accept ?? false, createdAt: d.created_at ?? '',
-        }))
-        setMyClubs(clubs)
-
-        // Pinned news
-        supabase.from('club_news').select('*').in('club_id', clubIds).eq('is_pinned', true).then(({ data: newsData }) => {
-          if (!newsData) return
-          const map: Record<string, ClubNews> = {}
-          for (const n of newsData) {
-            const existing = map[n.club_id]
-            if (!existing || new Date(n.created_at) > new Date(existing.createdAt)) {
-              map[n.club_id] = { id: n.id, clubId: n.club_id, title: n.title, content: n.content, authorId: n.author_id, createdAt: n.created_at, isPinned: n.is_pinned }
+          supabase.from('club_news').select('*').in('club_id', clubIds).eq('is_pinned', true).then(({ data: newsData }) => {
+            if (!newsData) return
+            const map: Record<string, ClubNews> = {}
+            for (const n of newsData) {
+              const existing = map[n.club_id]
+              if (!existing || new Date(n.created_at) > new Date(existing.createdAt)) {
+                map[n.club_id] = { id: n.id, clubId: n.club_id, title: n.title, content: n.content, authorId: n.author_id, createdAt: n.created_at, isPinned: n.is_pinned }
+              }
             }
-          }
-          setPinnedNews(map)
-        })
+            setPinnedNews(map)
+          })
 
-        // Next events
-        const today2 = new Date().toISOString().split('T')[0]
-        supabase.from('events').select('*').in('club_id', clubIds).gte('date', today2).order('date').then(({ data: evData }) => {
-          if (!evData) return
-          const map: Record<string, ClubEvent> = {}
-          for (const e of evData) {
-            if (!map[e.club_id]) {
-              map[e.club_id] = { id: e.id, clubId: e.club_id, title: e.title, description: e.description ?? '', date: e.date, location: e.location ?? undefined, isPublic: e.is_public, createdBy: e.created_by }
+          supabase.from('events').select('*').in('club_id', clubIds).gte('date', today).order('date').then(({ data: evData }) => {
+            if (!evData) return
+            const map: Record<string, ClubEvent> = {}
+            for (const e of evData) {
+              if (!map[e.club_id]) {
+                map[e.club_id] = { id: e.id, clubId: e.club_id, title: e.title, description: e.description ?? '', date: e.date, location: e.location ?? undefined, isPublic: e.is_public, createdBy: e.created_by }
+              }
             }
-          }
-          setNextEvents(map)
+            setNextEvents(map)
+          })
         })
-      })
+        .catch(console.error)
     }
-  }, [currentUser.id, currentUser.schoolId, currentUser.role])
+  }, [currentUser.id, currentUser.role])
 
   async function resolveIssue(id: string) {
     await supabase.from('issue_reports').update({ status: 'resolved' }).eq('id', id)
@@ -265,7 +238,7 @@ export default function DashboardPage() {
           <div className="text-center py-20 bg-white rounded-xl border">
             {currentUser.role === 'advisor'
               ? <><Users className="w-8 h-8 text-gray-300 mx-auto mb-3" /><p className="text-gray-500 font-medium">You are not assigned as advisor to any clubs yet.</p></>
-              : <><BookOpen className="w-8 h-8 text-gray-300 mx-auto mb-3" /><p className="text-gray-500 font-medium">You haven't joined any clubs yet.</p></>
+              : <><BookOpen className="w-8 h-8 text-gray-300 mx-auto mb-3" /><p className="text-gray-500 font-medium">You haven&apos;t joined any clubs yet.</p></>
             }
           </div>
         ) : (

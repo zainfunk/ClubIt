@@ -225,3 +225,82 @@ export async function GET(_request: NextRequest, { params }: PageProps) {
     usersById,
   })
 }
+
+export async function PATCH(request: NextRequest, { params }: PageProps) {
+  const { userId } = await auth()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const db = createServiceClient()
+  const { id: clubId } = await params
+
+  const { data: userRow } = await db
+    .from('users')
+    .select('school_id, role')
+    .eq('id', userId)
+    .maybeSingle()
+
+  const schoolId = userRow?.school_id as string | null
+  if (!schoolId) return NextResponse.json({ error: 'No school context' }, { status: 400 })
+
+  const { data: clubRow } = await db
+    .from('clubs')
+    .select('id, advisor_id, capacity, auto_accept')
+    .eq('id', clubId)
+    .eq('school_id', schoolId)
+    .maybeSingle()
+
+  if (!clubRow) return NextResponse.json({ error: 'Club not found' }, { status: 404 })
+
+  const isManager =
+    clubRow.advisor_id === userId ||
+    userRow?.role === 'admin' ||
+    userRow?.role === 'superadmin'
+
+  const body = await request.json() as { action: string; requestId?: string }
+  const { action, requestId } = body
+
+  if (action === 'approve') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    if (!requestId) return NextResponse.json({ error: 'requestId required' }, { status: 400 })
+
+    const { data: req } = await db
+      .from('join_requests')
+      .select('user_id, status')
+      .eq('id', requestId)
+      .maybeSingle()
+
+    if (!req) return NextResponse.json({ error: 'Request not found' }, { status: 404 })
+
+    // Check capacity
+    if (clubRow.capacity !== null) {
+      const { count } = await db
+        .from('memberships')
+        .select('id', { count: 'exact', head: true })
+        .eq('club_id', clubId)
+      if ((count ?? 0) >= clubRow.capacity) {
+        return NextResponse.json({ error: 'Club is full' }, { status: 409 })
+      }
+    }
+
+    const joinedAt = new Date().toISOString().split('T')[0]
+    await db.from('join_requests').update({ status: 'approved' }).eq('id', requestId)
+    await db
+      .from('memberships')
+      .upsert(
+        { id: `m-${requestId}`, club_id: clubId, user_id: req.user_id, joined_at: joinedAt },
+        { onConflict: 'club_id,user_id' }
+      )
+
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'reject') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    if (!requestId) return NextResponse.json({ error: 'requestId required' }, { status: 400 })
+
+    await db.from('join_requests').update({ status: 'rejected' }).eq('id', requestId)
+    return NextResponse.json({ ok: true })
+  }
+
+  return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
+}
