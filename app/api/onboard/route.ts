@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
+import { generateInviteCode } from '@/lib/schools-store'
 
 export async function POST(request: NextRequest) {
   const { userId } = await auth()
@@ -28,7 +29,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'You are already enrolled in a school' }, { status: 409 })
   }
 
-  // Create the school with status=pending (no invite codes yet — generated on approval)
+  // Auto-approve: create as active with invite codes ready to share.
+  // The onboarding user becomes the admin immediately; superadmin can still suspend later.
   const { data: school, error } = await db
     .from('schools')
     .insert({
@@ -36,7 +38,10 @@ export async function POST(request: NextRequest) {
       district: district?.trim() || null,
       contact_name: contactName.trim(),
       contact_email: contactEmail.trim().toLowerCase(),
-      status: 'pending',
+      status: 'active',
+      student_invite_code: generateInviteCode('STU'),
+      admin_invite_code: generateInviteCode('ADM'),
+      advisor_invite_code: generateInviteCode('ADV'),
     })
     .select()
     .single()

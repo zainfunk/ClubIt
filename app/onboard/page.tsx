@@ -32,7 +32,7 @@ export default function OnboardPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Something went wrong')
-      router.push('/onboard/pending')
+      router.push('/dashboard')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -50,7 +50,7 @@ export default function OnboardPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Register your school</h1>
           <p className="text-gray-500 mt-1 text-sm">
-            We&apos;ll review your request and send invite codes within one business day.
+            Your school goes live the moment you submit — invite codes ready to share right away.
           </p>
         </div>
 
