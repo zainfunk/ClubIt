@@ -11,6 +11,7 @@ export interface School {
   status: SchoolStatus
   studentInviteCode?: string
   adminInviteCode?: string
+  advisorInviteCode?: string
   setupToken?: string
   setupTokenExpiresAt?: string
   setupCompletedAt?: string

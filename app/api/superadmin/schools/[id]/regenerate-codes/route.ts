@@ -24,13 +24,14 @@ export async function POST(
 
   const studentCode = generateInviteCode('STU')
   const adminCode = generateInviteCode('ADM')
+  const advisorCode = generateInviteCode('ADV')
 
   const { error } = await db
     .from('schools')
-    .update({ student_invite_code: studentCode, admin_invite_code: adminCode })
+    .update({ student_invite_code: studentCode, admin_invite_code: adminCode, advisor_invite_code: advisorCode })
     .eq('id', id)
 
   if (error) return NextResponse.json({ error: 'Failed to regenerate codes' }, { status: 500 })
 
-  return NextResponse.json({ studentInviteCode: studentCode, adminInviteCode: adminCode })
+  return NextResponse.json({ studentInviteCode: studentCode, adminInviteCode: adminCode, advisorInviteCode: advisorCode })
 }

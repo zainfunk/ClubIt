@@ -11,7 +11,7 @@ function randomSegment(length: number): string {
   return out
 }
 
-export function generateInviteCode(prefix: 'STU' | 'ADM'): string {
+export function generateInviteCode(prefix: 'STU' | 'ADM' | 'ADV'): string {
   return `${randomSegment(4)}-${prefix}-${randomSegment(4)}`
 }
 
@@ -39,6 +39,7 @@ export function rowToSchool(row: Record<string, any>): School {
     status: row.status,
     studentInviteCode: row.student_invite_code ?? undefined,
     adminInviteCode: row.admin_invite_code ?? undefined,
+    advisorInviteCode: row.advisor_invite_code ?? undefined,
     setupToken: row.setup_token ?? undefined,
     setupTokenExpiresAt: row.setup_token_expires_at ?? undefined,
     setupCompletedAt: row.setup_completed_at ?? undefined,

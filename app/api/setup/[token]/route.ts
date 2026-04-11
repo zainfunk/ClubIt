@@ -11,7 +11,7 @@ export async function GET(
 
   const { data: school } = await db
     .from('schools')
-    .select('id, name, district, contact_name, contact_email, status, student_invite_code, admin_invite_code, setup_token_expires_at, setup_completed_at')
+    .select('id, name, district, contact_name, contact_email, status, student_invite_code, admin_invite_code, advisor_invite_code, setup_token_expires_at, setup_completed_at')
     .eq('setup_token', token)
     .maybeSingle()
 
@@ -34,6 +34,7 @@ export async function GET(
     contactEmail: school.contact_email,
     studentInviteCode: school.student_invite_code,
     adminInviteCode: school.admin_invite_code,
+    advisorInviteCode: school.advisor_invite_code,
     expiresAt: school.setup_token_expires_at,
     completedAt: school.setup_completed_at,
   })

@@ -38,6 +38,7 @@ export async function POST(
 
   const studentCode = generateInviteCode('STU')
   const adminCode = generateInviteCode('ADM')
+  const advisorCode = generateInviteCode('ADV')
   const token = generateSetupToken()
   const tokenExpiry = setupTokenExpiresAt()
 
@@ -47,6 +48,7 @@ export async function POST(
       status: 'active',
       student_invite_code: studentCode,
       admin_invite_code: adminCode,
+      advisor_invite_code: advisorCode,
       setup_token: token,
       setup_token_expires_at: tokenExpiry,
     })

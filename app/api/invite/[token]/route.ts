@@ -72,6 +72,7 @@ export async function POST(
 
   const studentCode = generateInviteCode('STU')
   const adminCode = generateInviteCode('ADM')
+  const advisorCode = generateInviteCode('ADV')
 
   // Create the school as active immediately (superadmin already approved by sending the invite)
   const { data: school, error } = await db
@@ -84,6 +85,7 @@ export async function POST(
       status: 'active',
       student_invite_code: studentCode,
       admin_invite_code: adminCode,
+      advisor_invite_code: advisorCode,
     })
     .select()
     .single()
@@ -103,5 +105,6 @@ export async function POST(
     schoolName: school.name,
     studentInviteCode: studentCode,
     adminInviteCode: adminCode,
+    advisorInviteCode: advisorCode,
   })
 }

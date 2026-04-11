@@ -391,12 +391,16 @@ create table if not exists schools (
   status text not null default 'pending' check (status in ('pending', 'active', 'suspended')),
   student_invite_code text unique,
   admin_invite_code text unique,
+  advisor_invite_code text unique,
   -- One-time IT setup link token
   setup_token text unique,
   setup_token_expires_at timestamptz,
   setup_completed_at timestamptz,
   created_at timestamptz default now()
 );
+
+-- Add advisor_invite_code to existing schools tables (migration for existing deployments)
+alter table schools add column if not exists advisor_invite_code text unique;
 
 -- Add school_id to users (nullable: superadmin users have no school)
 alter table users add column if not exists school_id uuid references schools(id) on delete set null;
@@ -415,8 +419,8 @@ alter table users add constraint users_role_check
 -- Seed: Demo school for existing seed data
 -- ============================================================
 
-insert into schools (id, name, district, contact_name, contact_email, status, student_invite_code, admin_invite_code, setup_completed_at) values
-  ('00000000-0000-0000-0000-000000000001', 'Demo High School', 'Demo District', 'Principal Hayes', 'hayes@clubit.edu', 'active', 'DEMO-STU-0001', 'DEMO-ADM-0001', now())
+insert into schools (id, name, district, contact_name, contact_email, status, student_invite_code, admin_invite_code, advisor_invite_code, setup_completed_at) values
+  ('00000000-0000-0000-0000-000000000001', 'Demo High School', 'Demo District', 'Principal Hayes', 'hayes@clubit.edu', 'active', 'DEMO-STU-0001', 'DEMO-ADM-0001', 'DEMO-ADV-0001', now())
 on conflict (id) do nothing;
 
 -- Assign existing seed users to the demo school

@@ -7,6 +7,7 @@ interface Codes {
   schoolName: string
   studentInviteCode: string
   adminInviteCode: string
+  advisorInviteCode: string
 }
 
 function CopyButton({ value }: { value: string }) {
@@ -108,6 +109,22 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
                 <code className="text-lg font-mono font-bold tracking-widest text-gray-900">{codes.studentInviteCode}</code>
                 <CopyButton value={codes.studentInviteCode} />
               </div>
+            </div>
+
+            {/* Advisor code */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Advisor invite code</p>
+                  <p className="text-sm text-gray-500 mt-0.5">Share with club advisors and teachers</p>
+                </div>
+                <span className="text-xs bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full font-medium">Advisors</span>
+              </div>
+              <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+                <code className="text-lg font-mono font-bold tracking-widest text-gray-900">{codes.advisorInviteCode}</code>
+                <CopyButton value={codes.advisorInviteCode} />
+              </div>
+              <p className="text-xs text-purple-600 mt-3">Advisors can create and manage clubs they own.</p>
             </div>
 
             {/* Admin code */}

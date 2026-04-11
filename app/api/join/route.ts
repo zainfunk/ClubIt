@@ -25,11 +25,11 @@ export async function POST(request: NextRequest) {
   const normalised = (code as string).trim().toUpperCase()
   const db = createServiceClient()
 
-  // Look up school by student or admin invite code
+  // Look up school by student, advisor, or admin invite code
   const { data: school } = await db
     .from('schools')
-    .select('id, name, status, student_invite_code, admin_invite_code')
-    .or(`student_invite_code.eq.${normalised},admin_invite_code.eq.${normalised}`)
+    .select('id, name, status, student_invite_code, admin_invite_code, advisor_invite_code')
+    .or(`student_invite_code.eq.${normalised},admin_invite_code.eq.${normalised},advisor_invite_code.eq.${normalised}`)
     .maybeSingle()
 
   if (!school) {
@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
   }
 
   const isAdminCode = school.admin_invite_code === normalised
-  const incomingRole: Role = isAdminCode ? 'admin' : 'student'
+  const isAdvisorCode = school.advisor_invite_code === normalised
+  const incomingRole: Role = isAdminCode ? 'admin' : isAdvisorCode ? 'advisor' : 'student'
 
   const { data: existingUser } = await db
     .from('users')
