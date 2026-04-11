@@ -59,8 +59,9 @@ function SchoolRow({ school, onAction }: SchoolRowProps) {
     try {
       const res = await fetch(path, { method: 'POST' })
       const data = await res.json()
+      if (!res.ok) return
       if (data.setupLink) setSetupLink(data.setupLink)
-      if (data.studentInviteCode) setCodes({ student: data.studentInviteCode, advisor: data.advisorInviteCode, admin: data.adminInviteCode })
+      if (data.studentInviteCode) setCodes({ student: data.studentInviteCode, advisor: data.advisorInviteCode ?? null, admin: data.adminInviteCode })
       onAction()
     } finally {
       setLoading(null)
