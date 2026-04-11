@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import Link from 'next/link'
 import { applyOverrides } from '@/lib/user-store'
 import Avatar from '@/components/Avatar'
-import { Users, Shield, Vote, Plus, GraduationCap, MessageSquare, CheckCircle, Clock } from 'lucide-react'
+import { Users, Shield, Vote, Plus, GraduationCap, MessageSquare, CheckCircle, Clock, Copy, Check, KeyRound } from 'lucide-react'
 
 export default function AdminPage() {
   const { actualUser } = useMockAuth()
@@ -25,6 +25,8 @@ export default function AdminPage() {
   const [issueReports, setIssueReports] = useState<{ id: string; reporter_name: string; reporter_email: string; message: string; status: string; created_at: string }[]>([])
   const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null)
   const [roleError, setRoleError] = useState<string | null>(null)
+  const [invites, setInvites] = useState<{ studentCode: string | null; advisorCode: string | null; adminCode: string | null } | null>(null)
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
 
   function applyClubsPayload(payload: {
     clubs?: Club[]
@@ -75,6 +77,33 @@ export default function AdminPage() {
   async function resolveIssue(id: string) {
     await supabase.from('issue_reports').update({ status: 'resolved' }).eq('id', id)
     setIssueReports((prev) => prev.map((r) => r.id === id ? { ...r, status: 'resolved' } : r))
+  }
+
+  useEffect(() => {
+    if (!actualUser.schoolId) return
+    let cancelled = false
+    fetch('/api/school/invites', { cache: 'no-store' })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (cancelled || !data) return
+        setInvites({
+          studentCode: data.studentCode ?? null,
+          advisorCode: data.advisorCode ?? null,
+          adminCode: data.adminCode ?? null,
+        })
+      })
+      .catch(() => { /* ignore */ })
+    return () => { cancelled = true }
+  }, [actualUser.schoolId])
+
+  async function copyCode(label: string, code: string) {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopiedCode(label)
+      setTimeout(() => setCopiedCode((current) => current === label ? null : current), 1500)
+    } catch {
+      /* clipboard may be unavailable — silently ignore */
+    }
   }
 
   useEffect(() => {
@@ -222,6 +251,70 @@ export default function AdminPage() {
             <p className="text-sm text-gray-500 mt-0.5">Manage clubs, advisors, and school elections</p>
           </div>
         </div>
+
+        {/* Invite codes — share these so users can join via /join */}
+        {invites && (invites.studentCode || invites.advisorCode || invites.adminCode) && (
+          <Card className="mb-10 border-indigo-100 bg-gradient-to-br from-indigo-50/40 to-emerald-50/40">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center shadow-sm">
+                  <KeyRound className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Invite codes</CardTitle>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Share these with your school. New users enter them at <span className="font-mono">/join</span> to get the right role.
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {([
+                  { label: 'Students', code: invites.studentCode, accent: 'emerald' },
+                  { label: 'Advisors', code: invites.advisorCode, accent: 'indigo' },
+                  { label: 'Admins', code: invites.adminCode, accent: 'rose' },
+                ] as const).map(({ label, code, accent }) => (
+                  <div
+                    key={label}
+                    className="rounded-xl bg-white border border-gray-100 p-4 flex flex-col gap-2 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                        accent === 'emerald' ? 'text-emerald-600' :
+                        accent === 'indigo' ? 'text-indigo-600' :
+                        'text-rose-600'
+                      }`}>
+                        {label}
+                      </span>
+                      {code && (
+                        <button
+                          type="button"
+                          onClick={() => copyCode(label, code)}
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-gray-500 hover:text-gray-900 transition"
+                          aria-label={`Copy ${label} invite code`}
+                        >
+                          {copiedCode === label ? (
+                            <><Check className="w-3 h-3 text-emerald-500" /> Copied</>
+                          ) : (
+                            <><Copy className="w-3 h-3" /> Copy</>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    {code ? (
+                      <code className="font-mono text-sm font-bold text-gray-900 tracking-tight">
+                        {code}
+                      </code>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">Not generated yet</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Clubs section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
