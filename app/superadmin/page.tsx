@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
 import {
   CheckCircle, XCircle, Ban, RefreshCw, Link, Clock,
@@ -121,14 +120,14 @@ function SchoolRow({ school, onAction }: SchoolRowProps) {
                   {codes.student && <CopyButton value={codes.student} />}
                 </div>
               </div>
-              <div className="bg-purple-50 rounded-xl p-3">
-                <p className="text-xs text-purple-400 mb-1">Advisor code</p>
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-400 mb-1">Advisor code</p>
                 <div className="flex items-center">
-                  <code className="text-sm font-mono font-bold text-purple-800">{codes.advisor ?? '—'}</code>
+                  <code className="text-sm font-mono font-bold text-gray-800">{codes.advisor ?? '—'}</code>
                   {codes.advisor && <CopyButton value={codes.advisor} />}
                 </div>
                 {!codes.advisor && (
-                  <p className="text-xs text-purple-400 mt-1">Regen codes to generate</p>
+                  <p className="text-xs text-gray-400 mt-1">Regen codes to generate</p>
                 )}
               </div>
               <div className="bg-gray-50 rounded-xl p-3">
@@ -359,20 +358,13 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 
 export default function SuperAdminPage() {
   const devQuickInviteEnabled = process.env.NODE_ENV === 'development'
-  const { user, isLoaded } = useUser()
-  const router = useRouter()
+  const { isLoaded } = useUser()
   const [schools, setSchools] = useState<SchoolType[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
 
-  // Guard: only superadmins may access this page
-  useEffect(() => {
-    if (!isLoaded) return
-    if (user?.publicMetadata?.role !== 'superadmin') {
-      router.replace('/dashboard')
-    }
-  }, [isLoaded, user, router])
+  // Access is gated server-side in app/superadmin/layout.tsx (DB-first check).
 
   async function loadSchools() {
     setLoading(true)
@@ -383,7 +375,7 @@ export default function SuperAdminPage() {
   }
 
   useEffect(() => {
-    if (!isLoaded || user?.publicMetadata?.role !== 'superadmin') return
+    if (!isLoaded) return
 
     let cancelled = false
 
@@ -400,7 +392,7 @@ export default function SuperAdminPage() {
     return () => {
       cancelled = true
     }
-  }, [isLoaded, user])
+  }, [isLoaded])
 
   const filtered = filter === 'all' ? schools : schools.filter(s => s.status === filter)
 
@@ -411,7 +403,7 @@ export default function SuperAdminPage() {
     suspended: schools.filter(s => s.status === 'suspended').length,
   }
 
-  if (!isLoaded || user?.publicMetadata?.role !== 'superadmin') {
+  if (!isLoaded) {
     return <div className="min-h-screen bg-[#f8f9fa]" />
   }
 
