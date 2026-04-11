@@ -50,6 +50,7 @@ function SchoolRow({ school, onAction }: SchoolRowProps) {
   const [setupLink, setSetupLink] = useState<string | null>(null)
   const [codes, setCodes] = useState({
     student: school.studentInviteCode,
+    advisor: school.advisorInviteCode,
     admin: school.adminInviteCode,
   })
 
@@ -59,7 +60,7 @@ function SchoolRow({ school, onAction }: SchoolRowProps) {
       const res = await fetch(path, { method: 'POST' })
       const data = await res.json()
       if (data.setupLink) setSetupLink(data.setupLink)
-      if (data.studentInviteCode) setCodes({ student: data.studentInviteCode, admin: data.adminInviteCode })
+      if (data.studentInviteCode) setCodes({ student: data.studentInviteCode, advisor: data.advisorInviteCode, admin: data.adminInviteCode })
       onAction()
     } finally {
       setLoading(null)
@@ -110,19 +111,29 @@ function SchoolRow({ school, onAction }: SchoolRowProps) {
           </div>
 
           {/* Invite codes (only for active schools) */}
-          {(codes.student || codes.admin) && (
-            <div className="grid grid-cols-2 gap-3">
+          {(codes.student || codes.advisor || codes.admin) && (
+            <div className="grid grid-cols-3 gap-3">
               <div className="bg-gray-50 rounded-xl p-3">
                 <p className="text-xs text-gray-400 mb-1">Student code</p>
                 <div className="flex items-center">
-                  <code className="text-sm font-mono font-bold text-gray-800">{codes.student}</code>
+                  <code className="text-sm font-mono font-bold text-gray-800">{codes.student ?? '—'}</code>
                   {codes.student && <CopyButton value={codes.student} />}
                 </div>
+              </div>
+              <div className="bg-purple-50 rounded-xl p-3">
+                <p className="text-xs text-purple-400 mb-1">Advisor code</p>
+                <div className="flex items-center">
+                  <code className="text-sm font-mono font-bold text-purple-800">{codes.advisor ?? '—'}</code>
+                  {codes.advisor && <CopyButton value={codes.advisor} />}
+                </div>
+                {!codes.advisor && (
+                  <p className="text-xs text-purple-400 mt-1">Regen codes to generate</p>
+                )}
               </div>
               <div className="bg-gray-50 rounded-xl p-3">
                 <p className="text-xs text-gray-400 mb-1">Admin code</p>
                 <div className="flex items-center">
-                  <code className="text-sm font-mono font-bold text-gray-800">{codes.admin}</code>
+                  <code className="text-sm font-mono font-bold text-gray-800">{codes.admin ?? '—'}</code>
                   {codes.admin && <CopyButton value={codes.admin} />}
                 </div>
               </div>
