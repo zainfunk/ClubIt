@@ -9,7 +9,9 @@ const BARE_ROUTES = ['/sign-in', '/sign-up', '/onboard', '/join', '/setup', '/in
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const isBare = BARE_ROUTES.some(r => pathname.startsWith(r))
+  // The public landing page at exactly "/" renders bare (no sidebar/topbar).
+  const isLanding = pathname === '/'
+  const isBare = isLanding || BARE_ROUTES.some(r => pathname.startsWith(r))
 
   if (isBare) return <>{children}</>
 
