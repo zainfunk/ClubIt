@@ -108,19 +108,13 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!actualUser.schoolId) return
-    // Load this school's elections
-    supabase.from('school_elections').select('*, election_candidates(*), election_votes(*)').eq('school_id', actualUser.schoolId).then(({ data }) => {
-      if (data) setElections(data.map((e) => ({
-        id: e.id, positionTitle: e.position_title, description: e.description ?? '',
-        createdAt: e.created_at, isOpen: e.is_open,
-        candidates: (e.election_candidates as {user_id: string}[]).map((c) => ({
-          userId: c.user_id,
-          votes: (e.election_votes as {candidate_user_id: string; voter_user_id: string}[])
-            .filter((v) => v.candidate_user_id === c.user_id)
-            .map((v) => v.voter_user_id),
-        })),
-      })))
-    })
+    // Load this school's elections via the server API (so it survives RLS).
+    fetch('/api/school/elections', { cache: 'no-store' })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.elections) setElections(data.elections as SchoolElection[])
+      })
+      .catch(() => { /* ignore */ })
     let cancelled = false
 
     async function loadClubs() {
@@ -214,18 +208,21 @@ export default function AdminPage() {
 
   async function createElection() {
     if (!electionTitle.trim() || electionCandidateIds.length < 2) return
-    const elecId = `selec-${Date.now()}`
-    const newElection: SchoolElection = {
-      id: elecId,
-      positionTitle: electionTitle.trim(),
-      description: electionDescription.trim(),
-      candidates: electionCandidateIds.map((uid) => ({ userId: uid, votes: [] })),
-      createdAt: new Date().toISOString(),
-      isOpen: true,
+    const res = await fetch('/api/school/elections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        positionTitle: electionTitle.trim(),
+        description: electionDescription.trim(),
+        candidateUserIds: electionCandidateIds,
+      }),
+    })
+    const payload = await res.json()
+    if (!res.ok) {
+      console.error('create election error', payload.error)
+      return
     }
-    await supabase.from('school_elections').insert({ id: elecId, position_title: newElection.positionTitle, description: newElection.description, created_at: newElection.createdAt, is_open: true, school_id: actualUser.schoolId })
-    await supabase.from('election_candidates').insert(electionCandidateIds.map((uid) => ({ election_id: elecId, user_id: uid })))
-    setElections((prev) => [...prev, newElection])
+    setElections((prev) => [payload.election as SchoolElection, ...prev])
     setElectionTitle('')
     setElectionDescription('')
     setElectionCandidateIds([])
@@ -233,7 +230,12 @@ export default function AdminPage() {
   }
 
   async function closeElection(id: string) {
-    await supabase.from('school_elections').update({ is_open: false }).eq('id', id)
+    const res = await fetch(`/api/school/elections/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isOpen: false }),
+    })
+    if (!res.ok) return
     setElections((prev) => prev.map((e) => (e.id === id ? { ...e, isOpen: false } : e)))
   }
 

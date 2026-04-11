@@ -59,18 +59,13 @@ export default function FormsPage() {
 
   useEffect(() => {
     if (!currentUser.schoolId) return
-    // Load school-wide elections for this school
-    supabase.from('school_elections').select('*, election_candidates(*), election_votes(*)').eq('school_id', currentUser.schoolId).then(({ data }) => {
-      if (data) setSchoolElections(data.map((e) => ({
-        id: e.id, positionTitle: e.position_title, description: e.description ?? '',
-        createdAt: e.created_at, isOpen: e.is_open,
-        candidates: (e.election_candidates as {user_id: string}[]).map((c) => ({
-          userId: c.user_id,
-          votes: (e.election_votes as {candidate_user_id: string; voter_user_id: string}[])
-            .filter((v) => v.candidate_user_id === c.user_id).map((v) => v.voter_user_id),
-        })),
-      })))
-    })
+    // Load school-wide elections via the server API (works regardless of RLS).
+    fetch('/api/school/elections', { cache: 'no-store' })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.elections) setSchoolElections(data.elections as SchoolElection[])
+      })
+      .catch(() => { /* ignore */ })
     // Load club polls, forms, and club names for this school's clubs
     supabase.from('clubs').select('id, name, icon_url').eq('school_id', currentUser.schoolId).then(({ data: clubData }) => {
       const schoolClubIds = (clubData ?? []).map((c) => c.id)
