@@ -405,6 +405,12 @@ alter table schools add column if not exists advisor_invite_code text unique;
 -- Add school_id to users (nullable: superadmin users have no school)
 alter table users add column if not exists school_id uuid references schools(id) on delete set null;
 
+-- Fix admin_settings for multi-tenancy: remove singleton constraint, support one row per school
+alter table admin_settings drop constraint if exists admin_settings_id_check;
+alter table admin_settings alter column id set default nextval(pg_get_serial_sequence('admin_settings', 'id'));
+alter table admin_settings add column if not exists school_id uuid references schools(id) on delete cascade;
+create unique index if not exists admin_settings_school_id_idx on admin_settings (school_id) where school_id is not null;
+
 -- Add school_id to clubs and school elections
 alter table clubs add column if not exists school_id uuid references schools(id) on delete cascade;
 alter table school_elections add column if not exists school_id uuid references schools(id) on delete cascade;

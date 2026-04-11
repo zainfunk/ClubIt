@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
 import {
-  getAdminSettings, setAdminSettings,
-  getUserPrivacy, setUserPrivacy,
+  getAdminSettings, getUserPrivacy,
+  fetchAdminSettings, fetchUserPrivacy,
+  persistAdminSettings, persistUserPrivacy,
   AdminSettings, UserPrivacySettings,
 } from '@/lib/settings-store'
 import { useAppSettings } from '@/components/SettingsProvider'
@@ -104,19 +105,24 @@ export default function SettingsPage() {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
+    if (!currentUser.id) return
+    // Show localStorage cache immediately (no flicker), then sync from Supabase
     setAdminState(getAdminSettings())
     setPrivacyState(getUserPrivacy(currentUser.id))
     setLoaded(true)
+
+    void fetchAdminSettings().then(setAdminState)
+    void fetchUserPrivacy(currentUser.id).then(setPrivacyState)
   }, [currentUser.id])
 
   function updateAdmin(partial: Partial<AdminSettings>) {
-    setAdminSettings(partial)
     setAdminState((p) => ({ ...p, ...partial }))
+    void persistAdminSettings(partial)
   }
 
   function updatePrivacy(partial: Partial<UserPrivacySettings>) {
-    setUserPrivacy(currentUser.id, partial)
     setPrivacyState((p) => ({ ...p, ...partial }))
+    void persistUserPrivacy(currentUser.id, partial)
   }
 
   // ── Report issue ──

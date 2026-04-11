@@ -15,6 +15,7 @@ const ADMIN_DEFAULTS: AdminSettings = {
   studentSocialsEnabled: true,
 }
 
+// Sync read from localStorage cache (used for immediate render, no flicker)
 export function getAdminSettings(): AdminSettings {
   if (typeof window === 'undefined') return ADMIN_DEFAULTS
   try {
@@ -23,8 +24,36 @@ export function getAdminSettings(): AdminSettings {
   } catch { return ADMIN_DEFAULTS }
 }
 
+// Write to localStorage cache only (used internally + as optimistic update)
 export function setAdminSettings(partial: Partial<AdminSettings>): void {
   localStorage.setItem(ADMIN_KEY, JSON.stringify({ ...getAdminSettings(), ...partial }))
+}
+
+// Fetch from Supabase via API, hydrate localStorage cache
+export async function fetchAdminSettings(): Promise<AdminSettings> {
+  try {
+    const res = await fetch('/api/school/settings', { cache: 'no-store' })
+    if (!res.ok) return getAdminSettings()
+    const data = await res.json() as AdminSettings
+    setAdminSettings(data)
+    return data
+  } catch {
+    return getAdminSettings()
+  }
+}
+
+// Persist to Supabase via API, also update localStorage cache
+export async function persistAdminSettings(partial: Partial<AdminSettings>): Promise<void> {
+  setAdminSettings(partial) // optimistic local update
+  try {
+    await fetch('/api/school/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(partial),
+    })
+  } catch (err) {
+    console.error('Failed to persist admin settings', err)
+  }
 }
 
 // ── Per-user privacy settings ──────────────────────────────────────────────
@@ -42,6 +71,7 @@ const PRIVACY_DEFAULTS: UserPrivacySettings = {
   clubsPublic: true,
 }
 
+// Sync read from localStorage cache
 export function getUserPrivacy(userId: string): UserPrivacySettings {
   if (typeof window === 'undefined') return PRIVACY_DEFAULTS
   try {
@@ -50,8 +80,36 @@ export function getUserPrivacy(userId: string): UserPrivacySettings {
   } catch { return PRIVACY_DEFAULTS }
 }
 
+// Write to localStorage cache only
 export function setUserPrivacy(userId: string, partial: Partial<UserPrivacySettings>): void {
   localStorage.setItem(PRIVACY_PREFIX + userId, JSON.stringify({ ...getUserPrivacy(userId), ...partial }))
+}
+
+// Fetch from Supabase via API, hydrate localStorage cache
+export async function fetchUserPrivacy(userId: string): Promise<UserPrivacySettings> {
+  try {
+    const res = await fetch('/api/user/privacy', { cache: 'no-store' })
+    if (!res.ok) return getUserPrivacy(userId)
+    const data = await res.json() as UserPrivacySettings
+    setUserPrivacy(userId, data)
+    return data
+  } catch {
+    return getUserPrivacy(userId)
+  }
+}
+
+// Persist to Supabase via API, also update localStorage cache
+export async function persistUserPrivacy(userId: string, partial: Partial<UserPrivacySettings>): Promise<void> {
+  setUserPrivacy(userId, partial) // optimistic local update
+  try {
+    await fetch('/api/user/privacy', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(partial),
+    })
+  } catch (err) {
+    console.error('Failed to persist user privacy settings', err)
+  }
 }
 
 // ── Per-user app settings ──────────────────────────────────────────────────
