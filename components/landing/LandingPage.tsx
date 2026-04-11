@@ -278,39 +278,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ============ SOCIAL PROOF ============ */}
-      <section className="py-12 border-y border-slate-100 bg-slate-50/50">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <p className="text-center text-xs font-bold uppercase tracking-widest text-slate-400 mb-6">
-            Trusted by schools across the country
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 mb-10 opacity-70">
-            {['Westview High', 'Lakeside Prep', 'Northgate Academy', 'Riverdale HS', 'Summit High', 'Pinecrest'].map((name) => (
-              <div key={name} className="text-lg font-extrabold text-slate-500 tracking-tight" style={{ fontFamily: 'var(--font-manrope)' }}>
-                {name}
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-3 max-w-3xl mx-auto gap-6 text-center">
-            {[
-              { stat: '10,000+', label: 'students' },
-              { stat: '250+', label: 'clubs managed' },
-              { stat: '40+', label: 'schools' },
-            ].map((s) => (
-              <div key={s.label}>
-                <div
-                  className="text-3xl lg:text-4xl font-extrabold bg-gradient-to-br from-indigo-600 to-emerald-500 bg-clip-text text-transparent"
-                  style={{ fontFamily: 'var(--font-manrope)' }}
-                >
-                  {s.stat}
-                </div>
-                <div className="text-sm text-slate-500 mt-1">{s.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ============ FEATURES ============ */}
       <section id="features" className="py-24">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
