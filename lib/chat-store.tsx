@@ -1,89 +1,70 @@
 'use client'
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
-import { fetchSchoolClubs } from '@/lib/school-data'
 import { supabase } from '@/lib/supabase'
 import { ChatMessage } from '@/types'
 
 interface ChatContextValue {
   messages: ChatMessage[]
-  sendMessage: (clubId: string, senderId: string, content: string) => Promise<void>
+  sendMessage: (clubId: string, content: string) => Promise<void>
+  sendError: string | null
+  clearSendError: () => void
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
 
-function mapMessage(r: Record<string, unknown>): ChatMessage {
+function mapRow(r: Record<string, unknown>): ChatMessage {
   return {
     id: r.id as string,
-    clubId: r.club_id as string,
-    senderId: r.sender_id as string,
+    clubId: (r.club_id ?? r.clubId) as string,
+    senderId: (r.sender_id ?? r.senderId) as string,
     content: r.content as string,
-    sentAt: r.sent_at as string,
+    sentAt: (r.sent_at ?? r.sentAt) as string,
   }
 }
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useMockAuth()
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [clubIds, setClubIds] = useState<string[]>([])
-
-  const clubKey = useMemo(() => clubIds.slice().sort().join('|'), [clubIds])
+  const [sendError, setSendError] = useState<string | null>(null)
 
   function mergeMessages(incoming: ChatMessage[]) {
     setMessages((prev) => {
-      const map = new Map(prev.map((message) => [message.id, message]))
-      for (const message of incoming) {
-        if (clubIds.length === 0 || clubIds.includes(message.clubId)) {
-          map.set(message.id, message)
-        }
+      const map = new Map(prev.map((m) => [m.id, m]))
+      for (const m of incoming) {
+        map.set(m.id, m)
       }
       return Array.from(map.values()).sort((a, b) => a.sentAt.localeCompare(b.sentAt))
     })
   }
 
-  async function fetchMessages(nextClubIds: string[]) {
-    if (nextClubIds.length === 0) {
-      setMessages([])
-      return
-    }
-
-    const { data } = await supabase
-      .from('chat_messages')
-      .select('*')
-      .in('club_id', nextClubIds)
-      .order('sent_at')
-
-    if (data) {
-      setMessages(data.map(mapMessage))
+  async function fetchMessages() {
+    try {
+      const res = await fetch('/api/school/chat', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json() as { messages?: Record<string, unknown>[] }
+      if (data.messages) {
+        setMessages(data.messages.map(mapRow).sort((a, b) => a.sentAt.localeCompare(b.sentAt)))
+      }
+    } catch (err) {
+      console.error('chat fetch error', err)
     }
   }
 
+  // Initial load
   useEffect(() => {
     if (!currentUser.schoolId) {
-      Promise.resolve().then(() => {
-        setClubIds([])
-        setMessages([])
-      })
+      setMessages([])
       return
     }
-
-    let cancelled = false
-
-    fetchSchoolClubs(currentUser.schoolId).then((clubs) => {
-      if (cancelled) return
-      const ids = clubs.map((club) => club.id)
-      setClubIds(ids)
-      void fetchMessages(ids)
-    })
-
-    return () => {
-      cancelled = true
-    }
+    void fetchMessages()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser.schoolId])
 
+  // Realtime subscription (bonus) + polling fallback (reliable)
   useEffect(() => {
-    if (!currentUser.schoolId || clubIds.length === 0) return
+    if (!currentUser.schoolId) return
 
     const channel = supabase
       .channel(`chat_messages_${currentUser.schoolId}`)
@@ -91,54 +72,67 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages' },
         (payload) => {
-          const message = mapMessage(payload.new as Record<string, unknown>)
-          if (clubIds.includes(message.clubId)) {
-            mergeMessages([message])
-          }
+          mergeMessages([mapRow(payload.new as Record<string, unknown>)])
         }
       )
       .subscribe()
 
     const interval = setInterval(() => {
-      void fetchMessages(clubIds)
+      void fetchMessages()
     }, 4000)
 
     return () => {
       supabase.removeChannel(channel)
       clearInterval(interval)
     }
-  }, [clubKey, clubIds, currentUser.schoolId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser.schoolId])
 
-  async function sendMessage(clubId: string, senderId: string, content: string) {
+  async function sendMessage(clubId: string, content: string) {
     const trimmed = content.trim()
     if (!trimmed) return
 
-    const message: ChatMessage = {
-      id: `msg-${Date.now()}`,
+    setSendError(null)
+
+    // Optimistic update with a temp ID
+    const tempId = `msg-temp-${Date.now()}`
+    const optimistic: ChatMessage = {
+      id: tempId,
       clubId,
-      senderId,
+      senderId: currentUser.id,
       content: trimmed,
       sentAt: new Date().toISOString(),
     }
+    setMessages((prev) => [...prev, optimistic])
 
-    setMessages((prev) => [...prev, message])
+    try {
+      const res = await fetch('/api/school/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clubId, content: trimmed }),
+      })
 
-    const { error } = await supabase.from('chat_messages').insert({
-      id: message.id,
-      club_id: message.clubId,
-      sender_id: message.senderId,
-      content: message.content,
-      sent_at: message.sentAt,
-    })
+      const data = await res.json() as { error?: string; message?: Record<string, unknown> }
 
-    if (error) {
-      console.error('Failed to send message:', error)
-      setMessages((prev) => prev.filter((entry) => entry.id !== message.id))
+      if (!res.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId))
+        setSendError(data.error ?? 'Failed to send message')
+        return
+      }
+
+      // Swap temp message for the persisted one from the server
+      if (data.message) {
+        const persisted = mapRow(data.message)
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? persisted : m)))
+      }
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId))
+      setSendError('Network error — message not sent')
     }
   }
 
   return (
-    <ChatContext.Provider value={{ messages, sendMessage }}>
+    <ChatContext.Provider value={{ messages, sendMessage, sendError, clearSendError: () => setSendError(null) }}>
       {children}
     </ChatContext.Provider>
   )

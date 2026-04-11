@@ -31,7 +31,7 @@ export default function ClubChatPage({ params }: { params: Promise<{ clubId: str
   const { clubId } = use(params)
   const router = useRouter()
   const { currentUser, devRole } = useMockAuth()
-  const { messages, sendMessage } = useChatStore()
+  const { messages, sendMessage, sendError, clearSendError } = useChatStore()
   const [draft, setDraft] = useState('')
   const [myClubIds, setMyClubIds] = useState<string[]>([])
   const [accessChecked, setAccessChecked] = useState(false)
@@ -139,7 +139,7 @@ export default function ClubChatPage({ params }: { params: Promise<{ clubId: str
 
   function handleSend() {
     if (!draft.trim()) return
-    void sendMessage(clubId, currentUser.id, draft)
+    void sendMessage(clubId, draft)
     setDraft('')
     inputRef.current?.focus()
   }
@@ -290,6 +290,12 @@ export default function ClubChatPage({ params }: { params: Promise<{ clubId: str
         </div>
 
         <div className="px-6 py-4 bg-white border-t border-gray-100 shrink-0">
+          {sendError && (
+            <div className="flex items-center justify-between bg-red-50 text-red-600 text-xs rounded-xl px-4 py-2 mb-3">
+              <span>{sendError}</span>
+              <button onClick={clearSendError} className="ml-3 text-red-400 hover:text-red-600 font-bold">✕</button>
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex -space-x-2">
               {members.slice(0, 3).map((member) => (
