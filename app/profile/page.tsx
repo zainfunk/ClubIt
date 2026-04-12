@@ -16,8 +16,9 @@ import AttendanceCalendar from '@/components/profile/AttendanceCalendar'
 import {
   Pencil, Check, X, Shield, Plus, Trash2,
   ExternalLink, EyeOff, Users, Mail, BadgeCheck,
-  Trophy, Star, Flame, BookOpen, Award, Zap,
+  Trophy, Star, Flame, BookOpen, Award, Zap, AlertCircle,
 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 const ROLE_BADGE: Record<string, string> = {
   admin:   'bg-red-100 text-red-700 border-red-200',
@@ -101,7 +102,17 @@ export default function ProfilePage() {
   const canEdit = isAdmin || profileUser.id === currentUser.id
 
   const [profile, setProfileState] = useState({ bio: '', skills: [] as string[], interests: [] as string[], socials: [] as PersonalSocialLink[] })
-  useEffect(() => { getProfile(profileUser.id).then(setProfileState) }, [profileUser.id])
+  const [profileLoading, setProfileLoading] = useState(true)
+  const [profileError, setProfileError] = useState<string | null>(null)
+  useEffect(() => {
+    setProfileLoading(true)
+    setProfileError(null)
+    Promise.all([
+      getProfile(profileUser.id).then(setProfileState),
+    ]).catch((err) => {
+      setProfileError(err instanceof Error ? err.message : 'Failed to load profile')
+    }).finally(() => setProfileLoading(false))
+  }, [profileUser.id])
 
   async function saveProfile(partial: Parameters<typeof setProfile>[1]) {
     await setProfile(profileUser.id, partial)
@@ -211,6 +222,31 @@ export default function ProfilePage() {
   // Guard after all hooks — currentUser.id is empty during the loading state
   if (!currentUser.id) return null
 
+  if (profileLoading) return (
+    <div className="max-w-2xl mx-auto space-y-4">
+      <div className="rounded-2xl overflow-hidden bg-white p-6" style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
+        <Skeleton className="h-2 w-full mb-6" />
+        <div className="flex items-center gap-4 mb-5">
+          <Skeleton className="w-16 h-16 rounded-2xl" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-3 mb-5">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="rounded-xl p-3" style={{ background: '#f8f9fa' }}>
+              <Skeleton className="h-5 w-8 mx-auto mb-1" />
+              <Skeleton className="h-2 w-12 mx-auto" />
+            </div>
+          ))}
+        </div>
+        <Skeleton className="h-3 w-10 mb-2" />
+        <Skeleton className="h-16 w-full rounded-lg" />
+      </div>
+    </div>
+  )
+
   const roleAccent: Record<string, string> = {
     admin:   '#EF4444',
     advisor: '#3B82F6',
@@ -220,6 +256,18 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-0">
+
+      {/* Error banner */}
+      {profileError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 flex items-start gap-3 mb-4">
+          <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">Failed to load profile</p>
+            <p className="text-xs text-red-600 mt-0.5">{profileError}</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs font-bold text-red-700 hover:underline shrink-0">Retry</button>
+        </div>
+      )}
 
       {/* Admin user selector */}
       {isAdmin && (

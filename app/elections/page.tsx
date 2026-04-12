@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react'
 import { SchoolElection, Poll } from '@/types'
 import { Vote, FileText, ClipboardList, Clock, ChevronRight, TrendingUp, CheckCircle2, AlertCircle } from 'lucide-react'
 import Avatar from '@/components/Avatar'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -56,40 +57,50 @@ export default function FormsPage() {
   const [polls, setPolls] = useState<Poll[]>([])
   const [clubForms, setClubForms] = useState<import('@/types').ClubForm[]>([])
   const [clubNames, setClubNames] = useState<Record<string, { name: string; iconUrl?: string }>>({})
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!currentUser.schoolId) return
-    // Load school-wide elections via the server API (works regardless of RLS).
-    fetch('/api/school/elections', { cache: 'no-store' })
-      .then((res) => res.ok ? res.json() : null)
-      .then((data) => {
-        if (data?.elections) setSchoolElections(data.elections as SchoolElection[])
-      })
-      .catch(() => { /* ignore */ })
-    // Load club polls, forms, and club names for this school's clubs
-    supabase.from('clubs').select('id, name, icon_url').eq('school_id', currentUser.schoolId).then(({ data: clubData }) => {
-      const schoolClubIds = (clubData ?? []).map((c) => c.id)
-      if (schoolClubIds.length === 0) return
+    setIsLoading(true)
+    setLoadError(null)
 
-      // Build club name map
-      const nameMap: Record<string, { name: string; iconUrl?: string }> = {}
-      for (const c of clubData ?? []) nameMap[c.id] = { name: c.name, iconUrl: c.icon_url ?? undefined }
-      setClubNames(nameMap)
+    let cancelled = false
 
-      // Load club forms
-      supabase.from('club_forms').select('*').in('club_id', schoolClubIds).then(({ data: formData }) => {
-        if (formData) setClubForms(formData.map((f) => ({
+    async function load() {
+      try {
+        // Load school-wide elections via the server API (works regardless of RLS).
+        const elRes = await fetch('/api/school/elections', { cache: 'no-store' })
+        if (elRes.ok) {
+          const data = await elRes.json()
+          if (!cancelled && data?.elections) setSchoolElections(data.elections as SchoolElection[])
+        }
+
+        // Load club polls, forms, and club names for this school's clubs
+        const { data: clubData } = await supabase.from('clubs').select('id, name, icon_url').eq('school_id', currentUser.schoolId)
+        const schoolClubIds = (clubData ?? []).map((c) => c.id)
+        if (cancelled) return
+        if (schoolClubIds.length === 0) return
+
+        // Build club name map
+        const nameMap: Record<string, { name: string; iconUrl?: string }> = {}
+        for (const c of clubData ?? []) nameMap[c.id] = { name: c.name, iconUrl: c.icon_url ?? undefined }
+        setClubNames(nameMap)
+
+        // Load club forms
+        const { data: formData } = await supabase.from('club_forms').select('*').in('club_id', schoolClubIds)
+        if (!cancelled && formData) setClubForms(formData.map((f) => ({
           id: f.id, clubId: f.club_id, title: f.title, description: f.description ?? '',
           formType: f.form_type, isOpen: f.is_open, closesAt: f.closes_at ?? null, createdAt: f.created_at,
         })))
-      })
 
-      supabase.from('memberships').select('club_id').eq('user_id', currentUser.id).then(({ data: memData }) => {
+        const { data: memData } = await supabase.from('memberships').select('club_id').eq('user_id', currentUser.id)
+        if (cancelled) return
         const myClubIds = (memData ?? []).map((r) => r.club_id)
         const pollClubIds = (devRole === 'advisor' || devRole === 'admin') ? schoolClubIds : myClubIds.filter((id) => schoolClubIds.includes(id))
-        if (pollClubIds.length === 0) return
-        supabase.from('polls').select('*, poll_candidates(*), poll_votes(*)').in('club_id', pollClubIds).then(({ data: pollData }) => {
-          if (pollData) setPolls(pollData.map((p) => ({
+        if (pollClubIds.length > 0) {
+          const { data: pollData } = await supabase.from('polls').select('*, poll_candidates(*), poll_votes(*)').in('club_id', pollClubIds)
+          if (!cancelled && pollData) setPolls(pollData.map((p) => ({
             id: p.id, clubId: p.club_id, positionTitle: p.position_title,
             createdAt: p.created_at, isOpen: p.is_open,
             candidates: (p.poll_candidates as {user_id: string}[]).map((c) => ({
@@ -98,9 +109,16 @@ export default function FormsPage() {
                 .filter((v) => v.candidate_user_id === c.user_id).map((v) => v.voter_user_id),
             })),
           })))
-        })
-      })
-    })
+        }
+      } catch (err) {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load elections data')
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    void load()
+    return () => { cancelled = true }
   }, [currentUser.schoolId, currentUser.id, devRole])
 
   const openElections = schoolElections.filter((e) => e.isOpen)
@@ -173,6 +191,45 @@ export default function FormsPage() {
         </h1>
         <p className="text-sm text-[#727785] mt-1">Participate in active elections and club decisions.</p>
       </div>
+
+      {/* ── Error banner ── */}
+      {loadError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">Failed to load elections</p>
+            <p className="text-xs text-red-600 mt-0.5">{loadError}</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs font-bold text-red-700 hover:underline shrink-0">Retry</button>
+        </div>
+      )}
+
+      {/* ── Loading skeletons ── */}
+      {isLoading ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-2xl p-4 bg-white" style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
+                <Skeleton className="h-4 w-4 mx-auto mb-2 rounded-full" />
+                <Skeleton className="h-6 w-12 mx-auto mb-1" />
+                <Skeleton className="h-3 w-16 mx-auto" />
+              </div>
+            ))}
+          </div>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-2xl bg-white p-5" style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
+              <div className="flex items-start gap-3">
+                <Skeleton className="w-10 h-10 rounded-full shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : <>
 
       {/* ── Urgent election hero card ── */}
       {urgentElection && !doneIds.has(urgentElection.id) && (
@@ -392,6 +449,8 @@ export default function FormsPage() {
           </div>
         </div>
       )}
+
+      </>}
     </div>
   )
 }

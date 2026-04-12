@@ -7,6 +7,7 @@ import { ChatProvider } from "@/lib/chat-store";
 import AppShell from "@/components/layout/AppShell";
 import SettingsProvider from "@/components/SettingsProvider";
 import TourWrapper from "@/components/TourWrapper";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -51,7 +52,9 @@ export default function RootLayout({
           <ChatProvider>
             <SettingsProvider>
               <TourWrapper>
-                <AppShell>{children}</AppShell>
+                <ErrorBoundary>
+                  <AppShell>{children}</AppShell>
+                </ErrorBoundary>
               </TourWrapper>
             </SettingsProvider>
           </ChatProvider>

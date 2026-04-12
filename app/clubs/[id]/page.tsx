@@ -177,6 +177,17 @@ export default function ClubDetailPage({ params }: PageProps) {
   const [manualDate, setManualDate] = useState(() => new Date().toISOString().split('T')[0])
   const [showManual, setShowManual] = useState(false)
 
+  // Shared action feedback
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null)
+
+  // Auto-dismiss success messages
+  useEffect(() => {
+    if (!actionSuccess) return
+    const t = setTimeout(() => setActionSuccess(null), 3000)
+    return () => clearTimeout(t)
+  }, [actionSuccess])
+
   const foundClub = clubs.find((c) => c.id === id)
   if (clubLoading) return null
   if (!foundClub) notFound()
@@ -224,25 +235,13 @@ export default function ClubDetailPage({ params }: PageProps) {
   // --- Join request handlers ---
   async function handleRequest() {
     if (myRequest || isMember) return
-    const res = await fetch(`/api/school/clubs/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'join' }),
-    })
-    if (!res.ok) return
-    const controller = new AbortController()
-    await loadDetail(controller.signal)
+    const ok = await patch({ action: 'join' })
+    if (ok) setActionSuccess('Join request sent!')
   }
 
   async function handleLeave() {
-    const res = await fetch(`/api/school/clubs/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'leave' }),
-    })
-    if (!res.ok) return
-    const controller = new AbortController()
-    await loadDetail(controller.signal)
+    const ok = await patch({ action: 'leave' })
+    if (ok) setActionSuccess('Left the club')
   }
 
   async function handleApprove(requestId: string) {
@@ -255,15 +254,26 @@ export default function ClubDetailPage({ params }: PageProps) {
     await patch({ action: 'reject', requestId })
   }
 
-  async function patch(body: Record<string, unknown>) {
-    const res = await fetch(`/api/school/clubs/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) return
-    const controller = new AbortController()
-    await loadDetail(controller.signal)
+  async function patch(body: Record<string, unknown>): Promise<boolean> {
+    setActionError(null)
+    try {
+      const res = await fetch(`/api/school/clubs/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setActionError(data.error ?? `Action failed (${res.status})`)
+        return false
+      }
+      const controller = new AbortController()
+      await loadDetail(controller.signal)
+      return true
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Network error — please try again')
+      return false
+    }
   }
 
   async function toggleAutoAccept() {
@@ -354,10 +364,14 @@ export default function ClubDetailPage({ params }: PageProps) {
 
   // --- Events ---
   async function createEvent() {
-    if (!newEventTitle.trim() || !newEventDate) return
-    await patch({ action: 'create_event', title: newEventTitle.trim(), description: newEventDesc.trim(), date: newEventDate, location: newEventLocation.trim() || undefined, isPublic: newEventPublic })
-    setNewEventTitle(''); setNewEventDesc(''); setNewEventDate(''); setNewEventLocation(''); setNewEventPublic(true)
-    setShowEventForm(false)
+    if (!newEventTitle.trim()) { setActionError('Event title is required'); return }
+    if (!newEventDate) { setActionError('Event date is required'); return }
+    const ok = await patch({ action: 'create_event', title: newEventTitle.trim(), description: newEventDesc.trim(), date: newEventDate, location: newEventLocation.trim() || undefined, isPublic: newEventPublic })
+    if (ok) {
+      setNewEventTitle(''); setNewEventDesc(''); setNewEventDate(''); setNewEventLocation(''); setNewEventPublic(true)
+      setShowEventForm(false)
+      setActionSuccess('Event created!')
+    }
   }
 
   async function deleteEvent(eventId: string) {
@@ -366,10 +380,14 @@ export default function ClubDetailPage({ params }: PageProps) {
 
   // --- News ---
   async function postNews() {
-    if (!newNewsTitle.trim() || !newNewsContent.trim()) return
-    await patch({ action: 'post_news', title: newNewsTitle.trim(), content: newNewsContent.trim(), isPinned: newNewsPinned })
-    setNewNewsTitle(''); setNewNewsContent(''); setNewNewsPinned(false)
-    setShowNewsForm(false)
+    if (!newNewsTitle.trim()) { setActionError('News title is required'); return }
+    if (!newNewsContent.trim()) { setActionError('News content is required'); return }
+    const ok = await patch({ action: 'post_news', title: newNewsTitle.trim(), content: newNewsContent.trim(), isPinned: newNewsPinned })
+    if (ok) {
+      setNewNewsTitle(''); setNewNewsContent(''); setNewNewsPinned(false)
+      setShowNewsForm(false)
+      setActionSuccess('News posted!')
+    }
   }
 
   async function deleteNews(newsId: string) {
@@ -382,9 +400,13 @@ export default function ClubDetailPage({ params }: PageProps) {
   }
 
   async function createPoll() {
-    if (!pollPositionTitle.trim() || pollCandidateIds.length < 2) return
-    await patch({ action: 'create_poll', positionTitle: pollPositionTitle.trim(), candidateIds: pollCandidateIds })
-    setPollPositionTitle(''); setPollCandidateIds([]); setShowPollForm(false)
+    if (!pollPositionTitle.trim()) { setActionError('Position title is required'); return }
+    if (pollCandidateIds.length < 2) { setActionError('Select at least 2 candidates'); return }
+    const ok = await patch({ action: 'create_poll', positionTitle: pollPositionTitle.trim(), candidateIds: pollCandidateIds })
+    if (ok) {
+      setPollPositionTitle(''); setPollCandidateIds([]); setShowPollForm(false)
+      setActionSuccess('Poll created!')
+    }
   }
 
   async function castVote(pollId: string, candidateUserId: string) {
@@ -480,6 +502,20 @@ export default function ClubDetailPage({ params }: PageProps) {
       <Link href="/clubs" className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-400 hover:text-gray-700 transition-colors mb-6">
         <ArrowLeft className="w-4 h-4" />All Clubs
       </Link>
+
+      {/* ── Feedback banners ── */}
+      {actionError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 flex items-center gap-3 mb-4">
+          <span className="text-sm text-red-700 flex-1">{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-600 font-bold text-sm">✕</button>
+        </div>
+      )}
+      {actionSuccess && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3 mb-4">
+          <span className="text-sm text-emerald-700 flex-1">{actionSuccess}</span>
+          <button onClick={() => setActionSuccess(null)} className="text-emerald-400 hover:text-emerald-600 font-bold text-sm">✕</button>
+        </div>
+      )}
 
       {/* ── Hero Section ── */}
       <section className={`relative overflow-hidden flex items-center px-12 rounded-3xl mb-8 bg-gradient-to-br ${heroTheme.bg}`} style={{ minHeight: '380px' }}>

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
 import { supabase } from '@/lib/supabase'
-import { Users, BookOpen, Pin, Calendar, MessageSquare, CheckCircle, Clock } from 'lucide-react'
+import { Users, BookOpen, Pin, Calendar, MessageSquare, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import type { Club, ClubEvent, ClubNews, JoinRequest } from '@/types'
 
@@ -30,6 +30,7 @@ export default function DashboardPage() {
   const [pendingRequests, setPendingRequests] = useState<JoinRequest[]>([])
   const [issueReports, setIssueReports] = useState<{ id: string; reporter_name: string; reporter_email: string; message: string; status: string; created_at: string }[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     // Guard on id — the server resolves school context.
@@ -48,6 +49,7 @@ export default function DashboardPage() {
       })
       .catch((err) => {
         console.error(err)
+        setLoadError(err instanceof Error ? err.message : 'Failed to load dashboard')
         setIsLoading(false)
       })
   }, [currentUser.id, currentUser.role])
@@ -169,6 +171,17 @@ export default function DashboardPage() {
           )}
         </div>
       </section>
+
+      {loadError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 flex items-start gap-3 mb-6">
+          <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">Failed to load dashboard</p>
+            <p className="text-xs text-red-600 mt-0.5">{loadError}</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs font-bold text-red-700 hover:underline shrink-0">Retry</button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-6">
         {isLoading ? (

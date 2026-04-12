@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
 import { supabase } from '@/lib/supabase'
 import { ClubEvent } from '@/types'
-import { Search, Clock, MapPin } from 'lucide-react'
+import { Search, Clock, MapPin, AlertCircle } from 'lucide-react'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 const CLUB_COLORS: Record<string, { spine: string; spineText: string; badge: string; badgeText: string; panel: string }> = {
   'club-robotics':    { spine: 'bg-blue-50',   spineText: 'text-blue-800',   badge: 'bg-blue-100',   badgeText: 'text-blue-700',   panel: 'bg-blue-50/60' },
@@ -23,25 +24,44 @@ export default function EventsPage() {
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('upcoming')
   const [events, setEvents] = useState<ClubEvent[]>([])
   const [clubNames, setClubNames] = useState<Record<string, { name: string; iconUrl?: string }>>({})
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!currentUser.schoolId) return
-    // Load this school's clubs, then their events
-    supabase.from('clubs').select('id, name, icon_url').eq('school_id', currentUser.schoolId).then(({ data: clubData }) => {
-      if (!clubData?.length) return
-      const nameMap: Record<string, { name: string; iconUrl?: string }> = {}
-      for (const c of clubData) nameMap[c.id] = { name: c.name, iconUrl: c.icon_url ?? undefined }
-      setClubNames(nameMap)
+    setIsLoading(true)
+    setLoadError(null)
 
-      const clubIds = clubData.map((c) => c.id)
-      supabase.from('events').select('*').in('club_id', clubIds).then(({ data }) => {
-        if (!data) return
-        setEvents(data.map((e) => ({
-          id: e.id, clubId: e.club_id, title: e.title, description: e.description ?? '',
-          date: e.date, location: e.location ?? undefined, isPublic: e.is_public, createdBy: e.created_by,
-        })))
-      })
-    })
+    let cancelled = false
+
+    async function load() {
+      try {
+        const { data: clubData } = await supabase.from('clubs').select('id, name, icon_url').eq('school_id', currentUser.schoolId)
+        if (cancelled) return
+        if (!clubData?.length) return
+
+        const nameMap: Record<string, { name: string; iconUrl?: string }> = {}
+        for (const c of clubData) nameMap[c.id] = { name: c.name, iconUrl: c.icon_url ?? undefined }
+        setClubNames(nameMap)
+
+        const clubIds = clubData.map((c) => c.id)
+        const { data } = await supabase.from('events').select('*').in('club_id', clubIds)
+        if (cancelled) return
+        if (data) {
+          setEvents(data.map((e) => ({
+            id: e.id, clubId: e.club_id, title: e.title, description: e.description ?? '',
+            date: e.date, location: e.location ?? undefined, isPublic: e.is_public, createdBy: e.created_by,
+          })))
+        }
+      } catch (err) {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load events')
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    void load()
+    return () => { cancelled = true }
   }, [currentUser.schoolId])
 
   const today = new Date().toISOString().split('T')[0]
@@ -109,8 +129,44 @@ export default function EventsPage() {
         ))}
       </div>
 
+      {/* Error banner */}
+      {loadError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 flex items-start gap-3 mb-10">
+          <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">Failed to load events</p>
+            <p className="text-xs text-red-600 mt-0.5">{loadError}</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs font-bold text-red-700 hover:underline shrink-0">Retry</button>
+        </div>
+      )}
+
       {/* Events list */}
-      {publicEvents.length === 0 ? (
+      {isLoading ? (
+        <div className="space-y-8">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex gap-6 items-start">
+              <div className="hidden lg:block w-20 py-4 rounded-xl">
+                <Skeleton className="h-3 w-10 mx-auto mb-1" />
+                <Skeleton className="h-8 w-10 mx-auto" />
+              </div>
+              <div className="flex-1 bg-white rounded-xl p-7" style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.04)' }}>
+                <div className="flex items-center gap-2 mb-4">
+                  <Skeleton className="w-8 h-8 rounded-full" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+                <Skeleton className="h-5 w-48 mb-2" />
+                <Skeleton className="h-3 w-full mb-1" />
+                <Skeleton className="h-3 w-2/3 mb-5" />
+                <div className="flex gap-5">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : publicEvents.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-xl border">
           <p className="text-gray-400 text-sm">No events found.</p>
         </div>
