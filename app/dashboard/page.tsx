@@ -59,7 +59,19 @@ export default function DashboardPage() {
 
   const firstName = currentUser.name.split(' ')[0]
 
-  if (currentUser.role === 'admin' || currentUser.role === 'superadmin') {
+  if (currentUser.role === 'superadmin') {
+    return (
+      <div className="text-center py-20">
+        <p className="text-gray-500">
+          Head to the{' '}
+          <Link href="/superadmin" className="text-purple-600 underline font-semibold">Super Admin Panel</Link>{' '}
+          to manage schools and tenants.
+        </p>
+      </div>
+    )
+  }
+
+  if (currentUser.role === 'admin') {
     return (
       <div className="text-center py-20">
         <p className="text-gray-500">
