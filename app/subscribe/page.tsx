@@ -6,6 +6,6 @@ import SubscribeClient from '@/components/landing/SubscribeClient'
 // If signed in, render the client component that triggers Stripe Checkout.
 export default async function SubscribePage() {
   const { userId } = await auth()
-  if (!userId) redirect('/sign-up?redirect_url=/subscribe')
+  if (!userId) redirect('/sign-in?force_redirect_url=/subscribe')
   return <SubscribeClient />
 }
