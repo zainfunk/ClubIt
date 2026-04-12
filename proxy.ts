@@ -13,6 +13,7 @@ const isPublicRoute = createRouteMatcher([
   '/join',
   '/api/invite/(.*)',
   '/api/setup/(.*)',
+  '/api/join',
   '/api/onboard',
   '/api/webhooks/(.*)',
   '/api/stripe/webhook',
@@ -21,12 +22,16 @@ const isPublicRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, request) => {
   if (isPublicRoute(request)) return NextResponse.next()
 
-  // For API routes, return a proper 401 JSON response instead of redirecting
-  // to the sign-in page (which results in a confusing 404).
+  // For API routes, return a proper JSON response instead of redirecting
+  // to the sign-in page (which results in an HTML page the client can't parse).
   const isApiRoute = request.nextUrl.pathname.startsWith('/api/')
   if (isApiRoute) {
-    const { userId } = await auth()
-    if (!userId) {
+    try {
+      const { userId } = await auth()
+      if (!userId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+    } catch {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     return NextResponse.next()

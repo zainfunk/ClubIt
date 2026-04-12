@@ -27,6 +27,14 @@ export default function JoinPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code }),
       })
+      const contentType = res.headers.get('content-type') ?? ''
+      if (!contentType.includes('application/json')) {
+        throw new Error(
+          res.status === 401
+            ? 'Please sign in before using an invite code.'
+            : 'Something went wrong. Please try again.'
+        )
+      }
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Something went wrong')
 
