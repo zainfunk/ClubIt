@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Search, Bell, Settings, Database } from 'lucide-react'
+import { Search, Settings, Database } from 'lucide-react'
 import { UserButton } from '@clerk/nextjs'
 import { useMockAuth } from '@/lib/mock-auth'
 import Avatar from '@/components/Avatar'
+import NotificationBell from '@/components/NotificationBell'
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':  'My Clubs',
@@ -73,7 +74,7 @@ export default function TopBar() {
           />
         </div>
         <div className="flex items-center gap-4 text-slate-500">
-          <Bell className="w-5 h-5 cursor-pointer hover:text-[#0058be] transition-colors" />
+          <NotificationBell />
           <Link href="/settings" data-tour-id="tour-settings">
             <Settings className="w-5 h-5 cursor-pointer hover:text-[#0058be] transition-colors" />
           </Link>

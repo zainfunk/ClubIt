@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
+import { rateLimit } from '@/lib/rate-limit'
 import { Role } from '@/types'
 
 const ROLE_PRIORITY: Record<Role, number> = {
@@ -19,6 +20,15 @@ export async function POST(request: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
+  const { success, retryAfter } = rateLimit(ip)
+  if (!success) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.', retryAfter },
+      { status: 429 }
+    )
+  }
+
   const { code } = await request.json()
   if (!code) return NextResponse.json({ error: 'Invite code required' }, { status: 400 })
 
@@ -28,12 +38,29 @@ export async function POST(request: NextRequest) {
   // Look up school by student, advisor, or admin invite code
   const { data: school } = await db
     .from('schools')
-    .select('id, name, status, student_invite_code, admin_invite_code, advisor_invite_code')
+    .select('id, name, status, student_invite_code, admin_invite_code, advisor_invite_code, student_code_expires_at, advisor_code_expires_at, admin_code_expires_at')
     .or(`student_invite_code.eq.${normalised},admin_invite_code.eq.${normalised},advisor_invite_code.eq.${normalised}`)
     .maybeSingle()
 
   if (!school) {
     return NextResponse.json({ error: 'Invalid invite code' }, { status: 404 })
+  }
+
+  // Check invite code expiry
+  const isStudentCode = school.student_invite_code === normalised
+  const matchedExpiresAt = school.admin_invite_code === normalised
+    ? school.admin_code_expires_at
+    : school.advisor_invite_code === normalised
+      ? school.advisor_code_expires_at
+      : isStudentCode
+        ? school.student_code_expires_at
+        : null
+
+  if (matchedExpiresAt && new Date(matchedExpiresAt) < new Date()) {
+    return NextResponse.json(
+      { error: 'This invite code has expired. Ask your administrator for a new one.' },
+      { status: 403 }
+    )
   }
 
   if (school.status !== 'active') {

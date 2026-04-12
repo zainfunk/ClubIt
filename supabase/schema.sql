@@ -1149,3 +1149,29 @@ create policy issue_reports_update on issue_reports
   for update to authenticated
   using (app.is_school_admin() and school_id = app.current_school_id())
   with check (app.is_school_admin() and school_id = app.current_school_id());
+
+-- ============================================================
+-- Invite code expiry tracking
+-- ============================================================
+
+ALTER TABLE schools ADD COLUMN IF NOT EXISTS student_code_expires_at timestamptz;
+ALTER TABLE schools ADD COLUMN IF NOT EXISTS advisor_code_expires_at timestamptz;
+ALTER TABLE schools ADD COLUMN IF NOT EXISTS admin_code_expires_at timestamptz;
+
+-- ============================================================
+-- Notifications
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id text NOT NULL,
+  school_id uuid REFERENCES schools(id),
+  type text NOT NULL,
+  title text NOT NULL,
+  body text,
+  link text,
+  is_read boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);

@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
 import { supabase } from '@/lib/supabase'
 import { Users, BookOpen, Pin, Calendar, MessageSquare, CheckCircle, Clock } from 'lucide-react'
+import { Skeleton } from '@/components/ui/Skeleton'
 import type { Club, ClubEvent, ClubNews, JoinRequest } from '@/types'
 
 function getPattern(club: Club): 'chess' | 'art' | 'robotics' {
@@ -28,103 +29,27 @@ export default function DashboardPage() {
   const [nextEvents, setNextEvents] = useState<Record<string, ClubEvent>>({})
   const [pendingRequests, setPendingRequests] = useState<JoinRequest[]>([])
   const [issueReports, setIssueReports] = useState<{ id: string; reporter_name: string; reporter_email: string; message: string; status: string; created_at: string }[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     // Guard on id — the server resolves school context.
     if (!currentUser.id) return
 
-    const today = new Date().toISOString().split('T')[0]
-
-    if (currentUser.role === 'student') {
-      // Fetch clubs via server API (bypasses RLS, uses service client).
-      fetch('/api/school/clubs', { cache: 'no-store' })
-        .then((r) => r.json())
-        .then(async (payload: { clubs?: Club[]; myMembershipClubIds?: string[]; advisorNames?: Record<string, string> }) => {
-          const allClubs = payload.clubs ?? []
-          const memberIds = payload.myMembershipClubIds ?? []
-          const joined = allClubs.filter((c) => memberIds.includes(c.id))
-          setMyClubs(joined)
-          setAdvisorNames(payload.advisorNames ?? {})
-
-          if (joined.length === 0) return
-          const myClubIds = joined.map((c) => c.id)
-
-          // Pinned news (client-side — read-only, lower stakes)
-          supabase.from('club_news').select('*').in('club_id', myClubIds).eq('is_pinned', true).then(({ data: newsData }) => {
-            if (!newsData) return
-            const map: Record<string, ClubNews> = {}
-            for (const n of newsData) {
-              const existing = map[n.club_id]
-              if (!existing || new Date(n.created_at) > new Date(existing.createdAt)) {
-                map[n.club_id] = { id: n.id, clubId: n.club_id, title: n.title, content: n.content, authorId: n.author_id, createdAt: n.created_at, isPinned: n.is_pinned }
-              }
-            }
-            setPinnedNews(map)
-          })
-
-          // Next upcoming event per club
-          supabase.from('events').select('*').in('club_id', myClubIds).gte('date', today).order('date').then(({ data: evData }) => {
-            if (!evData) return
-            const map: Record<string, ClubEvent> = {}
-            for (const e of evData) {
-              if (!map[e.club_id]) {
-                map[e.club_id] = { id: e.id, clubId: e.club_id, title: e.title, description: e.description ?? '', date: e.date, location: e.location ?? undefined, isPublic: e.is_public, createdBy: e.created_by }
-              }
-            }
-            setNextEvents(map)
-          })
-        })
-        .catch(console.error)
-
-      // Pending join requests (client-side)
-      supabase.from('join_requests').select('*').eq('user_id', currentUser.id).eq('status', 'pending').then(({ data }) => {
-        setPendingRequests((data ?? []).map((r) => ({ id: r.id, clubId: r.club_id, userId: r.user_id, requestedAt: r.requested_at, status: r.status })))
+    fetch('/api/school/dashboard', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((payload) => {
+        setMyClubs(payload.clubs ?? [])
+        setAdvisorNames(payload.advisorNames ?? {})
+        setPinnedNews(payload.pinnedNews ?? {})
+        setNextEvents(payload.nextEvents ?? {})
+        setPendingRequests(payload.pendingRequests ?? [])
+        setIssueReports(payload.issueReports ?? [])
+        setIsLoading(false)
       })
-    }
-
-    if (currentUser.role === 'advisor') {
-      // Issue reports
-      supabase.from('issue_reports').select('*').eq('school_id', currentUser.schoolId!).order('created_at', { ascending: false }).then(({ data }) => {
-        if (data) setIssueReports(data)
+      .catch((err) => {
+        console.error(err)
+        setIsLoading(false)
       })
-
-      // Fetch clubs via server API and filter to advised clubs
-      fetch('/api/school/clubs', { cache: 'no-store' })
-        .then((r) => r.json())
-        .then(async (payload: { clubs?: Club[]; advisorNames?: Record<string, string> }) => {
-          const allClubs = payload.clubs ?? []
-          const advised = allClubs.filter((c) => c.advisorId === currentUser.id)
-          setMyClubs(advised)
-          setAdvisorNames(payload.advisorNames ?? {})
-
-          if (advised.length === 0) return
-          const clubIds = advised.map((c) => c.id)
-
-          supabase.from('club_news').select('*').in('club_id', clubIds).eq('is_pinned', true).then(({ data: newsData }) => {
-            if (!newsData) return
-            const map: Record<string, ClubNews> = {}
-            for (const n of newsData) {
-              const existing = map[n.club_id]
-              if (!existing || new Date(n.created_at) > new Date(existing.createdAt)) {
-                map[n.club_id] = { id: n.id, clubId: n.club_id, title: n.title, content: n.content, authorId: n.author_id, createdAt: n.created_at, isPinned: n.is_pinned }
-              }
-            }
-            setPinnedNews(map)
-          })
-
-          supabase.from('events').select('*').in('club_id', clubIds).gte('date', today).order('date').then(({ data: evData }) => {
-            if (!evData) return
-            const map: Record<string, ClubEvent> = {}
-            for (const e of evData) {
-              if (!map[e.club_id]) {
-                map[e.club_id] = { id: e.id, clubId: e.club_id, title: e.title, description: e.description ?? '', date: e.date, location: e.location ?? undefined, isPublic: e.is_public, createdBy: e.created_by }
-              }
-            }
-            setNextEvents(map)
-          })
-        })
-        .catch(console.error)
-    }
   }, [currentUser.id, currentUser.role])
 
   async function resolveIssue(id: string) {
@@ -234,11 +159,41 @@ export default function DashboardPage() {
       </section>
 
       <div className="flex flex-col gap-6">
-        {myClubs.length === 0 ? (
+        {isLoading ? (
+          <>
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-white rounded-xl p-6" style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.04)' }}>
+                <div className="flex items-center gap-5">
+                  <Skeleton className="w-14 h-14 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3 w-16 rounded-full" />
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
+        ) : myClubs.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-xl border">
             {currentUser.role === 'advisor'
               ? <><Users className="w-8 h-8 text-gray-300 mx-auto mb-3" /><p className="text-gray-500 font-medium">You are not assigned as advisor to any clubs yet.</p></>
-              : <><BookOpen className="w-8 h-8 text-gray-300 mx-auto mb-3" /><p className="text-gray-500 font-medium">You haven&apos;t joined any clubs yet.</p></>
+              : <div className="max-w-sm mx-auto">
+                  <div className="w-16 h-16 rounded-full mx-auto mb-5 flex items-center justify-center" style={{ background: 'rgba(0, 88, 190, 0.08)' }}>
+                    <BookOpen className="w-8 h-8 text-[#0058be]" />
+                  </div>
+                  <h3 className="text-xl font-bold text-[#191c1d] mb-2" style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}>
+                    Welcome to ClubIt!
+                  </h3>
+                  <p className="text-sm text-[#727785] leading-relaxed mb-6">
+                    Clubs are student-run communities where you can explore interests, build skills, and meet new people. Browse the directory to find one that fits you.
+                  </p>
+                  <Link href="/clubs">
+                    <button className="font-bold py-3 px-8 rounded-full text-sm uppercase tracking-widest text-white transition-colors hover:bg-[#0047a0]" style={{ background: '#0058be', fontFamily: 'var(--font-manrope, sans-serif)' }}>
+                      Browse Clubs
+                    </button>
+                  </Link>
+                </div>
             }
           </div>
         ) : (

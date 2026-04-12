@@ -16,6 +16,9 @@ export interface School {
   setupTokenExpiresAt?: string
   setupCompletedAt?: string
   createdAt: string
+  studentCodeExpiresAt?: string
+  advisorCodeExpiresAt?: string
+  adminCodeExpiresAt?: string
 }
 
 export type JoinRequestStatus = 'pending' | 'approved' | 'rejected'
@@ -154,6 +157,18 @@ export interface ChatMessage {
   senderId: string
   content: string
   sentAt: string // ISO timestamp
+}
+
+export interface Notification {
+  id: string
+  userId: string
+  schoolId?: string
+  type: string
+  title: string
+  body?: string
+  link?: string
+  isRead: boolean
+  createdAt: string
 }
 
 export type ClubFormType = 'signup' | 'nomination' | 'survey' | 'approval'

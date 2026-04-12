@@ -79,7 +79,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     const interval = setInterval(() => {
       void fetchMessages()
-    }, 4000)
+    }, 30000)
 
     return () => {
       supabase.removeChannel(channel)

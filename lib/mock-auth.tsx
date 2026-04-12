@@ -110,6 +110,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
   const [schoolSetupCompletedAt, setSchoolSetupCompletedAt] = useState<string | null>(null)
   const [devRole, setDevRole] = useState<Role | null>(null)
   const [refreshTick, setRefreshTick] = useState(0)
+  const [isResolved, setIsResolved] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
 
@@ -125,6 +126,22 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session])
 
+  // Redirect effect: only runs once isResolved is true
+  useEffect(() => {
+    if (!isResolved) return
+
+    const redirectTarget = getRequiredRoute(
+      pathname,
+      baseUser.role,
+      baseUser.schoolId,
+      schoolStatus
+    )
+
+    if (redirectTarget && pathname !== redirectTarget) {
+      router.replace(redirectTarget)
+    }
+  }, [isResolved, pathname, baseUser.role, baseUser.schoolId, schoolStatus, router])
+
   useEffect(() => {
     if (!isLoaded || !clerkUser) return
 
@@ -135,7 +152,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     const email = clerkUser.primaryEmailAddress?.emailAddress ?? ''
     const clerkRole = clerkUser.publicMetadata?.role as Role | undefined
 
-    function applyResolvedSchool(args: {
+    function applySchoolState(args: {
       role: Role
       schoolId?: string
       schoolName?: string | null
@@ -165,22 +182,11 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
       } else if (!args.schoolId) {
         clearSchoolSession(id)
       }
-
-      const redirectTarget = getRequiredRoute(
-        pathname,
-        args.role,
-        args.schoolId,
-        args.schoolStatus ?? null
-      )
-
-      if (redirectTarget && pathname !== redirectTarget) {
-        router.replace(redirectTarget)
-      }
     }
 
     const cached = getSchoolSession(id)
     if (cached) {
-      applyResolvedSchool({
+      applySchoolState({
         role: clerkRole ?? cached.role,
         schoolId: cached.schoolId,
         schoolName: cached.schoolName,
@@ -188,26 +194,50 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
         setupCompletedAt: cached.setupCompletedAt ?? null,
         persist: false,
       })
+      // Cache hit: safe to redirect immediately
+      setIsResolved(true)
     }
 
     async function syncSchoolContext() {
-      await supabase.from('users').upsert(
-        { id, name, email, role: clerkRole ?? 'student' },
-        { onConflict: 'id', ignoreDuplicates: true }
-      )
+      try {
+        await supabase.from('users').upsert(
+          { id, name, email, role: clerkRole ?? 'student' },
+          { onConflict: 'id', ignoreDuplicates: true }
+        )
 
-      const { data: userData } = await supabase
-        .from('users')
-        .select('role, school_id')
-        .eq('id', id)
-        .maybeSingle()
+        const { data: userData } = await supabase
+          .from('users')
+          .select('role, school_id')
+          .eq('id', id)
+          .maybeSingle()
 
-      const role = (userData?.role as Role | undefined) ?? clerkRole ?? 'student'
-      const schoolId = userData?.school_id ?? undefined
+        const role = (userData?.role as Role | undefined) ?? clerkRole ?? 'student'
+        const schoolId = userData?.school_id ?? undefined
 
-      if (!schoolId) {
-        if (cached?.schoolId) {
-          applyResolvedSchool({
+        if (!schoolId) {
+          if (cached?.schoolId) {
+            applySchoolState({
+              role: clerkRole ?? cached.role,
+              schoolId: cached.schoolId,
+              schoolName: cached.schoolName,
+              schoolStatus: cached.schoolStatus ?? null,
+              setupCompletedAt: cached.setupCompletedAt ?? null,
+              persist: false,
+            })
+          } else {
+            applySchoolState({ role })
+          }
+          return
+        }
+
+        const { data: school } = await supabase
+          .from('schools')
+          .select('name, contact_name, contact_email, status, setup_completed_at')
+          .eq('id', schoolId)
+          .maybeSingle()
+
+        if (!school && cached && cached.schoolId === schoolId) {
+          applySchoolState({
             role: clerkRole ?? cached.role,
             schoolId: cached.schoolId,
             schoolName: cached.schoolName,
@@ -218,37 +248,22 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        applyResolvedSchool({ role })
-        return
-      }
-
-      const { data: school } = await supabase
-        .from('schools')
-        .select('name, contact_name, contact_email, status, setup_completed_at')
-        .eq('id', schoolId)
-        .maybeSingle()
-
-      if (!school && cached && cached.schoolId === schoolId) {
-        applyResolvedSchool({
-          role: clerkRole ?? cached.role,
-          schoolId: cached.schoolId,
-          schoolName: cached.schoolName,
-          schoolStatus: cached.schoolStatus ?? null,
-          setupCompletedAt: cached.setupCompletedAt ?? null,
-          persist: false,
+        applySchoolState({
+          role,
+          schoolId: school ? schoolId : undefined,
+          schoolName: school?.name ?? null,
+          schoolStatus: (school?.status as SchoolStatus | undefined) ?? null,
+          contactName: school?.contact_name ?? null,
+          contactEmail: school?.contact_email ?? null,
+          setupCompletedAt: school?.setup_completed_at ?? null,
         })
-        return
+      } finally {
+        // Whether sync succeeded or failed, mark as resolved so the
+        // redirect effect can evaluate with the best data we have.
+        if (!cancelled) {
+          setIsResolved(true)
+        }
       }
-
-      applyResolvedSchool({
-        role,
-        schoolId: school ? schoolId : undefined,
-        schoolName: school?.name ?? null,
-        schoolStatus: (school?.status as SchoolStatus | undefined) ?? null,
-        contactName: school?.contact_name ?? null,
-        contactEmail: school?.contact_email ?? null,
-        setupCompletedAt: school?.setup_completed_at ?? null,
-      })
     }
 
     void syncSchoolContext()
@@ -261,6 +276,11 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
   const currentUser: User = devRole
     ? { ...baseUser, role: devRole }
     : baseUser
+
+  // Don't block rendering when Clerk hasn't loaded yet (unauthenticated pages
+  // need to render) — but once we know there's a signed-in user, wait until
+  // the school session is resolved before showing children.
+  const showChildren = !isLoaded || !clerkUser || isResolved
 
   return (
     <AuthContext.Provider
@@ -277,7 +297,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
         refreshSchoolContext: () => setRefreshTick((tick) => tick + 1),
       }}
     >
-      {children}
+      {showChildren ? children : null}
     </AuthContext.Provider>
   )
 }

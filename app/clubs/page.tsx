@@ -6,6 +6,7 @@ import { useMockAuth } from '@/lib/mock-auth'
 import { Club } from '@/types'
 import Avatar from '@/components/Avatar'
 import { Search, ArrowRight, Plus, X } from 'lucide-react'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 const PATTERNS = [
   'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)',
@@ -52,6 +53,7 @@ export default function ClubsPage() {
   const [newUnlimited, setNewUnlimited] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   const canCreateClub = actualUser.role === 'advisor' || actualUser.role === 'admin'
 
@@ -134,6 +136,8 @@ export default function ClubsPage() {
       } catch (err) {
         if (cancelled) return
         console.error('clubs load error', err)
+      } finally {
+        if (!cancelled) setIsLoading(false)
       }
     }
 
@@ -276,7 +280,25 @@ export default function ClubsPage() {
         </div>
       </header>
 
-      {filtered.length === 0 ? (
+      {isLoading && clubs.length === 0 ? (
+        <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="bg-white rounded-xl p-7 border border-gray-100 min-h-[260px]" style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.04)' }}>
+              <Skeleton className="w-14 h-14 rounded-full mb-5" />
+              <Skeleton className="h-5 w-3/4 mb-2" />
+              <Skeleton className="h-3 w-full mb-1" />
+              <Skeleton className="h-3 w-2/3 mb-5" />
+              <div className="pt-5 border-t border-gray-100 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <Skeleton className="w-6 h-6 rounded-full" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="h-3 w-32" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
           <p className="text-sm">{clubs.length === 0 ? 'No clubs have been created yet.' : 'No clubs match your search.'}</p>
         </div>
