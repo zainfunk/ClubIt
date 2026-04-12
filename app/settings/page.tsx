@@ -34,7 +34,7 @@ function Toggle({
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
         disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
       }`}
-      style={{ background: checked ? '#0058be' : '#d1d5db' }}
+      style={{ background: checked ? '#6366f1' : '#d1d5db' }}
     >
       <span
         className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
@@ -48,14 +48,14 @@ function Toggle({
 
 function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: '#ffffff', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-[#0058be]">
+    <div className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-3">
+        <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
           {icon}
         </div>
-        <h2 className="font-bold text-gray-900 text-sm" style={{ fontFamily: 'var(--font-manrope)' }}>{title}</h2>
+        <h2 className="font-bold text-slate-900 text-sm" style={{ fontFamily: 'var(--font-manrope)' }}>{title}</h2>
       </div>
-      <div className="divide-y divide-gray-50">{children}</div>
+      <div className="divide-y divide-slate-50">{children}</div>
     </div>
   )
 }
@@ -72,10 +72,10 @@ function SettingRow({
   disabled?: boolean
 }) {
   return (
-    <div className={`flex items-center justify-between gap-4 px-6 py-4 ${disabled ? 'opacity-50' : ''}`}>
+    <div className={`flex items-center justify-between gap-4 px-5 py-3.5 ${disabled ? 'opacity-50' : ''}`}>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-800">{label}</p>
-        {description && <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{description}</p>}
+        <p className="text-sm font-semibold text-slate-800">{label}</p>
+        {description && <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</p>}
       </div>
       {control}
     </div>
@@ -150,16 +150,7 @@ export default function SettingsPage() {
   if (!loaded) return null
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-
-      {/* Page header */}
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Preferences</p>
-        <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-manrope)', letterSpacing: '-0.02em' }}>
-          Settings
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">Manage your privacy, appearance, and preferences.</p>
-      </div>
+    <div className="max-w-2xl mx-auto space-y-5" style={{ fontFamily: 'var(--font-inter)' }}>
 
       {/* ── Appearance ── */}
       <Section title="Appearance" icon={<Sun className="w-4 h-4" />}>
@@ -194,7 +185,7 @@ export default function SettingsPage() {
                 }
               />
               {!adminSettings.achievementsFeatureEnabled && (
-                <div className="px-6 py-2 flex items-center gap-2 text-xs text-amber-600" style={{ background: 'rgba(245,158,11,0.06)' }}>
+                <div className="px-5 py-2 flex items-center gap-2 text-xs text-amber-600 bg-amber-50/50">
                   <Lock className="w-3.5 h-3.5 shrink-0" />
                   Disabled by admin — achievement visibility is turned off school-wide.
                 </div>
@@ -213,7 +204,7 @@ export default function SettingsPage() {
                 }
               />
               {!adminSettings.attendanceFeatureEnabled && (
-                <div className="px-6 py-2 flex items-center gap-2 text-xs text-amber-600" style={{ background: 'rgba(245,158,11,0.06)' }}>
+                <div className="px-5 py-2 flex items-center gap-2 text-xs text-amber-600 bg-amber-50/50">
                   <Lock className="w-3.5 h-3.5 shrink-0" />
                   Disabled by admin — attendance visibility is turned off school-wide.
                 </div>
@@ -232,7 +223,7 @@ export default function SettingsPage() {
                 }
               />
               {!adminSettings.clubsFeatureEnabled && (
-                <div className="px-6 py-2 flex items-center gap-2 text-xs text-amber-600" style={{ background: 'rgba(245,158,11,0.06)' }}>
+                <div className="px-5 py-2 flex items-center gap-2 text-xs text-amber-600 bg-amber-50/50">
                   <Lock className="w-3.5 h-3.5 shrink-0" />
                   Disabled by admin — club visibility is turned off school-wide.
                 </div>
@@ -255,7 +246,7 @@ export default function SettingsPage() {
             />
           )}
           {isStudent && !adminSettings.studentSocialsEnabled && (
-            <div className="px-6 py-2 flex items-center gap-2 text-xs text-amber-600" style={{ background: 'rgba(245,158,11,0.06)' }}>
+            <div className="px-5 py-2 flex items-center gap-2 text-xs text-amber-600 bg-amber-50/50">
               <Lock className="w-3.5 h-3.5 shrink-0" />
               Disabled by admin — personal social media links are not permitted.
             </div>
@@ -266,9 +257,9 @@ export default function SettingsPage() {
       {/* ── Admin controls ── */}
       {isAdmin && (
         <Section title="Student Feature Controls" icon={<Shield className="w-4 h-4" />}>
-          <div className="px-6 py-3 bg-red-50">
-            <p className="text-xs text-red-700 font-medium">
-              These settings apply to all students school-wide. Disabling a feature prevents students from making it visible to peers.
+          <div className="px-5 py-2.5 bg-rose-50/80 border-b border-rose-100">
+            <p className="text-xs text-rose-700 font-medium">
+              These settings apply to all students school-wide.
             </p>
           </div>
 
@@ -320,13 +311,13 @@ export default function SettingsPage() {
 
       {/* ── Report an issue ── */}
       <Section title="Report an Issue" icon={<AlertCircle className="w-4 h-4" />}>
-        <div className="px-6 py-5 space-y-3">
-          <p className="text-sm text-gray-600">
-            Your report will be sent directly to{' '}
-            <span className="font-semibold text-gray-800">{schoolPrincipal ?? 'the admin'}</span>.
+        <div className="px-5 py-4 space-y-3">
+          <p className="text-sm text-slate-600">
+            Your report goes to{' '}
+            <span className="font-semibold text-slate-800">{schoolPrincipal ?? 'the admin'}</span>.
           </p>
           {issueSubmitted ? (
-            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 rounded-lg px-4 py-2.5">
               <CheckCircle className="w-4 h-4 shrink-0" />
               Report submitted — the admin has been notified.
             </div>
@@ -335,19 +326,17 @@ export default function SettingsPage() {
               <textarea
                 value={issueText}
                 onChange={(e) => setIssueText(e.target.value)}
-                rows={4}
-                placeholder="Describe the issue you're experiencing…"
-                className="w-full text-sm rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                style={{ background: '#f8f9fa', border: '1px solid #e9ecef' }}
+                rows={3}
+                placeholder="Describe the issue…"
+                className="w-full text-sm rounded-lg px-4 py-3 resize-none bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300"
               />
               <button
                 onClick={submitIssue}
                 disabled={!issueText.trim() || issueSubmitting}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: '#0058be' }}
+                className="inline-flex items-center gap-2 h-9 px-5 rounded-lg text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 shadow-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {issueSubmitting ? 'Sending…' : 'Send Report'}
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </>
           )}

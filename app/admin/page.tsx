@@ -6,9 +6,6 @@ import { supabase } from '@/lib/supabase'
 import { Club, SchoolElection, User, Role } from '@/types'
 import RoleGuard from '@/components/layout/RoleGuard'
 import ClubForm from '@/components/admin/ClubForm'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Link from 'next/link'
 import { applyOverrides } from '@/lib/user-store'
@@ -243,443 +240,324 @@ export default function AdminPage() {
     return allUsers.find((u) => u.id === id)
   }
 
+  const openIssues = issueReports.filter((r) => r.status === 'open').length
+
   return (
     <RoleGuard allowed={['admin']}>
-      <div>
-        <div className="flex items-center gap-3 mb-6">
-          <Shield className="w-5 h-5 text-red-500" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Manage clubs, advisors, and school elections</p>
-          </div>
-        </div>
+      <div className="space-y-6" style={{ fontFamily: 'var(--font-inter)' }}>
 
-        {/* Invite codes — share these so users can join via /join */}
+        {/* ── Invite Codes ── */}
         {invites && (invites.studentCode || invites.advisorCode || invites.adminCode) && (
-          <Card className="mb-10 border-indigo-100 bg-gradient-to-br from-indigo-50/40 to-emerald-50/40">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center shadow-sm">
-                  <KeyRound className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">Invite codes</CardTitle>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Share these with your school. New users enter them at <span className="font-mono">/join</span> to get the right role.
-                  </p>
-                </div>
+          <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/50 via-white to-emerald-50/30 p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <KeyRound className="w-4 h-4 text-white" />
               </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {([
-                  { label: 'Students', code: invites.studentCode, accent: 'emerald' },
-                  { label: 'Advisors', code: invites.advisorCode, accent: 'indigo' },
-                  { label: 'Admins', code: invites.adminCode, accent: 'rose' },
-                ] as const).map(({ label, code, accent }) => (
-                  <div
-                    key={label}
-                    className="rounded-xl bg-white border border-gray-100 p-4 flex flex-col gap-2 shadow-sm"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${
-                        accent === 'emerald' ? 'text-emerald-600' :
-                        accent === 'indigo' ? 'text-indigo-600' :
-                        'text-rose-600'
-                      }`}>
-                        {label}
-                      </span>
-                      {code && (
-                        <button
-                          type="button"
-                          onClick={() => copyCode(label, code)}
-                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-gray-500 hover:text-gray-900 transition"
-                          aria-label={`Copy ${label} invite code`}
-                        >
-                          {copiedCode === label ? (
-                            <><Check className="w-3 h-3 text-emerald-500" /> Copied</>
-                          ) : (
-                            <><Copy className="w-3 h-3" /> Copy</>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                    {code ? (
-                      <code className="font-mono text-sm font-bold text-gray-900 tracking-tight">
-                        {code}
-                      </code>
-                    ) : (
-                      <span className="text-xs text-gray-400 italic">Not generated yet</span>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>Invite Codes</h2>
+                <p className="text-xs text-slate-500">Share at <span className="font-mono text-indigo-600">/join</span> to onboard users</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {([
+                { label: 'Students', code: invites.studentCode, color: 'text-emerald-600' },
+                { label: 'Advisors', code: invites.advisorCode, color: 'text-indigo-600' },
+                { label: 'Admins', code: invites.adminCode, color: 'text-rose-600' },
+              ] as const).map(({ label, code, color }) => (
+                <div key={label} className="rounded-xl bg-white border border-slate-100 p-3 shadow-sm">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${color}`}>{label}</span>
+                    {code && (
+                      <button onClick={() => copyCode(label, code)} className="text-[10px] font-semibold text-slate-400 hover:text-slate-700 transition inline-flex items-center gap-1">
+                        {copiedCode === label ? <><Check className="w-3 h-3 text-emerald-500" />Copied</> : <><Copy className="w-3 h-3" />Copy</>}
+                      </button>
                     )}
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  {code ? (
+                    <code className="font-mono text-sm font-bold text-slate-900 tracking-tight">{code}</code>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">Not set</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
-        {/* Clubs section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+        {/* ── Clubs ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-1">
             <ClubForm advisors={staffOwners} onSubmit={handleCreateClub} />
           </div>
-
           <div className="lg:col-span-2">
-            <h2 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
-              All Clubs ({clubs.length})
-            </h2>
-            <div className="space-y-3">
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-3">All Clubs ({clubs.length})</h3>
+            <div className="space-y-2">
               {clubs.map((club) => {
-                const advisor = allUsers.find((u) => u.id === club.advisorId)
-                  ?? (club.advisorId === actualUser.id ? actualUser : undefined)
+                const advisor = allUsers.find((u) => u.id === club.advisorId) ?? (club.advisorId === actualUser.id ? actualUser : undefined)
                 const advisorName = advisor?.name ?? advisorNames[club.advisorId] ?? 'Unassigned'
-                const spotsLeft = club.capacity !== null ? club.capacity - club.memberIds.length : null
+                const pct = club.capacity ? Math.min((club.memberIds.length / club.capacity) * 100, 100) : 0
+                const full = club.capacity !== null && club.memberIds.length >= club.capacity
                 return (
-                  <Card key={club.id}>
-                    <CardContent className="py-3 px-4">
-                      <div className="flex items-center justify-between gap-4 flex-wrap">
-                        <div className="flex items-center gap-3">
-                          <span className="text-xl">{club.iconUrl ?? '📌'}</span>
-                          <div>
-                            <p className="font-medium text-gray-900 text-sm">{club.name}</p>
-                            <p className="text-xs text-gray-500">
-                              Advisor: {advisorName}
-                            </p>
-                          </div>
+                  <Link key={club.id} href={`/clubs/${club.id}`}>
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-white border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-200 transition-all cursor-pointer">
+                      <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center text-lg shrink-0">{club.iconUrl ?? '📌'}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-900 truncate">{club.name}</span>
+                          {full && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-600">FULL</span>}
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                            <Users className="w-3.5 h-3.5" />
-                            {club.memberIds.length}/{club.capacity === null ? '∞' : club.capacity}
-                          </div>
-                          {club.capacity === null ? (
-                            <Badge variant="secondary" className="text-xs">Unlimited</Badge>
-                          ) : spotsLeft !== null && spotsLeft <= 0 ? (
-                            <Badge variant="destructive" className="text-xs">Full</Badge>
-                          ) : (
-                            <Badge variant="secondary" className="text-xs">{spotsLeft} spots left</Badge>
-                          )}
-                        </div>
+                        <span className="text-xs text-slate-400">{advisorName}</span>
                       </div>
-                    </CardContent>
-                  </Card>
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-medium text-slate-500">{club.memberIds.length}/{club.capacity ?? '∞'}</span>
+                        {club.capacity && (
+                          <div className="w-16 h-1.5 rounded-full bg-slate-100 mt-1 overflow-hidden">
+                            <div className={`h-full rounded-full ${full ? 'bg-rose-400' : 'bg-gradient-to-r from-indigo-500 to-emerald-500'}`} style={{ width: `${pct}%` }} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
                 )
               })}
             </div>
           </div>
         </div>
 
-        {/* Staff & roles */}
-        <div className="border-t pt-8 mb-10">
-          <div className="flex items-center gap-3 mb-4">
-            <Shield className="w-5 h-5 text-blue-600" />
+        {/* ── Staff & Roles ── */}
+        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center"><Shield className="w-4 h-4 text-indigo-600" /></div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Staff & Role Management</h2>
-              <p className="text-sm text-gray-500">
-                Promote joined users to advisor so they can own clubs, manage rosters, and run attendance.
-              </p>
+              <h3 className="text-sm font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>Staff & Roles</h3>
+              <p className="text-xs text-slate-500">Promote users to advisor or admin</p>
             </div>
           </div>
-
           {roleError && (
-            <p className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3 mb-4">{roleError}</p>
+            <div className="px-5 py-2.5 bg-rose-50 text-sm text-rose-700 border-b border-rose-100">{roleError}</div>
           )}
-
           {allUsers.length === 0 ? (
-            <p className="text-sm text-gray-400">No users have joined this school yet.</p>
+            <p className="px-5 py-6 text-sm text-slate-400">No users have joined this school yet.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="divide-y divide-slate-50">
               {allUsers.map((user) => (
-                <Card key={user.id}>
-                  <CardContent className="py-4 px-4 flex items-center justify-between gap-4 flex-wrap">
+                <div key={user.id} className="flex items-center justify-between gap-4 px-5 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar name={user.name} size="sm" />
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-gray-900">{user.name}</span>
-                        <Badge variant="secondary" className="text-xs capitalize">{user.role}</Badge>
-                        {user.id === actualUser.id && (
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">You</span>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-900 truncate">{user.name}</span>
+                        {user.id === actualUser.id && <span className="text-[9px] font-bold text-slate-400 uppercase">you</span>}
                       </div>
-                      <p className="text-sm text-gray-500 mt-1">{user.email}</p>
+                      <span className="text-xs text-slate-400">{user.email}</span>
                     </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {(['student', 'advisor', 'admin'] as Exclude<Role, 'superadmin'>[]).map((nextRole) => (
-                        <Button
-                          key={nextRole}
-                          size="sm"
-                          variant={user.role === nextRole ? 'default' : 'outline'}
-                          className="h-8 text-xs capitalize"
-                          disabled={updatingRoleId === user.id || user.role === nextRole}
-                          onClick={() => updateUserRole(user.id, nextRole)}
-                        >
-                          {updatingRoleId === user.id ? 'Saving...' : nextRole}
-                        </Button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {(['student', 'advisor', 'admin'] as Exclude<Role, 'superadmin'>[]).map((nextRole) => (
+                      <button
+                        key={nextRole}
+                        disabled={updatingRoleId === user.id || user.role === nextRole}
+                        onClick={() => updateUserRole(user.id, nextRole)}
+                        className={`h-7 px-3 rounded-lg text-xs font-medium capitalize transition-all ${
+                          user.role === nextRole
+                            ? 'bg-slate-900 text-white shadow-sm'
+                            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 border border-slate-200'
+                        } disabled:opacity-40 disabled:cursor-not-allowed`}
+                      >
+                        {updatingRoleId === user.id ? '...' : nextRole}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Student Roster */}
-        <div className="border-t pt-8 mb-10">
-          <div className="flex items-center gap-3 mb-4">
-            <GraduationCap className="w-5 h-5 text-green-600" />
+        {/* ── Student Roster ── */}
+        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center"><GraduationCap className="w-4 h-4 text-emerald-600" /></div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Student Roster</h2>
-              <p className="text-sm text-gray-500">All enrolled students — click a name to view or edit their profile.</p>
+              <h3 className="text-sm font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>Student Roster</h3>
+              <p className="text-xs text-slate-500">Click a name to view their profile</p>
             </div>
           </div>
-          <div className="overflow-hidden rounded-xl border bg-white">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3 text-left">Student</th>
-                  <th className="px-4 py-3 text-left">Email</th>
-                  <th className="px-4 py-3 text-left">Clubs</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {allUsers.filter((u) => u.role === 'student').map(applyOverrides).map((student) => {
-                  const studentClubIds = membershipsByUser[student.id] ?? []
-                  const studentClubs = studentClubIds.map((cid) => clubs.find((c) => c.id === cid)).filter(Boolean) as Club[]
-                  return (
-                    <tr key={student.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3">
-                        <Link href={`/profile/${student.id}`} className="flex items-center gap-2 group">
-                          <Avatar name={student.name} size="sm" />
-                          <span className="font-medium text-gray-900 group-hover:text-blue-600 group-hover:underline">
-                            {student.name}
-                          </span>
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-gray-500">{student.email}</td>
-                      <td className="px-4 py-3">
-                        {studentClubs.length === 0 ? (
-                          <span className="text-gray-400 italic">No clubs</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {studentClubs.map((c) => (
-                              <span key={c.id} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                                {c.iconUrl} {c.name}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* School Elections section */}
-        <div className="border-t pt-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Vote className="w-5 h-5 text-purple-500" />
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">School-Wide Elections</h2>
-                <p className="text-sm text-gray-500">All students and staff can vote on these positions.</p>
-              </div>
-            </div>
-            <Button
-              size="sm"
-              onClick={() => setShowElectionForm((v) => !v)}
-              className="flex items-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              New Election
-            </Button>
-          </div>
-
-          {/* Election creation form */}
-          {showElectionForm && (
-            <Card className="mb-6">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Create New School Election</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <label className="text-xs font-medium text-gray-700 block mb-1">Position Title *</label>
-                  <Input
-                    value={electionTitle}
-                    onChange={(e) => setElectionTitle(e.target.value)}
-                    placeholder="e.g. Student Body President"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-700 block mb-1">Description</label>
-                  <textarea
-                    value={electionDescription}
-                    onChange={(e) => setElectionDescription(e.target.value)}
-                    placeholder="Brief description of the role…"
-                    rows={2}
-                    className="w-full border rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-700 block mb-1">
-                    Candidates * (select 2+)
-                  </label>
-                  <div className="grid grid-cols-2 gap-1">
-                    {students.map((s) => (
-                      <label key={s.id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={electionCandidateIds.includes(s.id)}
-                          onChange={() => toggleElectionCandidate(s.id)}
-                        />
-                        {s.name}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={createElection}
-                    disabled={!electionTitle.trim() || electionCandidateIds.length < 2}
-                  >
-                    Launch Election
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowElectionForm(false)}>Cancel</Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Election list */}
-          {elections.length === 0 ? (
-            <p className="text-sm text-gray-400">No school elections yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {elections.map((election) => {
-                const totalVotes = election.candidates.reduce((s, c) => s + c.votes.length, 0)
-                const winner = !election.isOpen
-                  ? election.candidates.reduce((a, b) => (a.votes.length >= b.votes.length ? a : b))
-                  : null
-
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                <th className="px-5 py-2.5 text-left">Student</th>
+                <th className="px-5 py-2.5 text-left">Email</th>
+                <th className="px-5 py-2.5 text-left">Clubs</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {allUsers.filter((u) => u.role === 'student').map(applyOverrides).map((student) => {
+                const studentClubIds = membershipsByUser[student.id] ?? []
+                const studentClubs = studentClubIds.map((cid) => clubs.find((c) => c.id === cid)).filter(Boolean) as Club[]
                 return (
-                  <Card key={election.id}>
-                    <CardContent className="py-4 px-4">
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <div>
-                          <p className="font-semibold text-gray-900">{election.positionTitle}</p>
-                          {election.description && (
-                            <p className="text-sm text-gray-500 mt-0.5">{election.description}</p>
-                          )}
+                  <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-5 py-2.5">
+                      <Link href={`/profile/${student.id}`} className="flex items-center gap-2.5 group">
+                        <Avatar name={student.name} size="sm" />
+                        <span className="font-medium text-slate-900 group-hover:text-indigo-600 transition-colors">{student.name}</span>
+                      </Link>
+                    </td>
+                    <td className="px-5 py-2.5 text-slate-400">{student.email}</td>
+                    <td className="px-5 py-2.5">
+                      {studentClubs.length === 0 ? (
+                        <span className="text-slate-300 italic text-xs">None</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {studentClubs.map((c) => (
+                            <span key={c.id} className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">
+                              {c.iconUrl} {c.name}
+                            </span>
+                          ))}
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {election.isOpen ? (
-                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Open</span>
-                          ) : (
-                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Closed</span>
-                          )}
-                          {election.isOpen && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
-                              onClick={() => closeElection(election.id)}
-                            >
-                              Close Election
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-
-                      {winner && (
-                        <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1 mb-3">
-                          Winner: {getUserById(winner.userId)?.name} ({winner.votes.length} votes)
-                        </p>
                       )}
-
-                      <div className="space-y-2">
-                        {election.candidates.map((c) => {
-                          const user = getUserById(c.userId)
-                          const pct = totalVotes > 0 ? Math.round((c.votes.length / totalVotes) * 100) : 0
-                          return (
-                            <div key={c.userId} className="flex items-center gap-3">
-                              <span className="text-sm text-gray-700 w-28 shrink-0">{user?.name}</span>
-                              <div className="flex-1">
-                                <div className="w-full bg-gray-100 rounded-full h-2">
-                                  <div
-                                    className="bg-purple-400 h-2 rounded-full transition-all"
-                                    style={{ width: `${pct}%` }}
-                                  />
-                                </div>
-                              </div>
-                              <span className="text-xs text-gray-400 w-20 text-right shrink-0">
-                                {c.votes.length} votes {totalVotes > 0 && `(${pct}%)`}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                      <p className="text-xs text-gray-400 mt-2">{totalVotes} total vote{totalVotes !== 1 ? 's' : ''}</p>
-                    </CardContent>
-                  </Card>
+                    </td>
+                  </tr>
                 )
               })}
-            </div>
-          )}
+            </tbody>
+          </table>
         </div>
 
-        {/* Issue Reports section */}
-        <div className="border-t pt-8 mt-4">
-          <div className="flex items-center gap-3 mb-4">
-            <MessageSquare className="w-5 h-5 text-orange-500" />
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">Issue Reports</h2>
-              <p className="text-sm text-gray-500">Issues submitted by students and staff.</p>
+        {/* ── Elections ── */}
+        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center"><Vote className="w-4 h-4 text-purple-600" /></div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>School Elections</h3>
+                <p className="text-xs text-slate-500">All students and staff can vote</p>
+              </div>
             </div>
-            {issueReports.filter((r) => r.status === 'open').length > 0 && (
-              <span className="ml-auto text-xs font-bold bg-orange-100 text-orange-700 px-2.5 py-1 rounded-full">
-                {issueReports.filter((r) => r.status === 'open').length} open
-              </span>
-            )}
+            <button onClick={() => setShowElectionForm((v) => !v)} className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 shadow-sm transition">
+              <Plus className="w-3.5 h-3.5" />New Election
+            </button>
           </div>
 
-          {issueReports.length === 0 ? (
-            <p className="text-sm text-gray-400">No issue reports yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {issueReports.map((report) => (
-                <Card key={report.id} className={report.status === 'resolved' ? 'opacity-60' : ''}>
-                  <CardContent className="py-4 px-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className="text-sm font-semibold text-gray-900">{report.reporter_name}</span>
-                          <span className="text-xs text-gray-400">{report.reporter_email}</span>
-                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${
-                            report.status === 'open'
-                              ? 'bg-orange-100 text-orange-700'
-                              : 'bg-green-100 text-green-700'
-                          }`}>
-                            {report.status}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-700 leading-relaxed">{report.message}</p>
-                        <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {new Date(report.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                        </p>
-                      </div>
-                      {report.status === 'open' && (
-                        <Button size="sm" variant="outline" className="shrink-0 h-8 text-xs gap-1.5" onClick={() => resolveIssue(report.id)}>
-                          <CheckCircle className="w-3.5 h-3.5" />
-                          Resolve
-                        </Button>
+          {showElectionForm && (
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">New Election</p>
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-1">Position Title *</label>
+                <Input value={electionTitle} onChange={(e) => setElectionTitle(e.target.value)} placeholder="e.g. Student Body President" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-1">Description</label>
+                <textarea value={electionDescription} onChange={(e) => setElectionDescription(e.target.value)} placeholder="Brief description…" rows={2}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-1">Candidates * (select 2+)</label>
+                <div className="grid grid-cols-2 gap-1">
+                  {students.map((s) => (
+                    <label key={s.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer py-0.5">
+                      <input type="checkbox" checked={electionCandidateIds.includes(s.id)} onChange={() => toggleElectionCandidate(s.id)} className="accent-indigo-600" />
+                      {s.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={createElection} disabled={!electionTitle.trim() || electionCandidateIds.length < 2}
+                  className="h-8 px-4 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                  Launch Election
+                </button>
+                <button onClick={() => setShowElectionForm(false)} className="h-8 px-4 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 transition">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          <div className="divide-y divide-slate-50">
+            {elections.length === 0 ? (
+              <p className="px-5 py-6 text-sm text-slate-400">No school elections yet.</p>
+            ) : elections.map((election) => {
+              const totalVotes = election.candidates.reduce((s, c) => s + c.votes.length, 0)
+              const winner = !election.isOpen ? election.candidates.reduce((a, b) => (a.votes.length >= b.votes.length ? a : b)) : null
+              return (
+                <div key={election.id} className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>{election.positionTitle}</p>
+                      {election.description && <p className="text-xs text-slate-500 mt-0.5">{election.description}</p>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${election.isOpen ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                        {election.isOpen ? 'Open' : 'Closed'}
+                      </span>
+                      {election.isOpen && (
+                        <button onClick={() => closeElection(election.id)} className="text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 px-2 py-1 rounded-lg transition">Close</button>
                       )}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                  {winner && (
+                    <div className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-1.5 mb-3 font-medium">
+                      Winner: {getUserById(winner.userId)?.name} ({winner.votes.length} votes)
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {election.candidates.map((c) => {
+                      const user = getUserById(c.userId)
+                      const pct = totalVotes > 0 ? Math.round((c.votes.length / totalVotes) * 100) : 0
+                      return (
+                        <div key={c.userId} className="flex items-center gap-3">
+                          <span className="text-xs font-medium text-slate-700 w-24 shrink-0 truncate">{user?.name}</span>
+                          <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-[11px] text-slate-400 w-16 text-right shrink-0">{c.votes.length} ({pct}%)</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-2">{totalVotes} total vote{totalVotes !== 1 ? 's' : ''}</p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ── Issue Reports ── */}
+        <div className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center"><MessageSquare className="w-4 h-4 text-amber-600" /></div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>Issue Reports</h3>
+              <p className="text-xs text-slate-500">Submitted by students and staff</p>
+            </div>
+            {openIssues > 0 && (
+              <span className="ml-auto text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{openIssues} open</span>
+            )}
+          </div>
+          {issueReports.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-slate-400">No reports yet.</p>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {issueReports.map((report) => (
+                <div key={report.id} className={`px-5 py-3.5 flex items-start justify-between gap-4 ${report.status === 'resolved' ? 'opacity-50' : ''}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                      <span className="text-sm font-semibold text-slate-900">{report.reporter_name}</span>
+                      <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${
+                        report.status === 'open' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                      }`}>{report.status}</span>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed">{report.message}</p>
+                    <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {new Date(report.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  {report.status === 'open' && (
+                    <button onClick={() => resolveIssue(report.id)} className="shrink-0 inline-flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors">
+                      <CheckCircle className="w-3 h-3" />Resolve
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           )}
