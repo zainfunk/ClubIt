@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { useUser, useClerk } from '@clerk/nextjs'
 import {
   Sparkles,
   Zap,
@@ -26,6 +27,8 @@ import {
 // Only the Log In / Get Started / Subscribe CTAs route to Clerk (/sign-in, /sign-up).
 // Everything else stays visual/informational.
 export default function LandingPage() {
+  const { user, isSignedIn } = useUser()
+  const { signOut } = useClerk()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [capacity, setCapacity] = useState(12)
@@ -78,18 +81,37 @@ export default function LandingPage() {
           </div>
 
           <div className="hidden md:flex items-center gap-2">
-            <Link
-              href="/sign-in"
-              className="px-4 h-9 inline-flex items-center text-sm font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
-            >
-              Log In
-            </Link>
-            <Link
-              href="/sign-up"
-              className="px-4 h-9 inline-flex items-center text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-lg shadow-slate-900/10 transition"
-            >
-              Get Started
-            </Link>
+            {isSignedIn ? (
+              <>
+                <Link
+                  href="/dashboard"
+                  className="px-4 h-9 inline-flex items-center text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-lg shadow-slate-900/10 transition"
+                >
+                  Dashboard
+                </Link>
+                <button
+                  onClick={() => signOut({ redirectUrl: '/' })}
+                  className="px-4 h-9 inline-flex items-center text-sm font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
+                >
+                  Sign Out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/sign-in"
+                  className="px-4 h-9 inline-flex items-center text-sm font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
+                >
+                  Log In
+                </Link>
+                <Link
+                  href="/sign-up"
+                  className="px-4 h-9 inline-flex items-center text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-lg shadow-slate-900/10 transition"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
 
           <button
@@ -108,8 +130,17 @@ export default function LandingPage() {
             <a href="#pricing" onClick={() => setMobileOpen(false)}>Pricing</a>
             <a href="#faq" onClick={() => setMobileOpen(false)}>FAQ</a>
             <div className="flex gap-2 pt-2">
-              <Link href="/sign-in" className="flex-1 h-10 inline-flex items-center justify-center rounded-lg border border-slate-200 font-semibold">Log In</Link>
-              <Link href="/sign-up" className="flex-1 h-10 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white font-semibold">Get Started</Link>
+              {isSignedIn ? (
+                <>
+                  <Link href="/dashboard" className="flex-1 h-10 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white font-semibold">Dashboard</Link>
+                  <button onClick={() => signOut({ redirectUrl: '/' })} className="flex-1 h-10 inline-flex items-center justify-center rounded-lg border border-slate-200 font-semibold">Sign Out</button>
+                </>
+              ) : (
+                <>
+                  <Link href="/sign-in" className="flex-1 h-10 inline-flex items-center justify-center rounded-lg border border-slate-200 font-semibold">Log In</Link>
+                  <Link href="/sign-up" className="flex-1 h-10 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white font-semibold">Get Started</Link>
+                </>
+              )}
             </div>
           </div>
         )}
