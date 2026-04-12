@@ -133,9 +133,9 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session])
 
-  // Redirect effect: only runs once isResolved is true
+  // Redirect effect: only runs once isResolved is true and user is identified
   useEffect(() => {
-    if (!isResolved) return
+    if (!isResolved || !baseUser.id) return
 
     const redirectTarget = getRequiredRoute(
       pathname,
@@ -147,7 +147,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     if (redirectTarget && pathname !== redirectTarget) {
       router.replace(redirectTarget)
     }
-  }, [isResolved, pathname, baseUser.role, baseUser.schoolId, schoolStatus, router])
+  }, [isResolved, baseUser.id, pathname, baseUser.role, baseUser.schoolId, schoolStatus, router])
 
   // Sync school context when user signs in or refreshTick changes.
   // NOTE: pathname is NOT a dependency — we don't want to re-run the entire

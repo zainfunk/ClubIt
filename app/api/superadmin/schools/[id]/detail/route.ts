@@ -5,10 +5,21 @@ import { createServiceClient } from '@/lib/supabase'
 async function requireSuperAdmin() {
   const { userId } = await auth()
   if (!userId) return null
+
+  const db = createServiceClient()
+  const { data: userRow } = await db
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (userRow?.role === 'superadmin') return userId
+
   const client = await clerkClient()
   const user = await client.users.getUser(userId)
-  if (user.publicMetadata?.role !== 'superadmin') return null
-  return userId
+  if (user.publicMetadata?.role === 'superadmin') return userId
+
+  return null
 }
 
 export async function GET(
