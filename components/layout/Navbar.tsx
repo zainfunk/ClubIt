@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useClerk } from '@clerk/nextjs'
 import { useMockAuth } from '@/lib/mock-auth'
-import { GraduationCap, LayoutDashboard, Calendar, FileText, Compass, User, ShieldCheck, MessageSquare, Settings } from 'lucide-react'
+import { GraduationCap, LayoutDashboard, Calendar, FileText, Compass, User, ShieldCheck, MessageSquare, Settings, LogOut } from 'lucide-react'
 import Avatar from '@/components/Avatar'
 import { HelpButton } from '@/components/HelpTour'
 
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const { actualUser, schoolName } = useMockAuth()
+  const { signOut } = useClerk()
   const pathname = usePathname()
 
   const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(actualUser.role))
@@ -113,6 +115,13 @@ export default function Sidebar() {
               {actualUser.role}
             </span>
           </div>
+          <button
+            onClick={() => signOut({ redirectUrl: '/sign-in' })}
+            className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </aside>

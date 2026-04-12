@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useUser } from '@clerk/nextjs'
-import { Hash, CheckCircle } from 'lucide-react'
+import { useUser, useClerk } from '@clerk/nextjs'
+import { Hash, CheckCircle, LogOut } from 'lucide-react'
 import { saveSchoolSession, useMockAuth } from '@/lib/mock-auth'
 
 export default function JoinPage() {
   const router = useRouter()
   const { user: clerkUser } = useUser()
+  const { signOut } = useClerk()
   const { refreshSchoolContext } = useMockAuth()
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
@@ -75,13 +76,23 @@ export default function JoinPage() {
             Your school administrator provided a code to join.
           </p>
           {clerkUser && (
-            <div className="mt-3 inline-flex items-center gap-2 bg-gray-100 rounded-full px-4 py-1.5">
-              <div className="w-5 h-5 rounded-full bg-black text-white text-[10px] font-bold flex items-center justify-center">
-                {(clerkUser.fullName ?? clerkUser.username ?? '?')[0].toUpperCase()}
+            <div className="mt-3 flex flex-col items-center gap-2">
+              <div className="inline-flex items-center gap-2 bg-gray-100 rounded-full px-4 py-1.5">
+                <div className="w-5 h-5 rounded-full bg-black text-white text-[10px] font-bold flex items-center justify-center">
+                  {(clerkUser.fullName ?? clerkUser.username ?? '?')[0].toUpperCase()}
+                </div>
+                <span className="text-xs font-medium text-gray-700">
+                  {clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.username}
+                </span>
               </div>
-              <span className="text-xs font-medium text-gray-700">
-                {clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.username}
-              </span>
+              <button
+                type="button"
+                onClick={() => signOut({ redirectUrl: '/sign-in' })}
+                className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+              >
+                <LogOut className="w-3 h-3" />
+                Not you? Switch account
+              </button>
             </div>
           )}
         </div>
