@@ -277,6 +277,22 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [isLoaded, clerkUser?.id, pathname, refreshTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Listen for storage changes from other tabs — if another tab signs into
+  // a different account and overwrites the school session, re-sync.
+  useEffect(() => {
+    if (!clerkUser?.id) return
+
+    function onStorage(e: StorageEvent) {
+      if (e.key === lsKey(clerkUser!.id)) {
+        // Our user's session changed in another tab — re-sync
+        setRefreshTick((t) => t + 1)
+      }
+    }
+
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [clerkUser?.id])
+
   const currentUser: User = devRole
     ? { ...baseUser, role: devRole }
     : baseUser

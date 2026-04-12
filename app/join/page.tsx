@@ -74,6 +74,16 @@ export default function JoinPage() {
           <p className="text-gray-500 mt-1 text-sm">
             Your school administrator provided a code to join.
           </p>
+          {clerkUser && (
+            <div className="mt-3 inline-flex items-center gap-2 bg-gray-100 rounded-full px-4 py-1.5">
+              <div className="w-5 h-5 rounded-full bg-black text-white text-[10px] font-bold flex items-center justify-center">
+                {(clerkUser.fullName ?? clerkUser.username ?? '?')[0].toUpperCase()}
+              </div>
+              <span className="text-xs font-medium text-gray-700">
+                {clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.username}
+              </span>
+            </div>
+          )}
         </div>
 
         <form onSubmit={submit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-5">
