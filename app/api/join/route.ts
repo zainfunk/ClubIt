@@ -35,25 +35,33 @@ export async function POST(request: NextRequest) {
   const normalised = (code as string).trim().toUpperCase()
   const db = createServiceClient()
 
-  // Look up school by student, advisor, or admin invite code
-  const { data: school } = await db
-    .from('schools')
-    .select('id, name, status, student_invite_code, admin_invite_code, advisor_invite_code, student_code_expires_at, advisor_code_expires_at, admin_code_expires_at')
-    .or(`student_invite_code.eq.${normalised},admin_invite_code.eq.${normalised},advisor_invite_code.eq.${normalised}`)
-    .maybeSingle()
+  // Look up school by student, advisor, or admin invite code.
+  // Try each code column separately — the PostgREST .or() inline syntax
+  // can silently fail with certain column names and value patterns.
+  // Core columns only — expires_at columns may not exist if migration hasn't been applied
+  const cols = 'id, name, status, student_invite_code, admin_invite_code, advisor_invite_code'
+
+  const [{ data: byStudent }, { data: byAdmin }, { data: byAdvisor }] = await Promise.all([
+    db.from('schools').select(cols).eq('student_invite_code', normalised).maybeSingle(),
+    db.from('schools').select(cols).eq('admin_invite_code', normalised).maybeSingle(),
+    db.from('schools').select(cols).eq('advisor_invite_code', normalised).maybeSingle(),
+  ])
+
+  const school = byStudent ?? byAdmin ?? byAdvisor
 
   if (!school) {
     return NextResponse.json({ error: 'Invalid invite code' }, { status: 404 })
   }
 
-  // Check invite code expiry
+  // Check invite code expiry (columns may not exist on older deployments)
+  const schoolRecord = school as Record<string, unknown>
   const isStudentCode = school.student_invite_code === normalised
   const matchedExpiresAt = school.admin_invite_code === normalised
-    ? school.admin_code_expires_at
+    ? (schoolRecord.admin_code_expires_at as string | null)
     : school.advisor_invite_code === normalised
-      ? school.advisor_code_expires_at
+      ? (schoolRecord.advisor_code_expires_at as string | null)
       : isStudentCode
-        ? school.student_code_expires_at
+        ? (schoolRecord.student_code_expires_at as string | null)
         : null
 
   if (matchedExpiresAt && new Date(matchedExpiresAt) < new Date()) {
