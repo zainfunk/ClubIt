@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { stripe } from '@/lib/stripe'
+import { getStripe } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase'
 
 // POST — create a Stripe Checkout Session for the $500/year school subscription.
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
   const origin = request.headers.get('origin') ?? 'http://localhost:3000'
 
-  const session = await stripe.checkout.sessions.create({
+  const session = await getStripe().checkout.sessions.create({
     mode: 'subscription',
     line_items: [
       {

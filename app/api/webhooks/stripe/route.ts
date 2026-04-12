@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { stripe } from '@/lib/stripe'
+import { getStripe } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase'
 
 // Stripe sends raw body — disable Next.js body parsing.
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   if (webhookSecret) {
     try {
-      event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
+      event = getStripe().webhooks.constructEvent(body, sig, webhookSecret)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       console.error('Stripe webhook signature verification failed:', message)
