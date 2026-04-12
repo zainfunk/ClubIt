@@ -29,6 +29,7 @@ import {
 export default function LandingPage() {
   const { user, isSignedIn } = useUser()
   const { signOut } = useClerk()
+  const isSuperAdmin = (user?.publicMetadata?.role as string | undefined) === 'superadmin'
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [capacity, setCapacity] = useState(12)
@@ -84,10 +85,10 @@ export default function LandingPage() {
             {isSignedIn ? (
               <>
                 <Link
-                  href="/dashboard"
+                  href={isSuperAdmin ? '/superadmin' : '/dashboard'}
                   className="px-4 h-9 inline-flex items-center text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-lg shadow-slate-900/10 transition"
                 >
-                  Dashboard
+                  {isSuperAdmin ? 'Schools' : 'Dashboard'}
                 </Link>
                 <button
                   onClick={() => signOut({ redirectUrl: '/' })}
@@ -132,7 +133,7 @@ export default function LandingPage() {
             <div className="flex gap-2 pt-2">
               {isSignedIn ? (
                 <>
-                  <Link href="/dashboard" className="flex-1 h-10 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white font-semibold">Dashboard</Link>
+                  <Link href={isSuperAdmin ? '/superadmin' : '/dashboard'} className="flex-1 h-10 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white font-semibold">{isSuperAdmin ? 'Schools' : 'Dashboard'}</Link>
                   <button onClick={() => signOut({ redirectUrl: '/' })} className="flex-1 h-10 inline-flex items-center justify-center rounded-lg border border-slate-200 font-semibold">Sign Out</button>
                 </>
               ) : (
