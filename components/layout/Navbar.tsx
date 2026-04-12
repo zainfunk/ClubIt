@@ -47,7 +47,7 @@ export default function Sidebar() {
           <GraduationCap className="w-5 h-5" />
         </div>
         <div>
-          <Link href="/dashboard">
+          <Link href="/landing">
             <h2
               className="text-lg font-bold text-slate-900 leading-none"
               style={{ fontFamily: 'var(--font-manrope)' }}
