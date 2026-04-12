@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { Club, Role } from '@/types'
+import { sanitizeText, sanitizeUrl } from '@/lib/sanitize'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,11 +76,15 @@ function parseCapacity(value: unknown) {
   return Math.round(parsed)
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const requester = await getRequesterContext()
   if (!requester) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  const { searchParams } = new URL(request.url)
+  const limit = Math.min(parseInt(searchParams.get('limit') ?? '100') || 100, 200)
+  const offset = parseInt(searchParams.get('offset') ?? '0') || 0
 
   if (!requester.schoolId) {
     return NextResponse.json({
@@ -95,6 +100,7 @@ export async function GET() {
     .select('id, name, description, icon_url, capacity, advisor_id, auto_accept, tags, event_creator_ids, created_at')
     .eq('school_id', requester.schoolId)
     .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1)
 
   if (clubsError) {
     console.error('clubs load error', clubsError)
@@ -147,6 +153,9 @@ export async function GET() {
     myMembershipClubIds: (memberships ?? [])
       .filter((membership) => membership.user_id === requester.userId)
       .map((membership) => membership.club_id),
+    hasMore: (clubRows ?? []).length === limit,
+    offset,
+    limit,
   })
 }
 
@@ -170,13 +179,13 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json() as Record<string, unknown>
-  const name = typeof body.name === 'string' ? body.name.trim() : ''
-  const description = typeof body.description === 'string' ? body.description.trim() : ''
-  const iconUrl = typeof body.iconUrl === 'string' ? body.iconUrl.trim() : ''
+  const name = typeof body.name === 'string' ? sanitizeText(body.name.trim()) : ''
+  const description = typeof body.description === 'string' ? sanitizeText(body.description.trim()) : ''
+  const iconUrl = typeof body.iconUrl === 'string' ? sanitizeUrl(body.iconUrl.trim()) : ''
   const tags = Array.isArray(body.tags)
     ? body.tags
         .filter((tag: unknown): tag is string => typeof tag === 'string')
-        .map((tag: string) => tag.trim())
+        .map((tag: string) => sanitizeText(tag.trim()))
         .filter(Boolean)
     : []
   const ownerId = typeof body.advisorId === 'string' && body.advisorId.trim()

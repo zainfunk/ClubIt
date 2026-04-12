@@ -8,6 +8,7 @@ import { Users, BookOpen, Pin, Calendar, MessageSquare, CheckCircle, Clock, Aler
 import { Skeleton } from '@/components/ui/Skeleton'
 import type { Club, ClubEvent, ClubNews, JoinRequest } from '@/types'
 import { toast } from 'sonner'
+import { cachedFetch, invalidateCachePrefix } from '@/lib/fetch-cache'
 
 function getPattern(club: Club): 'chess' | 'art' | 'robotics' {
   const tags = (club.tags ?? []).map((t) => t.toLowerCase())
@@ -37,8 +38,14 @@ export default function DashboardPage() {
     // Guard on id — the server resolves school context.
     if (!currentUser.id) return
 
-    fetch('/api/school/dashboard', { cache: 'no-store' })
-      .then((r) => r.json())
+    cachedFetch<{
+        clubs?: Club[]
+        advisorNames?: Record<string, string>
+        pinnedNews?: Record<string, ClubNews>
+        nextEvents?: Record<string, ClubEvent>
+        pendingRequests?: JoinRequest[]
+        issueReports?: { id: string; reporter_name: string; reporter_email: string; message: string; status: string; created_at: string }[]
+      }>('/api/school/dashboard', { ttl: 30_000 })
       .then((payload) => {
         setMyClubs(payload.clubs ?? [])
         setAdvisorNames(payload.advisorNames ?? {})
@@ -59,6 +66,7 @@ export default function DashboardPage() {
     const { error } = await supabase.from('issue_reports').update({ status: 'resolved' }).eq('id', id)
     if (error) { toast.error('Failed to resolve issue'); return }
     setIssueReports((prev) => prev.map((r) => r.id === id ? { ...r, status: 'resolved' } : r))
+    invalidateCachePrefix('/api/school/dashboard')
     toast.success('Issue resolved')
   }
 

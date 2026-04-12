@@ -26,6 +26,8 @@ export default function EventsPage() {
   const [clubNames, setClubNames] = useState<Record<string, { name: string; iconUrl?: string }>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const PAGE_SIZE = 12
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
   useEffect(() => {
     if (!currentUser.schoolId) return
@@ -107,7 +109,7 @@ export default function EventsPage() {
             className="w-full pl-9 pr-4 py-2.5 bg-gray-100 border-none rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
             placeholder="Search events..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE) }}
           />
         </div>
       </header>
@@ -117,7 +119,7 @@ export default function EventsPage() {
         {(['upcoming', 'past', 'all'] as const).map((f) => (
           <button
             key={f}
-            onClick={() => setFilter(f)}
+            onClick={() => { setFilter(f); setVisibleCount(PAGE_SIZE) }}
             className={`px-5 py-2 rounded-full text-[11px] font-bold uppercase tracking-widest transition-colors ${
               filter === f
                 ? 'bg-[#0058be] text-white'
@@ -172,7 +174,7 @@ export default function EventsPage() {
         </div>
       ) : (
         <div className="space-y-8">
-          {publicEvents.map((event) => {
+          {publicEvents.slice(0, visibleCount).map((event) => {
             const club = clubNames[event.clubId]
             const isPast = event.date < today
             const date = new Date(event.date + 'T00:00:00')
@@ -255,6 +257,16 @@ export default function EventsPage() {
               </div>
             )
           })}
+          {publicEvents.length > visibleCount && (
+            <div className="text-center pt-4">
+              <button
+                onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
+                className="px-8 py-2.5 rounded-full text-sm font-bold text-[#0058be] border border-blue-200 hover:bg-blue-50 transition-colors"
+              >
+                Show more ({publicEvents.length - visibleCount} remaining)
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

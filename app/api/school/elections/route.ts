@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { Role, SchoolElection } from '@/types'
+import { sanitizeText } from '@/lib/sanitize'
 
 export const dynamic = 'force-dynamic'
 
@@ -87,8 +88,8 @@ export async function POST(request: NextRequest) {
     candidateUserIds?: string[]
   }
 
-  const positionTitle = body.positionTitle?.trim()
-  const description = body.description?.trim() ?? ''
+  const positionTitle = body.positionTitle?.trim() ? sanitizeText(body.positionTitle.trim()) : undefined
+  const description = body.description?.trim() ? sanitizeText(body.description.trim()) : ''
   const candidateUserIds = body.candidateUserIds ?? []
 
   if (!positionTitle) {

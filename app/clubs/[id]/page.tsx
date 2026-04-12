@@ -13,9 +13,11 @@ import {
   ClockIcon, Vote, Plus, Trash2, UserCheck, Pencil, Newspaper, Camera,
   MessageCircle, Tv, Video, Link as LinkIcon, QrCode, Copy, ArrowLeft, Mail,
 } from 'lucide-react'
-import { User, Club, JoinRequest, LeadershipPosition, Poll, ClubEvent, ClubNews, SocialLink, SocialPlatform, MeetingTime, AttendanceRecord, AttendanceSession } from '@/types'
+import { User, Club, JoinRequest, LeadershipPosition, Poll, ClubEvent, ClubNews as ClubNewsType, SocialLink, SocialPlatform, MeetingTime, AttendanceRecord, AttendanceSession } from '@/types'
 import Avatar from '@/components/Avatar'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import ClubNews from '@/components/clubs/ClubNews'
+import ClubEvents from '@/components/clubs/ClubEvents'
 import { toast } from 'sonner'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -53,7 +55,7 @@ export default function ClubDetailPage({ params }: PageProps) {
   const [usersById, setUsersById] = useState<Record<string, User>>({})
 
   const [clubEvents, setClubEvents] = useState<ClubEvent[]>([])
-  const [clubNews, setClubNews] = useState<ClubNews[]>([])
+  const [clubNews, setClubNews] = useState<ClubNewsType[]>([])
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([])
 
   async function loadDetail(signal: AbortSignal) {
@@ -930,272 +932,58 @@ export default function ClubDetailPage({ params }: PageProps) {
         </aside>
 
         {/* ── Center: News ── */}
-        <section className="col-span-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>
-              News
-            </h2>
-            {canCreateContent && (
-              <button onClick={() => setShowNewsForm((v) => !v)}
-                className="text-[#0058be] font-bold text-sm hover:underline flex items-center gap-1">
-                <Plus className="w-4 h-4" />Post Update
-              </button>
-            )}
-          </div>
-
-          {/* News creation form */}
-          {canCreateContent && showNewsForm && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
-              <h3 className="text-lg font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>New Post</h3>
-              <Input value={newNewsTitle} onChange={(e) => setNewNewsTitle(e.target.value)} placeholder="Title…" />
-              <textarea value={newNewsContent} onChange={(e) => setNewNewsContent(e.target.value)}
-                placeholder="Write your update…" rows={4}
-                className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-                  <input type="checkbox" checked={newNewsPinned} onChange={(e) => setNewNewsPinned(e.target.checked)} />
-                  Pin to top
-                </label>
-                <div className="flex gap-2">
-                  <button onClick={postNews} disabled={!newNewsTitle.trim() || !newNewsContent.trim()}
-                    className="text-xs font-bold bg-[#0058be] text-white rounded-xl px-5 py-2 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                    Post
-                  </button>
-                  <button onClick={() => setShowNewsForm(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!(isMember || isAdvisor) && (
-            <div className="bg-white rounded-3xl p-8 border border-slate-100 text-center">
-              <p className="text-gray-400 text-sm">Join the club to see updates.</p>
-            </div>
-          )}
-
-          {(isMember || isAdvisor) && clubNews.length === 0 && !showNewsForm && (
-            <div className="bg-white rounded-3xl p-8 border border-slate-100 text-center">
-              <p className="text-gray-400 text-sm">No posts yet.</p>
-            </div>
-          )}
-
-          {(isMember || isAdvisor) && clubNews.map((news) => {
-            const author = resolveUser(news.authorId)
-            const canDelete = isAdvisor || news.authorId === currentUser.id
-            if (news.isPinned) {
-              return (
-                <div key={news.id} className="bg-[#0058be]/5 rounded-3xl p-8 border border-[#0058be]/10 relative overflow-hidden">
-                  <div className="absolute top-4 right-4">
-                    <Newspaper className="w-4 h-4 text-[#0058be]" />
-                  </div>
-                  <div className="flex items-center gap-3 mb-5">
-                    <span className="w-8 h-8 rounded-full bg-[#0058be] flex items-center justify-center text-white shrink-0">
-                      <Newspaper className="w-4 h-4" />
-                    </span>
-                    <span className="text-[#0058be] font-bold text-xs uppercase tracking-widest">Pinned Update</span>
-                  </div>
-                  <h3 className="font-bold text-xl text-slate-900 mb-3" style={{ fontFamily: 'var(--font-manrope)' }}>
-                    {news.title}
-                  </h3>
-                  <p className="text-gray-600 leading-relaxed mb-6">{news.content}</p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400 text-xs font-medium">
-                      {author?.name} · {formatTime(news.createdAt)}
-                    </span>
-                    {canDelete && (
-                      <button onClick={() => deleteNews(news.id)} className="text-gray-300 hover:text-red-400 transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            }
-            return (
-              <div key={news.id} className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm hover:-translate-y-1 transition-transform">
-                <div className="flex items-center gap-2 mb-4 text-slate-400">
-                  <Clock className="w-4 h-4" />
-                  <span className="text-xs font-bold uppercase tracking-widest">General Update</span>
-                </div>
-                <h3 className="font-bold text-xl text-slate-900 mb-3" style={{ fontFamily: 'var(--font-manrope)' }}>
-                  {news.title}
-                </h3>
-                <p className="text-gray-600 leading-relaxed">{news.content}</p>
-                <div className="mt-6 pt-6 border-t border-slate-50 flex justify-between items-center">
-                  <span className="text-slate-400 text-xs font-medium">
-                    {author?.name} · {formatTime(news.createdAt)}
-                  </span>
-                  {canDelete && (
-                    <button onClick={() => deleteNews(news.id)} className="text-gray-300 hover:text-red-400 transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </section>
+        <ClubNews
+          news={clubNews}
+          canCreateContent={canCreateContent}
+          isMember={isMember}
+          isAdvisor={isAdvisor}
+          currentUserId={currentUser.id}
+          resolveUser={resolveUser}
+          showForm={showNewsForm}
+          setShowForm={setShowNewsForm}
+          title={newNewsTitle}
+          setTitle={setNewNewsTitle}
+          content={newNewsContent}
+          setContent={setNewNewsContent}
+          pinned={newNewsPinned}
+          setPinned={setNewNewsPinned}
+          onPost={postNews}
+          onDelete={deleteNews}
+          formatTime={formatTime}
+        />
 
         {/* ── Right: Events + Schedule ── */}
-        <section className="col-span-3 space-y-5" data-tour-id="tour-events-section">
-          {/* Upcoming Events */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>
-                Upcoming Events
-              </h3>
-              {canCreateContent && (
-                <button onClick={() => setShowEventForm((v) => !v)}
-                  className="text-[#0058be] font-bold text-xs hover:underline flex items-center gap-1">
-                  <Plus className="w-3.5 h-3.5" />Add
-                </button>
-              )}
-            </div>
-
-            {/* Event creation form */}
-            {canCreateContent && showEventForm && (
-              <div className="mb-6 p-5 bg-white rounded-2xl border border-slate-100 shadow-sm space-y-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">New Event</p>
-                <Input value={newEventTitle} onChange={(e) => setNewEventTitle(e.target.value)} placeholder="Event title…" className="h-8 text-sm" />
-                <textarea value={newEventDesc} onChange={(e) => setNewEventDesc(e.target.value)} placeholder="Description…" rows={2}
-                  className="w-full bg-gray-50 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none border border-gray-100" />
-                <div className="grid grid-cols-1 gap-2">
-                  <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Date</label>
-                    <Input type="date" value={newEventDate} onChange={(e) => setNewEventDate(e.target.value)} className="h-8 text-sm" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Location</label>
-                    <Input value={newEventLocation} onChange={(e) => setNewEventLocation(e.target.value)} placeholder="Room 204…" className="h-8 text-sm" />
-                  </div>
-                </div>
-                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-                  <input type="checkbox" checked={newEventPublic} onChange={(e) => setNewEventPublic(e.target.checked)} />
-                  Public event
-                </label>
-                <div className="flex gap-2">
-                  <button onClick={createEvent} disabled={!newEventTitle.trim() || !newEventDate}
-                    className="text-xs font-bold bg-[#0058be] text-white rounded-lg px-4 py-1.5 hover:bg-blue-700 disabled:opacity-40 transition-colors">
-                    Create
-                  </button>
-                  <button onClick={() => setShowEventForm(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-                </div>
-              </div>
-            )}
-
-            {clubEvents.filter((e) => e.date >= new Date().toISOString().split('T')[0]).length === 0 && !showEventForm && (
-              <p className="text-sm text-gray-400 italic">No upcoming events scheduled.</p>
-            )}
-
-            <div className="space-y-5">
-              {clubEvents.filter((e) => e.date >= new Date().toISOString().split('T')[0]).map((event) => {
-                const date = new Date(event.date + 'T00:00:00')
-                const canDelete = isAdvisor || event.createdBy === currentUser.id
-                return (
-                  <div key={event.id} className="flex gap-4 group">
-                    <div className="w-14 h-16 flex-shrink-0 date-spine-gradient rounded-2xl flex flex-col items-center justify-center">
-                      <span className="text-xs font-bold text-[#0058be] uppercase leading-none">
-                        {date.toLocaleString('en', { month: 'short' })}
-                      </span>
-                      <span className="text-xl font-black text-[#0058be] leading-none mt-1">
-                        {date.getDate()}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-1">
-                        <h4 className="font-bold text-slate-900 group-hover:text-[#0058be] transition-colors leading-snug text-sm">
-                          {event.title}
-                        </h4>
-                        {canDelete && (
-                          <button onClick={() => deleteEvent(event.id)}
-                            className="text-gray-200 hover:text-red-400 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      {event.location && (
-                        <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />{event.location}
-                        </p>
-                      )}
-                      {!event.isPublic && (
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full mt-1 inline-block">
-                          Members only
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Schedule */}
-          {(club.meetingTimes.length > 0 || isAdvisor) && (
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-              <h3 className="text-xl font-bold text-slate-900 mb-5" style={{ fontFamily: 'var(--font-manrope)' }}>
-                Schedule
-              </h3>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Weekly Times</p>
-              <div className="space-y-3">
-                {club.meetingTimes.map((mt) => {
-                  const fmt = (t: string) => {
-                    const [h, m] = t.split(':').map(Number)
-                    const ampm = h >= 12 ? 'PM' : 'AM'
-                    const h12 = h % 12 || 12
-                    return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
-                  }
-                  return (
-                  <div key={mt.id} className="group/mt flex items-start justify-between py-2 border-b border-slate-50 last:border-0">
-                    <div>
-                      <p className="font-semibold text-sm text-slate-900">{DAY_NAMES[mt.dayOfWeek]}s &nbsp;·&nbsp; {fmt(mt.startTime)} – {fmt(mt.endTime)}</p>
-                      {mt.location && (
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3 text-slate-400" />
-                          <p className="text-xs text-slate-500">{mt.location}</p>
-                        </div>
-                      )}
-                    </div>
-                    {isAdvisor && (
-                      <button onClick={() => removeMeetingTime(mt.id)}
-                        className="text-gray-200 hover:text-red-400 opacity-0 group-hover/mt:opacity-100 transition-all shrink-0 mt-1">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  )
-                })}
-
-                {club.meetingTimes.length === 0 && (
-                  <p className="text-slate-400 text-sm italic">No schedule set.</p>
-                )}
-
-                {isAdvisor && (
-                  <div className="pt-4 border-t border-slate-100 space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Add time</p>
-                    <select value={newMeetingDay} onChange={(e) => setNewMeetingDay(Number(e.target.value))}
-                      className="w-full text-xs bg-slate-50 text-slate-700 rounded-lg px-2 py-1.5 border border-slate-200 focus:outline-none">
-                      {DAY_NAMES.map((d, i) => <option key={i} value={i}>{d}s</option>)}
-                    </select>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <input type="time" value={newMeetingStart} onChange={(e) => setNewMeetingStart(e.target.value)}
-                        className="text-xs bg-slate-50 text-slate-700 rounded-lg px-2 py-1.5 border border-slate-200 focus:outline-none" />
-                      <input type="time" value={newMeetingEnd} onChange={(e) => setNewMeetingEnd(e.target.value)}
-                        className="text-xs bg-slate-50 text-slate-700 rounded-lg px-2 py-1.5 border border-slate-200 focus:outline-none" />
-                    </div>
-                    <input value={newMeetingLocation} onChange={(e) => setNewMeetingLocation(e.target.value)}
-                      placeholder="Location (optional)"
-                      className="w-full text-xs bg-slate-50 text-slate-700 rounded-lg px-2 py-1.5 border border-slate-200 focus:outline-none placeholder:text-slate-400" />
-                    <button onClick={addMeetingTime}
-                      className="w-full py-2 bg-[#0058be] hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-colors">
-                      Add
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
+        <ClubEvents
+          events={clubEvents}
+          meetingTimes={club.meetingTimes}
+          canCreateContent={canCreateContent}
+          isAdvisor={isAdvisor}
+          currentUserId={currentUser.id}
+          showEventForm={showEventForm}
+          setShowEventForm={setShowEventForm}
+          newEventTitle={newEventTitle}
+          setNewEventTitle={setNewEventTitle}
+          newEventDesc={newEventDesc}
+          setNewEventDesc={setNewEventDesc}
+          newEventDate={newEventDate}
+          setNewEventDate={setNewEventDate}
+          newEventLocation={newEventLocation}
+          setNewEventLocation={setNewEventLocation}
+          newEventPublic={newEventPublic}
+          setNewEventPublic={setNewEventPublic}
+          onCreateEvent={createEvent}
+          onDeleteEvent={deleteEvent}
+          newMeetingDay={newMeetingDay}
+          setNewMeetingDay={setNewMeetingDay}
+          newMeetingStart={newMeetingStart}
+          setNewMeetingStart={setNewMeetingStart}
+          newMeetingEnd={newMeetingEnd}
+          setNewMeetingEnd={setNewMeetingEnd}
+          newMeetingLocation={newMeetingLocation}
+          setNewMeetingLocation={setNewMeetingLocation}
+          onAddMeetingTime={addMeetingTime}
+          onRemoveMeetingTime={removeMeetingTime}
+        />
       </div>
 
       {/* ── Management Sections ── */}

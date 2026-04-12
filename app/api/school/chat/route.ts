@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
+import { sanitizeText } from '@/lib/sanitize'
 import { Role } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json()
   const clubId = typeof body.clubId === 'string' ? body.clubId.trim() : ''
-  const content = typeof body.content === 'string' ? body.content.trim() : ''
+  const content = typeof body.content === 'string' ? sanitizeText(body.content.trim()) : ''
 
   if (!clubId || !content) {
     return NextResponse.json({ error: 'clubId and content are required' }, { status: 400 })

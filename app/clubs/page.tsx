@@ -8,6 +8,7 @@ import Avatar from '@/components/Avatar'
 import { Search, ArrowRight, Plus, X } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { toast } from 'sonner'
+import { cachedFetch, invalidateCachePrefix } from '@/lib/fetch-cache'
 
 const PATTERNS = [
   'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)',
@@ -68,17 +69,12 @@ export default function ClubsPage() {
     setMyMembershipClubIds(payload.myMembershipClubIds ?? [])
   }
 
-  async function fetchClubsPayload() {
-    const res = await fetch('/api/school/clubs', { cache: 'no-store' })
-    const payload = await res.json()
-    if (!res.ok) {
-      throw new Error(payload.error ?? 'Failed to load clubs')
-    }
-    return payload as {
+  async function fetchClubsPayload(bust = false) {
+    return cachedFetch<{
       clubs?: Club[]
       advisorNames?: Record<string, string>
       myMembershipClubIds?: string[]
-    }
+    }>('/api/school/clubs', { ttl: 30_000, bust })
   }
 
   async function handleCreateClub(e: React.FormEvent) {
@@ -106,7 +102,8 @@ export default function ClubsPage() {
         throw new Error(payload.error ?? 'Failed to create club')
       }
 
-      applyClubsPayload(await fetchClubsPayload())
+      invalidateCachePrefix('/api/school/clubs')
+      applyClubsPayload(await fetchClubsPayload(true))
       setNewName('')
       setNewDesc('')
       setNewIcon('')

@@ -3,6 +3,7 @@ import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { generateInviteCode, generateSetupToken, setupTokenExpiresAt } from '@/lib/schools-store'
 import { Role, SchoolStatus } from '@/types'
+import { sanitizeText } from '@/lib/sanitize'
 
 interface SchoolSnapshot {
   id: string
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest) {
     const { data: school, error } = await db
       .from('schools')
       .insert({
-        name: typeof name === 'string' && name.trim() ? name.trim() : `Dev School ${new Date().toLocaleDateString('en-US')}`,
+        name: typeof name === 'string' && name.trim() ? sanitizeText(name.trim()) : `Dev School ${new Date().toLocaleDateString('en-US')}`,
         district: 'Local Development',
         contact_name: contactName,
         contact_email: contactEmail,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
+import { sanitizeText } from '@/lib/sanitize'
 
 async function requireSuperAdmin() {
   const { userId } = await auth()
@@ -40,9 +41,9 @@ export async function PATCH(
 
   const db = createServiceClient()
 
-  const updates: Record<string, string> = { name: name.trim() }
-  if (district !== undefined) updates.district = district?.trim() ?? ''
-  if (contactName !== undefined) updates.contact_name = contactName.trim()
+  const updates: Record<string, string> = { name: sanitizeText(name.trim()) }
+  if (district !== undefined) updates.district = district?.trim() ? sanitizeText(district.trim()) : ''
+  if (contactName !== undefined) updates.contact_name = sanitizeText(contactName.trim())
   if (contactEmail !== undefined) updates.contact_email = contactEmail.trim()
 
   const { error } = await db

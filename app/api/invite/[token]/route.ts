@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
 import { generateInviteCode } from '@/lib/schools-store'
+import { sanitizeText } from '@/lib/sanitize'
 
 function ensureDevelopmentOnly() {
   if (process.env.NODE_ENV !== 'development') {
@@ -78,9 +79,9 @@ export async function POST(
   const { data: school, error } = await db
     .from('schools')
     .insert({
-      name: name.trim(),
-      district: district?.trim() || null,
-      contact_name: contactName.trim(),
+      name: sanitizeText(name.trim()),
+      district: district?.trim() ? sanitizeText(district.trim()) : null,
+      contact_name: sanitizeText(contactName.trim()),
       contact_email: invite.email,
       status: 'active',
       student_invite_code: studentCode,

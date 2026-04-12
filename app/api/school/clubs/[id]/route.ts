@@ -16,6 +16,7 @@ import {
   AttendanceRecord,
   AttendanceSession,
 } from '@/types'
+import { sanitizeText, sanitizeUrl } from '@/lib/sanitize'
 
 export const dynamic = 'force-dynamic'
 
@@ -366,10 +367,12 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
   if (action === 'save_edit') {
     if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     const { iconUrl, description, tags, socialLinks } = body as { iconUrl?: string; description?: string; tags?: string[]; socialLinks?: { platform: string; url: string }[] }
-    await db.from('clubs').update({ icon_url: iconUrl ?? null, description: description ?? '', tags: tags ?? [] }).eq('id', clubId)
+    const safeDesc = description ? sanitizeText(description) : ''
+    const safeTags = (tags ?? []).map((t) => sanitizeText(t))
+    await db.from('clubs').update({ icon_url: iconUrl ?? null, description: safeDesc, tags: safeTags }).eq('id', clubId)
     await db.from('club_social_links').delete().eq('club_id', clubId)
     if (socialLinks && socialLinks.length > 0) {
-      await db.from('club_social_links').insert(socialLinks.map((sl) => ({ club_id: clubId, platform: sl.platform, url: sl.url })))
+      await db.from('club_social_links').insert(socialLinks.map((sl) => ({ club_id: clubId, platform: sanitizeText(sl.platform), url: sanitizeUrl(sl.url) })))
     }
     return NextResponse.json({ ok: true })
   }
@@ -392,7 +395,7 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
     if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     const { title } = body as { title: string }
     const posId = `lp-${Date.now()}`
-    await db.from('leadership_positions').insert({ id: posId, club_id: clubId, title, user_id: null })
+    await db.from('leadership_positions').insert({ id: posId, club_id: clubId, title: sanitizeText(title), user_id: null })
     return NextResponse.json({ ok: true })
   }
 
@@ -421,7 +424,7 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
     if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     const { dayOfWeek, startTime, endTime, location } = body as { dayOfWeek: number; startTime: string; endTime: string; location?: string }
     const mtId = `mt-${Date.now()}`
-    await db.from('meeting_times').insert({ id: mtId, club_id: clubId, day_of_week: dayOfWeek, start_time: startTime, end_time: endTime, location: location ?? null })
+    await db.from('meeting_times').insert({ id: mtId, club_id: clubId, day_of_week: dayOfWeek, start_time: startTime, end_time: endTime, location: location ? sanitizeText(location) : null })
     return NextResponse.json({ ok: true })
   }
 
@@ -437,7 +440,7 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
     if (!isEventCreator) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     const { title, description, date, location, isPublic } = body as { title: string; description?: string; date: string; location?: string; isPublic?: boolean }
     const eventId = `event-${Date.now()}`
-    await db.from('events').insert({ id: eventId, club_id: clubId, title, description: description ?? '', date, location: location ?? null, is_public: isPublic ?? true, created_by: userId })
+    await db.from('events').insert({ id: eventId, club_id: clubId, title: sanitizeText(title), description: sanitizeText(description ?? ''), date, location: location ? sanitizeText(location) : null, is_public: isPublic ?? true, created_by: userId })
     return NextResponse.json({ ok: true })
   }
 
@@ -455,7 +458,7 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
     const { title, content, isPinned } = body as { title: string; content: string; isPinned?: boolean }
     const newsId = `news-${Date.now()}`
     const createdAt = new Date().toISOString()
-    await db.from('club_news').insert({ id: newsId, club_id: clubId, title, content, author_id: userId, created_at: createdAt, is_pinned: isPinned ?? false })
+    await db.from('club_news').insert({ id: newsId, club_id: clubId, title: sanitizeText(title), content: sanitizeText(content), author_id: userId, created_at: createdAt, is_pinned: isPinned ?? false })
     return NextResponse.json({ ok: true })
   }
 
@@ -471,7 +474,7 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
     const { positionTitle, candidateIds } = body as { positionTitle: string; candidateIds: string[] }
     const pollId = `poll-${Date.now()}`
     const createdAt = new Date().toISOString()
-    await db.from('polls').insert({ id: pollId, club_id: clubId, position_title: positionTitle, created_at: createdAt, is_open: true })
+    await db.from('polls').insert({ id: pollId, club_id: clubId, position_title: sanitizeText(positionTitle), created_at: createdAt, is_open: true })
     await db.from('poll_candidates').insert(candidateIds.map((uid) => ({ poll_id: pollId, user_id: uid })))
     return NextResponse.json({ ok: true })
   }

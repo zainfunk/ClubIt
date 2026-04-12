@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { generateInviteCode } from '@/lib/schools-store'
+import { sanitizeText } from '@/lib/sanitize'
 
 export async function POST(request: NextRequest) {
   const { userId } = await auth()
@@ -34,9 +35,9 @@ export async function POST(request: NextRequest) {
   const { data: school, error } = await db
     .from('schools')
     .insert({
-      name: name.trim(),
-      district: district?.trim() || null,
-      contact_name: contactName.trim(),
+      name: sanitizeText(name.trim()),
+      district: district?.trim() ? sanitizeText(district.trim()) : null,
+      contact_name: sanitizeText(contactName.trim()),
       contact_email: contactEmail.trim().toLowerCase(),
       status: 'active',
       student_invite_code: generateInviteCode('STU'),
