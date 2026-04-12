@@ -1,6 +1,6 @@
 export type Role = 'superadmin' | 'admin' | 'advisor' | 'student'
 
-export type SchoolStatus = 'pending' | 'active' | 'suspended'
+export type SchoolStatus = 'pending' | 'active' | 'suspended' | 'payment_paused'
 
 export interface School {
   id: string
@@ -168,6 +168,37 @@ export interface Notification {
   body?: string
   link?: string
   isRead: boolean
+  createdAt: string
+}
+
+// --- Billing & Subscriptions ---
+
+export type SubscriptionPlan = 'monthly' | 'yearly'
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid' | 'paused'
+
+export interface SubscriptionInfo {
+  id: string
+  schoolId: string
+  stripeCustomerId: string
+  stripeSubscriptionId?: string
+  plan: SubscriptionPlan
+  status: SubscriptionStatus
+  trialEndsAt?: string
+  currentPeriodStart?: string
+  currentPeriodEnd?: string
+  cancelAtPeriodEnd: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PaymentEvent {
+  id: string
+  schoolId?: string
+  stripeEventId: string
+  eventType: string
+  amountCents?: number
+  currency: string
+  status: string
   createdAt: string
 }
 

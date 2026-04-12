@@ -246,6 +246,43 @@ export async function GET(
     }
   }
 
+  // Billing: subscription + payment events
+  const { data: subscriptionRow } = await db
+    .from('subscriptions')
+    .select('*')
+    .eq('school_id', id)
+    .maybeSingle()
+
+  const { data: paymentEventRows } = await db
+    .from('payment_events')
+    .select('*')
+    .eq('school_id', id)
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  const subscription = subscriptionRow
+    ? {
+        plan: subscriptionRow.plan,
+        status: subscriptionRow.status,
+        stripeCustomerId: subscriptionRow.stripe_customer_id,
+        stripeSubscriptionId: subscriptionRow.stripe_subscription_id,
+        trialEndsAt: subscriptionRow.trial_ends_at,
+        currentPeriodStart: subscriptionRow.current_period_start,
+        currentPeriodEnd: subscriptionRow.current_period_end,
+        cancelAtPeriodEnd: subscriptionRow.cancel_at_period_end,
+        createdAt: subscriptionRow.created_at,
+      }
+    : null
+
+  const paymentEvents = (paymentEventRows ?? []).map((e) => ({
+    id: e.id,
+    eventType: e.event_type,
+    amountCents: e.amount_cents,
+    currency: e.currency,
+    status: e.status,
+    createdAt: e.created_at,
+  }))
+
   return NextResponse.json({
     school,
     stats,
@@ -260,5 +297,7 @@ export async function GET(
     recentActivity,
     issueReports,
     settings,
+    subscription,
+    paymentEvents,
   })
 }

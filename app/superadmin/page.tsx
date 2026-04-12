@@ -8,7 +8,7 @@ import {
   Users, BookOpen, Activity, Server, Globe, Shield,
   BarChart3, AlertTriangle, Eye, Settings, Bug, MessageSquare,
   Calendar, ArrowRight, ChevronRight, Search, Loader2,
-  Trash2, Pencil, Save,
+  Trash2, Pencil, Save, CreditCard,
 } from 'lucide-react'
 import { School as SchoolType } from '@/types'
 
@@ -16,9 +16,9 @@ import { School as SchoolType } from '@/types'
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-type Filter = 'all' | 'pending' | 'active' | 'suspended'
+type Filter = 'all' | 'pending' | 'active' | 'suspended' | 'payment_paused'
 
-type DetailTab = 'overview' | 'users' | 'clubs' | 'activity' | 'issues' | 'debug'
+type DetailTab = 'overview' | 'users' | 'clubs' | 'activity' | 'issues' | 'billing' | 'debug'
 
 interface SchoolDetailData {
   school: SchoolType
@@ -45,6 +45,25 @@ interface SchoolDetailData {
     status: string; created_at: string
   }>
   settings: Record<string, unknown> | null
+  subscription: {
+    plan: string
+    status: string
+    stripeCustomerId: string
+    stripeSubscriptionId?: string
+    trialEndsAt?: string
+    currentPeriodStart?: string
+    currentPeriodEnd?: string
+    cancelAtPeriodEnd: boolean
+    createdAt?: string
+  } | null
+  paymentEvents: Array<{
+    id: string
+    eventType: string
+    amountCents: number | null
+    currency: string
+    status: string
+    createdAt: string
+  }>
 }
 
 /* ------------------------------------------------------------------ */
@@ -55,6 +74,7 @@ const STATUS_STYLES: Record<string, string> = {
   pending: 'bg-amber-50 text-amber-700',
   active: 'bg-green-50 text-green-700',
   suspended: 'bg-red-50 text-red-700',
+  payment_paused: 'bg-orange-50 text-orange-700',
 }
 
 const COLOR_MAP = {
@@ -70,6 +90,7 @@ const DETAIL_TABS: { key: DetailTab; label: string; icon: React.ReactNode }[] = 
   { key: 'clubs', label: 'Clubs', icon: <BookOpen className="w-4 h-4" /> },
   { key: 'activity', label: 'Activity', icon: <Activity className="w-4 h-4" /> },
   { key: 'issues', label: 'Issues', icon: <AlertTriangle className="w-4 h-4" /> },
+  { key: 'billing', label: 'Billing', icon: <CreditCard className="w-4 h-4" /> },
   { key: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" /> },
 ]
 
@@ -686,6 +707,108 @@ function SchoolDetailModal({
                 </div>
               )}
 
+              {/* ---- Billing ---- */}
+              {tab === 'billing' && (
+                <div className="space-y-4">
+                  {data?.subscription ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <p className="text-xs text-gray-400 mb-1">Plan</p>
+                          <p className="text-sm font-bold capitalize">{data.subscription.plan}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <p className="text-xs text-gray-400 mb-1">Status</p>
+                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                            data.subscription.status === 'active' ? 'bg-green-50 text-green-700' :
+                            data.subscription.status === 'trialing' ? 'bg-blue-50 text-blue-700' :
+                            data.subscription.status === 'past_due' ? 'bg-amber-50 text-amber-700' :
+                            data.subscription.status === 'canceled' ? 'bg-red-50 text-red-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {data.subscription.status.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        {data.subscription.trialEndsAt && (
+                          <div className="bg-gray-50 rounded-xl p-4">
+                            <p className="text-xs text-gray-400 mb-1">Trial Ends</p>
+                            <p className="text-sm font-medium">{new Date(data.subscription.trialEndsAt).toLocaleDateString()}</p>
+                          </div>
+                        )}
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <p className="text-xs text-gray-400 mb-1">Current Period End</p>
+                          <p className="text-sm font-medium">
+                            {data.subscription.currentPeriodEnd
+                              ? new Date(data.subscription.currentPeriodEnd).toLocaleDateString()
+                              : '—'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {data.subscription.cancelAtPeriodEnd && (
+                        <div className="rounded-xl bg-amber-50 border border-amber-100 p-3">
+                          <p className="text-sm text-amber-800">Subscription will cancel at period end.</p>
+                        </div>
+                      )}
+
+                      {data.subscription.stripeCustomerId && (
+                        <a
+                          href={`https://dashboard.stripe.com/customers/${data.subscription.stripeCustomerId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          View in Stripe Dashboard
+                        </a>
+                      )}
+
+                      {/* Payment History */}
+                      {data.paymentEvents && data.paymentEvents.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 mb-2">Payment History</p>
+                          <div className="bg-gray-50 rounded-xl overflow-hidden">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-gray-200 text-left">
+                                  <th className="px-4 py-2 text-xs font-medium text-gray-500">Date</th>
+                                  <th className="px-4 py-2 text-xs font-medium text-gray-500">Event</th>
+                                  <th className="px-4 py-2 text-xs font-medium text-gray-500">Amount</th>
+                                  <th className="px-4 py-2 text-xs font-medium text-gray-500">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {data.paymentEvents.map((evt) => (
+                                  <tr key={evt.id}>
+                                    <td className="px-4 py-2 text-gray-700">{new Date(evt.createdAt).toLocaleDateString()}</td>
+                                    <td className="px-4 py-2 text-gray-700">{evt.eventType.replace(/_/g, ' ').replace(/\./g, ' ')}</td>
+                                    <td className="px-4 py-2 text-gray-700">{evt.amountCents != null ? `$${(evt.amountCents / 100).toFixed(2)}` : '—'}</td>
+                                    <td className="px-4 py-2">
+                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                        evt.status === 'succeeded' ? 'bg-green-50 text-green-700' :
+                                        evt.status === 'failed' ? 'bg-red-50 text-red-700' :
+                                        'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {evt.status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-center py-12">
+                      <CreditCard className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+                      <p className="text-sm text-gray-500">No subscription found for this school.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* ---- Debug ---- */}
               {tab === 'debug' && school && (
                 <div className="space-y-4">
@@ -1174,6 +1297,7 @@ export default function SuperAdminPage() {
     pending: schools.filter(s => s.status === 'pending').length,
     active: schools.filter(s => s.status === 'active').length,
     suspended: schools.filter(s => s.status === 'suspended').length,
+    payment_paused: schools.filter(s => s.status === 'payment_paused').length,
   }
 
   // Aggregate stats for the dashboard
@@ -1263,7 +1387,7 @@ export default function SuperAdminPage() {
 
       {/* Filters */}
       <div className="flex gap-2 mb-6">
-        {(['all', 'pending', 'active', 'suspended'] as Filter[]).map(f => (
+        {(['all', 'pending', 'active', 'suspended', 'payment_paused'] as Filter[]).map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}

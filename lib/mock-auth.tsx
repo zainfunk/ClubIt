@@ -64,7 +64,7 @@ function getRequiredRoute(pathname: string, role: Role, schoolId?: string, schoo
       : '/onboard/pending'
   }
 
-  if (schoolStatus === 'suspended') {
+  if (schoolStatus === 'suspended' || schoolStatus === 'payment_paused') {
     return pathname.startsWith('/school/suspended') || pathname.startsWith('/dev')
       ? null
       : '/school/suspended'

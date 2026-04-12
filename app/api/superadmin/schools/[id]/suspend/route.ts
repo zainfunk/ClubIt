@@ -30,7 +30,10 @@ export async function POST(
 
   if (!school) return NextResponse.json({ error: 'School not found' }, { status: 404 })
 
-  const newStatus = school.status === 'suspended' ? 'active' : 'suspended'
+  // payment_paused → active is a superadmin override (no payment required)
+  const newStatus = (school.status === 'suspended' || school.status === 'payment_paused')
+    ? 'active'
+    : 'suspended'
 
   const { error } = await db
     .from('schools')

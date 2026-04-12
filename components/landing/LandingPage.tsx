@@ -33,6 +33,7 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [capacity, setCapacity] = useState(12)
+  const [pricingInterval, setPricingInterval] = useState<'monthly' | 'yearly'>('yearly')
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -664,20 +665,52 @@ export default function LandingPage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <div className="text-sm font-bold text-slate-500 uppercase tracking-widest">ClubIt for Schools</div>
-                  <div className="text-xl font-bold mt-1" style={{ fontFamily: 'var(--font-manrope)' }}>Annual plan</div>
                 </div>
                 <span className="text-[10px] font-extrabold uppercase tracking-widest px-3 py-1.5 rounded-full bg-gradient-to-r from-indigo-600 to-emerald-500 text-white shadow-lg">
                   Everything included
                 </span>
               </div>
 
+              {/* Billing toggle */}
+              <div className="flex items-center justify-center gap-1 p-1 rounded-full bg-slate-100 mb-6">
+                <button
+                  onClick={() => setPricingInterval('monthly')}
+                  className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${
+                    pricingInterval === 'monthly'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  onClick={() => setPricingInterval('yearly')}
+                  className={`px-5 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-1.5 ${
+                    pricingInterval === 'yearly'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Yearly
+                  <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                    Save $100
+                  </span>
+                </button>
+              </div>
+
               <div className="flex items-baseline gap-2 mb-2">
                 <span className="text-6xl font-extrabold tracking-tight" style={{ fontFamily: 'var(--font-manrope)' }}>
-                  $500
+                  {pricingInterval === 'yearly' ? '$500' : '$50'}
                 </span>
-                <span className="text-lg text-slate-500 font-semibold">/ year</span>
+                <span className="text-lg text-slate-500 font-semibold">
+                  / {pricingInterval === 'yearly' ? 'year' : 'month'}
+                </span>
               </div>
-              <p className="text-slate-600 mb-8">One flat rate. Unlimited students, teachers, and clubs.</p>
+              <p className="text-slate-600 mb-8">
+                {pricingInterval === 'yearly'
+                  ? 'One flat rate. Unlimited students, teachers, and clubs.'
+                  : '$600/year billed monthly. Unlimited students, teachers, and clubs.'}
+              </p>
 
               <ul className="space-y-3 mb-8">
                 {[
@@ -702,11 +735,11 @@ export default function LandingPage() {
                 href="/subscribe"
                 className="group w-full inline-flex items-center justify-center gap-2 h-14 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-base shadow-xl shadow-slate-900/20 transition-all hover:scale-[1.01]"
               >
-                Subscribe — $500/year
+                Start free trial — {pricingInterval === 'yearly' ? '$500/year' : '$50/month'}
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
               <p className="text-center text-xs text-slate-500 mt-4">
-                Billed annually. Cancel anytime. Purchase orders accepted for schools.
+                30-day free trial. Cancel anytime. Purchase orders accepted for schools.
               </p>
 
               <div className="mt-6 pt-6 border-t border-slate-100">
@@ -799,7 +832,7 @@ export default function LandingPage() {
               },
               {
                 q: 'How does billing work?',
-                a: 'One flat $500/year fee per school, billed annually. We accept credit cards, Apple Pay, Google Pay, and school purchase orders.',
+                a: '$500/year or $50/month per school. We accept credit cards, Apple Pay, Google Pay, and school purchase orders.',
               },
               {
                 q: 'Can we import existing club rosters?',

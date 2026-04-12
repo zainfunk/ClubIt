@@ -1179,3 +1179,46 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
+
+-- ============================================================
+-- Subscriptions & Billing (Stripe)
+-- ============================================================
+
+-- Allow 'payment_paused' status on schools
+ALTER TABLE schools DROP CONSTRAINT IF EXISTS schools_status_check;
+ALTER TABLE schools ADD CONSTRAINT schools_status_check
+  CHECK (status IN ('pending', 'active', 'suspended', 'payment_paused'));
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id uuid NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+  stripe_customer_id text NOT NULL,
+  stripe_subscription_id text UNIQUE,
+  plan text NOT NULL CHECK (plan IN ('monthly', 'yearly')),
+  status text NOT NULL DEFAULT 'trialing' CHECK (status IN (
+    'trialing', 'active', 'past_due', 'canceled', 'unpaid', 'paused'
+  )),
+  trial_ends_at timestamptz,
+  current_period_start timestamptz,
+  current_period_end timestamptz,
+  cancel_at_period_end boolean DEFAULT false,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE(school_id)
+);
+
+CREATE TABLE IF NOT EXISTS payment_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id uuid REFERENCES schools(id) ON DELETE SET NULL,
+  stripe_event_id text UNIQUE NOT NULL,
+  event_type text NOT NULL,
+  amount_cents integer,
+  currency text DEFAULT 'usd',
+  status text NOT NULL,
+  metadata jsonb DEFAULT '{}',
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_school ON subscriptions(school_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_sub ON subscriptions(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_payment_events_school ON payment_events(school_id, created_at DESC);
