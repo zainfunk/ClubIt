@@ -667,7 +667,7 @@ export default function LandingPage() {
               </ul>
 
               <Link
-                href="/sign-up"
+                href="/subscribe"
                 className="group w-full inline-flex items-center justify-center gap-2 h-14 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-base shadow-xl shadow-slate-900/20 transition-all hover:scale-[1.01]"
               >
                 Subscribe — $500/year

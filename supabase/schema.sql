@@ -402,6 +402,10 @@ create table if not exists schools (
 -- Add advisor_invite_code to existing schools tables (migration for existing deployments)
 alter table schools add column if not exists advisor_invite_code text unique;
 
+-- Stripe subscription tracking
+alter table schools add column if not exists stripe_customer_id text;
+alter table schools add column if not exists stripe_subscription_status text default 'none';
+
 -- Add school_id to users (nullable: superadmin users have no school)
 alter table users add column if not exists school_id uuid references schools(id) on delete set null;
 
