@@ -149,6 +149,9 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [isResolved, pathname, baseUser.role, baseUser.schoolId, schoolStatus, router])
 
+  // Sync school context when user signs in or refreshTick changes.
+  // NOTE: pathname is NOT a dependency — we don't want to re-run the entire
+  // async sync on every navigation, which causes flash/redirect loops.
   useEffect(() => {
     if (!isLoaded || !clerkUser) return
 
@@ -191,21 +194,37 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const cached = getSchoolSession(id)
-    if (cached) {
+    // If Clerk already tells us the role, apply it immediately so we
+    // don't flash as "student" while the DB sync runs.
+    if (clerkRole) {
+      const cached = getSchoolSession(id)
       applySchoolState({
-        role: clerkRole ?? cached.role,
-        schoolId: cached.schoolId,
-        schoolName: cached.schoolName,
-        schoolStatus: cached.schoolStatus ?? null,
-        setupCompletedAt: cached.setupCompletedAt ?? null,
+        role: clerkRole,
+        schoolId: cached?.schoolId,
+        schoolName: cached?.schoolName ?? null,
+        schoolStatus: cached?.schoolStatus ?? null,
+        setupCompletedAt: cached?.setupCompletedAt ?? null,
         persist: false,
       })
-      // Cache hit: safe to redirect immediately
-      setIsResolved(true)
+      // If superadmin (no school needed) or have a cached school, resolve now
+      if (clerkRole === 'superadmin' || cached) {
+        setIsResolved(true)
+      }
     } else {
-      // No cache: wait for syncSchoolContext before redirecting
-      setIsResolved(false)
+      const cached = getSchoolSession(id)
+      if (cached) {
+        applySchoolState({
+          role: cached.role,
+          schoolId: cached.schoolId,
+          schoolName: cached.schoolName,
+          schoolStatus: cached.schoolStatus ?? null,
+          setupCompletedAt: cached.setupCompletedAt ?? null,
+          persist: false,
+        })
+        setIsResolved(true)
+      } else {
+        setIsResolved(false)
+      }
     }
 
     async function syncSchoolContext() {
@@ -225,18 +244,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
         const schoolId = userData?.school_id ?? undefined
 
         if (!schoolId) {
-          if (cached?.schoolId) {
-            applySchoolState({
-              role: clerkRole ?? cached.role,
-              schoolId: cached.schoolId,
-              schoolName: cached.schoolName,
-              schoolStatus: cached.schoolStatus ?? null,
-              setupCompletedAt: cached.setupCompletedAt ?? null,
-              persist: false,
-            })
-          } else {
-            applySchoolState({ role })
-          }
+          applySchoolState({ role })
           return
         }
 
@@ -245,18 +253,6 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
           .select('name, contact_name, contact_email, status, setup_completed_at')
           .eq('id', schoolId)
           .maybeSingle()
-
-        if (!school && cached && cached.schoolId === schoolId) {
-          applySchoolState({
-            role: clerkRole ?? cached.role,
-            schoolId: cached.schoolId,
-            schoolName: cached.schoolName,
-            schoolStatus: cached.schoolStatus ?? null,
-            setupCompletedAt: cached.setupCompletedAt ?? null,
-            persist: false,
-          })
-          return
-        }
 
         applySchoolState({
           role,
@@ -268,8 +264,6 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
           setupCompletedAt: school?.setup_completed_at ?? null,
         })
       } finally {
-        // Whether sync succeeded or failed, mark as resolved so the
-        // redirect effect can evaluate with the best data we have.
         if (!cancelled) {
           setIsResolved(true)
         }
@@ -281,7 +275,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [isLoaded, clerkUser?.id, pathname, refreshTick]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isLoaded, clerkUser?.id, refreshTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for storage changes from other tabs — if another tab signs into
   // a different account and overwrites the school session, re-sync.
