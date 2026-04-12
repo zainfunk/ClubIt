@@ -40,6 +40,7 @@ const NO_SCHOOL_REQUIRED = [
   '/superadmin',
   '/school',
   '/dev',
+  '/landing',
 ]
 
 const ENTRY_ROUTES = ['/onboard', '/school/suspended']
@@ -196,6 +197,9 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
       })
       // Cache hit: safe to redirect immediately
       setIsResolved(true)
+    } else {
+      // No cache: wait for syncSchoolContext before redirecting
+      setIsResolved(false)
     }
 
     async function syncSchoolContext() {
