@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSession, useUser } from '@clerk/nextjs'
 import { usePathname, useRouter } from 'next/navigation'
 import { Role, SchoolStatus, User } from '@/types'
@@ -133,9 +133,18 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session])
 
-  // Redirect effect: only runs once isResolved is true and user is identified
+  // Redirect effect: only runs once isResolved is true and user is identified.
+  // Uses a ref to track whether we've already redirected for this resolution
+  // cycle, preventing redirect loops.
+  const hasRedirected = useRef(false)
+
   useEffect(() => {
-    if (!isResolved || !baseUser.id) return
+    // Reset the redirect guard when the user changes
+    hasRedirected.current = false
+  }, [baseUser.id])
+
+  useEffect(() => {
+    if (!isResolved || !baseUser.id || hasRedirected.current) return
 
     const redirectTarget = getRequiredRoute(
       pathname,
@@ -145,6 +154,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     )
 
     if (redirectTarget && pathname !== redirectTarget) {
+      hasRedirected.current = true
       router.replace(redirectTarget)
     }
   }, [isResolved, baseUser.id, pathname, baseUser.role, baseUser.schoolId, schoolStatus, router])
@@ -194,37 +204,27 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // If Clerk already tells us the role, apply it immediately so we
-    // don't flash as "student" while the DB sync runs.
-    if (clerkRole) {
-      const cached = getSchoolSession(id)
+    // Apply cached session or Clerk role immediately for fast rendering.
+    // Only resolve (enable redirects) if we have a cache hit — otherwise
+    // wait for the DB sync to avoid redirecting with stale/wrong role.
+    const cached = getSchoolSession(id)
+    if (cached) {
       applySchoolState({
-        role: clerkRole,
-        schoolId: cached?.schoolId,
-        schoolName: cached?.schoolName ?? null,
-        schoolStatus: cached?.schoolStatus ?? null,
-        setupCompletedAt: cached?.setupCompletedAt ?? null,
+        role: clerkRole ?? cached.role,
+        schoolId: cached.schoolId,
+        schoolName: cached.schoolName,
+        schoolStatus: cached.schoolStatus ?? null,
+        setupCompletedAt: cached.setupCompletedAt ?? null,
         persist: false,
       })
-      // If superadmin (no school needed) or have a cached school, resolve now
-      if (clerkRole === 'superadmin' || cached) {
-        setIsResolved(true)
-      }
+      setIsResolved(true)
+    } else if (clerkRole) {
+      // Set user state for rendering but do NOT resolve yet —
+      // the DB might have a different role (e.g. Clerk says admin,
+      // DB says superadmin). Wait for syncSchoolContext to confirm.
+      setBaseUser({ id, name, email, role: clerkRole })
     } else {
-      const cached = getSchoolSession(id)
-      if (cached) {
-        applySchoolState({
-          role: cached.role,
-          schoolId: cached.schoolId,
-          schoolName: cached.schoolName,
-          schoolStatus: cached.schoolStatus ?? null,
-          setupCompletedAt: cached.setupCompletedAt ?? null,
-          persist: false,
-        })
-        setIsResolved(true)
-      } else {
-        setIsResolved(false)
-      }
+      setIsResolved(false)
     }
 
     async function syncSchoolContext() {
