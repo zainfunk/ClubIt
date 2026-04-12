@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Users, BookOpen, Pin, Calendar, MessageSquare, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import type { Club, ClubEvent, ClubNews, JoinRequest } from '@/types'
+import { toast } from 'sonner'
 
 function getPattern(club: Club): 'chess' | 'art' | 'robotics' {
   const tags = (club.tags ?? []).map((t) => t.toLowerCase())
@@ -55,8 +56,10 @@ export default function DashboardPage() {
   }, [currentUser.id, currentUser.role])
 
   async function resolveIssue(id: string) {
-    await supabase.from('issue_reports').update({ status: 'resolved' }).eq('id', id)
+    const { error } = await supabase.from('issue_reports').update({ status: 'resolved' }).eq('id', id)
+    if (error) { toast.error('Failed to resolve issue'); return }
     setIssueReports((prev) => prev.map((r) => r.id === id ? { ...r, status: 'resolved' } : r))
+    toast.success('Issue resolved')
   }
 
   const firstName = currentUser.name.split(' ')[0]

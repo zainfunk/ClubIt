@@ -8,6 +8,7 @@ import AppShell from "@/components/layout/AppShell";
 import SettingsProvider from "@/components/SettingsProvider";
 import TourWrapper from "@/components/TourWrapper";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { Toaster } from "sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -48,6 +49,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} ${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-[#f8f9fa]">
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: { fontFamily: 'var(--font-inter, sans-serif)', fontSize: '0.875rem' },
+          }}
+        />
         <MockAuthProvider>
           <ChatProvider>
             <SettingsProvider>

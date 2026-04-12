@@ -7,6 +7,7 @@ import { Club } from '@/types'
 import Avatar from '@/components/Avatar'
 import { Search, ArrowRight, Plus, X } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { toast } from 'sonner'
 
 const PATTERNS = [
   'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)',
@@ -113,6 +114,7 @@ export default function ClubsPage() {
       setNewCapacity(20)
       setNewUnlimited(false)
       setShowCreateForm(false)
+      toast.success('Club created!')
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create club')
     } finally {
