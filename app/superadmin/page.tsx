@@ -408,7 +408,7 @@ export default function SuperAdminPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-10 px-4">
+    <div className="max-w-3xl mx-auto">
       {devQuickInviteEnabled && showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
 
       {/* Header */}

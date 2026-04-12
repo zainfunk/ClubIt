@@ -4,24 +4,26 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useClerk } from '@clerk/nextjs'
 import { useMockAuth } from '@/lib/mock-auth'
-import { GraduationCap, LayoutDashboard, Calendar, FileText, Compass, User, ShieldCheck, MessageSquare, Settings, LogOut } from 'lucide-react'
+import { GraduationCap, LayoutDashboard, Calendar, FileText, Compass, User, ShieldCheck, MessageSquare, Settings, LogOut, Globe } from 'lucide-react'
 import Avatar from '@/components/Avatar'
 import { HelpButton } from '@/components/HelpTour'
 
 const ROLE_BADGE: Record<string, string> = {
+  superadmin: 'bg-purple-100 text-purple-700',
   admin:   'bg-red-100 text-red-700',
   advisor: 'bg-blue-100 text-blue-700',
   student: 'bg-emerald-100 text-emerald-700',
 }
 
 const NAV_ITEMS = [
-  { href: '/dashboard',  icon: LayoutDashboard, label: 'My Clubs',       roles: ['student', 'advisor'],           tourId: 'tour-nav-dashboard' },
-  { href: '/events',     icon: Calendar,        label: 'Events',          roles: ['student', 'advisor', 'admin'],  tourId: 'tour-nav-events' },
-  { href: '/chat',       icon: MessageSquare,   label: 'Chat',            roles: ['student', 'advisor', 'admin'],  tourId: 'tour-nav-chat' },
-  { href: '/elections',  icon: FileText,        label: 'Elections',       roles: ['student', 'advisor', 'admin'],  tourId: 'tour-nav-elections' },
-  { href: '/clubs',      icon: Compass,         label: 'All Clubs',       roles: ['student', 'advisor', 'admin'],  tourId: 'tour-nav-clubs' },
-  { href: '/profile',    icon: User,            label: 'Profile',         roles: ['student', 'advisor', 'admin'],  tourId: 'tour-nav-profile' },
-  { href: '/admin',      icon: ShieldCheck,     label: 'Admin',           roles: ['admin'],                        tourId: 'tour-nav-admin' },
+  { href: '/superadmin', icon: Globe,           label: 'Schools',         roles: ['superadmin'],                                tourId: 'tour-nav-superadmin' },
+  { href: '/dashboard',  icon: LayoutDashboard, label: 'My Clubs',       roles: ['student', 'advisor'],                         tourId: 'tour-nav-dashboard' },
+  { href: '/events',     icon: Calendar,        label: 'Events',          roles: ['student', 'advisor', 'admin'],                tourId: 'tour-nav-events' },
+  { href: '/chat',       icon: MessageSquare,   label: 'Chat',            roles: ['student', 'advisor', 'admin'],                tourId: 'tour-nav-chat' },
+  { href: '/elections',  icon: FileText,        label: 'Elections',       roles: ['student', 'advisor', 'admin'],                tourId: 'tour-nav-elections' },
+  { href: '/clubs',      icon: Compass,         label: 'All Clubs',       roles: ['student', 'advisor', 'admin'],                tourId: 'tour-nav-clubs' },
+  { href: '/profile',    icon: User,            label: 'Profile',         roles: ['student', 'advisor', 'admin', 'superadmin'],  tourId: 'tour-nav-profile' },
+  { href: '/admin',      icon: ShieldCheck,     label: 'Admin',           roles: ['admin'],                                      tourId: 'tour-nav-admin' },
 ]
 
 export default function Sidebar() {

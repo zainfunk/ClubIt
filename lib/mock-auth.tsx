@@ -46,7 +46,13 @@ const NO_SCHOOL_REQUIRED = [
 const ENTRY_ROUTES = ['/onboard', '/school/suspended']
 
 function getRequiredRoute(pathname: string, role: Role, schoolId?: string, schoolStatus?: SchoolStatus | null) {
-  if (role === 'superadmin') return null
+  if (role === 'superadmin') {
+    // Superadmins don't belong to a school — redirect entry routes to the panel
+    if (pathname === '/join' || pathname === '/dashboard' || ENTRY_ROUTES.some((route) => pathname.startsWith(route))) {
+      return '/superadmin'
+    }
+    return null
+  }
 
   if (!schoolId) {
     return NO_SCHOOL_REQUIRED.some((route) => pathname.startsWith(route)) ? null : '/join'

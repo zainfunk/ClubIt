@@ -5,7 +5,7 @@ import Navbar from './Navbar'
 import TopBar from './TopBar'
 
 // Pages that should render without the sidebar/topbar shell
-const BARE_ROUTES = ['/sign-in', '/sign-up', '/onboard', '/join', '/setup', '/invite', '/superadmin', '/school']
+const BARE_ROUTES = ['/sign-in', '/sign-up', '/onboard', '/join', '/setup', '/invite', '/school']
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
