@@ -19,7 +19,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
 
   let isSuperAdmin = userRow?.role === 'superadmin'
 
-  if (!isSuperAdmin && !userRow) {
+  if (!isSuperAdmin) {
     const client = await clerkClient()
     const user = await client.users.getUser(userId)
     isSuperAdmin = user.publicMetadata?.role === 'superadmin'
