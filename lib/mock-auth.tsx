@@ -297,10 +297,13 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     ? { ...baseUser, role: devRole }
     : baseUser
 
-  // Don't block rendering when Clerk hasn't loaded yet (unauthenticated pages
-  // need to render) — but once we know there's a signed-in user, wait until
-  // the school session is resolved before showing children.
-  const showChildren = !isLoaded || !clerkUser || isResolved
+  // Show children when:
+  // - Clerk hasn't loaded yet (unauthenticated pages need to render)
+  // - No signed-in user
+  // - School context is resolved
+  // - Current page doesn't require school context (sign-in, superadmin, etc.)
+  const isNoSchoolRoute = NO_SCHOOL_REQUIRED.some((route) => pathname.startsWith(route))
+  const showChildren = !isLoaded || !clerkUser || isResolved || isNoSchoolRoute
 
   return (
     <AuthContext.Provider
