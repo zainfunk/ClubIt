@@ -17,6 +17,18 @@ const isPublicRoute = createRouteMatcher([
 
 export default clerkMiddleware(async (auth, request) => {
   if (isPublicRoute(request)) return NextResponse.next()
+
+  // For API routes, return a proper 401 JSON response instead of redirecting
+  // to the sign-in page (which results in a confusing 404).
+  const isApiRoute = request.nextUrl.pathname.startsWith('/api/')
+  if (isApiRoute) {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    return NextResponse.next()
+  }
+
   await auth.protect()
 })
 
