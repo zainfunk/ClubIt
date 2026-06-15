@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { Club, Role } from '@/types'
-import { sanitizeText, sanitizeUrl } from '@/lib/sanitize'
+import { sanitizeText } from '@/lib/sanitize'
 
 export const dynamic = 'force-dynamic'
 
@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json() as Record<string, unknown>
   const name = typeof body.name === 'string' ? sanitizeText(body.name.trim()) : ''
   const description = typeof body.description === 'string' ? sanitizeText(body.description.trim()) : ''
-  const iconUrl = typeof body.iconUrl === 'string' ? sanitizeUrl(body.iconUrl.trim()) : ''
+  const iconUrl = typeof body.iconUrl === 'string' ? sanitizeText(body.iconUrl.trim()) : ''
   const tags = Array.isArray(body.tags)
     ? body.tags
         .filter((tag: unknown): tag is string => typeof tag === 'string')
