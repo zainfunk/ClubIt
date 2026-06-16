@@ -13,7 +13,7 @@ import Avatar from '@/components/Avatar'
 import { Users, Shield, Vote, Plus, GraduationCap, MessageSquare, CheckCircle, Clock, Copy, Check, KeyRound } from 'lucide-react'
 
 export default function AdminPage() {
-  const { actualUser } = useMockAuth()
+  const { actualUser, schoolName } = useMockAuth()
   const [clubs, setClubs] = useState<Club[]>([])
   const [advisorNames, setAdvisorNames] = useState<Record<string, string>>({})
   const [elections, setElections] = useState<SchoolElection[]>([])
@@ -291,6 +291,19 @@ export default function AdminPage() {
           </div>
           <div className="lg:col-span-2">
             <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-3">All Clubs ({clubs.length})</h3>
+            {clubs.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/40 px-6 py-12 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/20">
+                  <Users className="w-6 h-6 text-white" />
+                </div>
+                <p className="text-sm font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>
+                  {schoolName ? `${schoolName} has no clubs yet` : 'No clubs registered yet'}
+                </p>
+                <p className="text-xs text-slate-500 mt-1.5 max-w-xs mx-auto leading-relaxed">
+                  Create your first club to start getting students signed up — use the New Club form to add one.
+                </p>
+              </div>
+            ) : (
             <div className="space-y-2">
               {clubs.map((club) => {
                 const advisor = allUsers.find((u) => u.id === club.advisorId) ?? (club.advisorId === actualUser.id ? actualUser : undefined)
@@ -321,6 +334,7 @@ export default function AdminPage() {
                 )
               })}
             </div>
+            )}
           </div>
         </div>
 
