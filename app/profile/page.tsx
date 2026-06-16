@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
 import { fetchClubsByIds, fetchSchoolClubs, fetchSchoolUsers } from '@/lib/school-data'
@@ -20,6 +20,7 @@ import {
   Pencil, Check, X, Plus, Trash2,
   ExternalLink, EyeOff, Users, Mail, BadgeCheck,
   Star, Flame, BookOpen, Award, Clock, AlertCircle,
+  Camera, Loader2,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 
@@ -49,6 +50,46 @@ export default function ProfilePage() {
     if (!currentUser.schoolId) return
     fetchSchoolUsers(currentUser.schoolId).then(setSchoolUsers)
   }, [currentUser.schoolId])
+
+  // ---- Avatar (profile picture) ----
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (!currentUser.id) return
+    supabase.from('users').select('avatar_url').eq('id', currentUser.id).maybeSingle()
+      .then(({ data }) => setAvatarUrl(data?.avatar_url ?? null))
+  }, [currentUser.id])
+
+  async function onAvatarPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingAvatar(true)
+    setProfileError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/user/avatar', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (res.ok) setAvatarUrl(data.avatarUrl)
+      else setProfileError(data.error ?? 'Failed to upload image')
+    } catch {
+      setProfileError('Failed to upload image')
+    } finally {
+      setUploadingAvatar(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function removeAvatar() {
+    setUploadingAvatar(true)
+    try {
+      const res = await fetch('/api/user/avatar', { method: 'DELETE' })
+      if (res.ok) setAvatarUrl(null)
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
 
   useEffect(() => {
     setProfileLoading(true)
@@ -215,7 +256,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="space-y-6" style={{ fontFamily: 'var(--font-inter)' }}>
+    <div className="space-y-5" style={{ fontFamily: 'var(--font-inter)' }}>
 
       {/* Error banner */}
       {profileError && (
@@ -229,28 +270,42 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ── Hero Banner ── */}
+      {/* ── Hero ── */}
       <div className="rounded-2xl overflow-hidden bg-white border border-slate-200/60" style={{ boxShadow: '0 4px 24px rgba(15,23,42,0.04)' }}>
         {/* Gradient banner */}
-        <div className={`h-28 bg-gradient-to-r ${roleGradient[profileUser.role]} relative`}>
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.2),transparent_70%)]" />
+        <div className={`h-20 bg-gradient-to-r ${roleGradient[profileUser.role]} relative`}>
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.25),transparent_70%)]" />
         </div>
 
-        {/* Profile info — avatar + text side by side, centered */}
-        <div className="px-4 sm:px-8 py-6">
-          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
-            <div className="rounded-2xl p-1 bg-white shadow-lg shadow-slate-900/10 shrink-0">
-              <Avatar name={profileUser.name} size="lg" className="!w-20 !h-20 !text-xl !rounded-xl" />
+        <div className="px-5 sm:px-6 py-5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            {/* Avatar + upload control */}
+            <div className="relative shrink-0 mx-auto sm:mx-0">
+              <div className="rounded-2xl p-1 bg-white shadow-lg shadow-slate-900/10">
+                <Avatar name={profileUser.name} imageUrl={avatarUrl} size="lg" className="!w-20 !h-20 !text-2xl !rounded-xl" />
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-lg ring-2 ring-white hover:bg-slate-700 transition-colors disabled:opacity-60"
+                title="Change profile picture"
+              >
+                {uploadingAvatar ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={onAvatarPick} />
             </div>
-            <div className="min-w-0 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-3 mb-1.5">
+
+            {/* Name / role / email */}
+            <div className="min-w-0 flex-1 text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-2">
                 {canEdit ? (
                   <Input
                     value={nameInput}
                     onChange={(e) => setNameInput(e.target.value)}
                     onBlur={saveName}
                     onKeyDown={(e) => e.key === 'Enter' && saveName()}
-                    className="h-auto text-2xl sm:text-3xl font-extrabold tracking-tight max-w-md border-none shadow-none px-0 py-0 focus-visible:ring-0"
+                    className="h-auto text-2xl sm:text-3xl font-extrabold tracking-tight max-w-xs sm:max-w-md border-none shadow-none px-0 py-0 focus-visible:ring-0 text-center sm:text-left"
                     style={{ fontFamily: 'var(--font-manrope)' }}
                   />
                 ) : (
@@ -261,34 +316,40 @@ export default function ProfilePage() {
                 )}
                 <BadgeCheck className="w-6 h-6 text-indigo-500 shrink-0" />
               </div>
-              <div className="flex items-center justify-center sm:justify-start gap-3 flex-wrap">
+              <div className="flex items-center justify-center sm:justify-start gap-2.5 flex-wrap mt-1.5">
                 <span className={`text-xs font-semibold px-3 py-0.5 rounded-full border ${ROLE_BADGE[profileUser.role]}`}>
                   {ROLE_LABEL[profileUser.role]}
                 </span>
-                <span className="text-sm text-slate-500 truncate">{profileUser.email}</span>
-                {canEdit && !editingEmail && (
-                  <button onClick={() => { setEmailInput(profileUser.email); setEditingEmail(true) }}
-                    className="text-slate-400 hover:text-slate-600 transition-colors">
-                    <Pencil className="w-3.5 h-3.5" />
+                {editingEmail ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Input value={emailInput} onChange={(e) => setEmailInput(e.target.value)}
+                      className="h-7 text-sm max-w-[14rem]" autoFocus onKeyDown={(e) => e.key === 'Enter' && saveEmail()} />
+                    <button onClick={saveEmail} className="text-emerald-600"><Check className="w-4 h-4" /></button>
+                    <button onClick={() => setEditingEmail(false)} className="text-slate-400"><X className="w-4 h-4" /></button>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="text-sm text-slate-500 truncate">{profileUser.email}</span>
+                    {canEdit && (
+                      <button onClick={() => { setEmailInput(profileUser.email); setEditingEmail(true) }}
+                        className="text-slate-400 hover:text-slate-600 transition-colors">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </span>
+                )}
+                {avatarUrl && (
+                  <button onClick={removeAvatar} disabled={uploadingAvatar}
+                    className="text-xs font-medium text-slate-400 hover:text-red-500 transition-colors">
+                    Remove photo
                   </button>
                 )}
               </div>
             </div>
-          </div>
-          <div className="flex items-start justify-between gap-6">
-            <div>
-              {editingEmail && (
-                <div className="flex items-center gap-2 mb-3">
-                  <Input value={emailInput} onChange={(e) => setEmailInput(e.target.value)}
-                    className="h-8 text-sm max-w-xs" autoFocus onKeyDown={(e) => e.key === 'Enter' && saveEmail()} />
-                  <button onClick={saveEmail} className="text-emerald-600"><Check className="w-4 h-4" /></button>
-                  <button onClick={() => setEditingEmail(false)} className="text-slate-400"><X className="w-4 h-4" /></button>
-                </div>
-              )}
-            </div>
 
+            {/* Message */}
             <a href={`mailto:${profileUser.email}`}
-              className="hidden sm:inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors shrink-0 mt-1">
+              className="hidden sm:inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors shrink-0 self-start">
               <Mail className="w-4 h-4" />
               Message
             </a>
@@ -324,10 +385,10 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Two-column layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
         {/* Left sidebar — Bio & Socials */}
-        <div className="space-y-6">
+        <div className="space-y-5">
           {/* Bio */}
           <div className="rounded-2xl bg-white border border-slate-200/60 p-6" style={{ boxShadow: '0 4px 24px rgba(15,23,42,0.04)' }}>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">About</h3>

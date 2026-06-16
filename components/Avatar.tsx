@@ -20,6 +20,7 @@ function initials(name: string): string {
 
 interface AvatarProps {
   name: string
+  imageUrl?: string | null
   size?: 'sm' | 'md' | 'lg'
   className?: string
 }
@@ -30,7 +31,17 @@ const SIZE: Record<string, string> = {
   lg: 'w-16 h-16 text-xl',
 }
 
-export default function Avatar({ name, size = 'md', className = '' }: AvatarProps) {
+export default function Avatar({ name, imageUrl, size = 'md', className = '' }: AvatarProps) {
+  if (imageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={imageUrl}
+        alt={name}
+        className={`${SIZE[size]} rounded-full object-cover select-none shrink-0 bg-slate-100 ${className}`}
+      />
+    )
+  }
   return (
     <div
       className={`${SIZE[size]} ${colorFor(name)} rounded-full flex items-center justify-center font-bold text-white select-none shrink-0 ${className}`}

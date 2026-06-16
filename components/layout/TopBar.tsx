@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Search, Settings, Database, ArrowLeftRight } from 'lucide-react'
+import { Settings, Database, ArrowLeftRight } from 'lucide-react'
 import { UserButton } from '@clerk/nextjs'
 import { useMockAuth } from '@/lib/mock-auth'
 import NotificationBell from '@/components/NotificationBell'
+import GlobalSearch from '@/components/layout/GlobalSearch'
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':      'My Clubs',
@@ -59,14 +60,7 @@ export default function TopBar() {
             Lab
           </Link>
         )}
-        <div className="relative hidden sm:block">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            className="pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200/60 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 w-40 md:w-56 transition-all outline-none placeholder:text-slate-400"
-            placeholder="Search..."
-            type="text"
-          />
-        </div>
+        {currentUser.role !== 'superadmin' && <GlobalSearch />}
         {schoolName && currentUser.role !== 'superadmin' && (
           <button
             onClick={switchSchool}

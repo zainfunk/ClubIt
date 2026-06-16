@@ -260,7 +260,7 @@ export default function ViewProfilePage({ params }: PageProps) {
   if (!rawUser) notFound()
 
   return (
-    <div className="max-w-2xl mx-auto space-y-0">
+    <div className="max-w-3xl mx-auto space-y-0">
 
       {/* Admin notice */}
       {isAdmin && (
@@ -289,7 +289,7 @@ export default function ViewProfilePage({ params }: PageProps) {
           <div className="flex items-start justify-between gap-4 mb-5">
             <div className="flex items-center gap-4">
               <div className="rounded-2xl p-1 shrink-0" style={{ background: `${accent}14`, boxShadow: `0 4px 16px ${accent}22` }}>
-                <Avatar name={displayName} size="lg" />
+                <Avatar name={displayName} imageUrl={rawUser?.avatarUrl} size="lg" />
               </div>
               <div>
                 {/* Name */}
