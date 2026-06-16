@@ -129,7 +129,17 @@ export default function ClubForm({ advisors, onSubmit }: ClubFormProps) {
             </div>
             <div>
               <label className="text-xs font-medium text-gray-700 block mb-1">Member Limit *</label>
-              <label className="flex items-center gap-2 text-xs text-gray-600 mb-1">
+              <Input
+                type="number"
+                min={1}
+                max={500}
+                value={unlimited ? '' : capacity}
+                onChange={(e) => setCapacity(Number(e.target.value))}
+                disabled={isSubmitting || unlimited}
+                placeholder={unlimited ? 'Unlimited' : undefined}
+                required={!unlimited}
+              />
+              <label className="flex items-center gap-2 text-xs text-gray-600 mt-2">
                 <input
                   type="checkbox"
                   checked={unlimited}
@@ -138,17 +148,6 @@ export default function ClubForm({ advisors, onSubmit }: ClubFormProps) {
                 />
                 Unlimited
               </label>
-              {!unlimited && (
-                <Input
-                  type="number"
-                  min={1}
-                  max={500}
-                  value={capacity}
-                  onChange={(e) => setCapacity(Number(e.target.value))}
-                  disabled={isSubmitting}
-                  required
-                />
-              )}
             </div>
           </div>
           <div>
