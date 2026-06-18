@@ -3,10 +3,19 @@ import { auth } from '@clerk/nextjs/server'
 import { getStripe } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase'
 import { checkoutLimiter } from '@/lib/rate-limit'
+import { isNativeUserAgent } from '@/lib/platform'
 
 export async function POST(request: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Apple Guideline 3.1.1: never initiate Stripe Checkout from the iOS app.
+  if (isNativeUserAgent(request.headers.get('user-agent'))) {
+    return NextResponse.json(
+      { error: 'Subscriptions are managed on the web at clubit.app.' },
+      { status: 403 },
+    )
+  }
 
   const rl = await checkoutLimiter.check(`user:${userId}`)
   if (!rl.success) {

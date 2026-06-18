@@ -9,6 +9,7 @@ import {
   AdminSettings, UserPrivacySettings,
 } from '@/lib/settings-store'
 import { useAppSettings } from '@/components/SettingsProvider'
+import DeleteAccountSection from '@/components/settings/DeleteAccountSection'
 import { supabase } from '@/lib/supabase'
 import {
   Moon, Sun, Shield, Eye, EyeOff, Users, Trophy,
@@ -396,6 +397,9 @@ export default function SettingsPage() {
           )}
         </div>
       </Section>
+
+      {/* ── Delete account (App Store Guideline 5.1.1(v)) ── */}
+      <DeleteAccountSection />
 
     </div>
   )

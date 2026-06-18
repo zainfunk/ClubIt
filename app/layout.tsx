@@ -9,6 +9,7 @@ import SettingsProvider from "@/components/SettingsProvider";
 import RealtimeSyncProvider from "@/components/RealtimeSyncProvider";
 import TourWrapper from "@/components/TourWrapper";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import NativeBootstrap from "@/components/NativeBootstrap";
 import { Toaster } from "sonner";
 
 const geistSans = Geist({
@@ -63,12 +64,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    // Telemetry disabled: ClubIt serves minors, so we don't emit any
+    // third-party usage telemetry (App Store kids/privacy posture).
+    <ClerkProvider telemetry={{ disabled: true }}>
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} ${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-[#f8f9fa]">
+        <NativeBootstrap />
         <Toaster
           position="top-right"
           toastOptions={{

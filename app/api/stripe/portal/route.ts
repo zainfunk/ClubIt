@@ -2,10 +2,19 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { getStripe } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase'
+import { isNativeUserAgent } from '@/lib/platform'
 
 export async function POST(request: Request) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Apple Guideline 3.1.1: no Stripe billing management from the iOS app.
+  if (isNativeUserAgent(request.headers.get('user-agent'))) {
+    return NextResponse.json(
+      { error: 'Billing is managed on the web at clubit.app.' },
+      { status: 403 },
+    )
+  }
 
   const db = createServiceClient()
 

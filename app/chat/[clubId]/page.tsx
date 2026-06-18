@@ -9,6 +9,7 @@ import { fetchUsersByIds } from '@/lib/school-data'
 import { supabase } from '@/lib/supabase'
 import { Club, User } from '@/types'
 import Avatar from '@/components/Avatar'
+import MessageActions from '@/components/chat/MessageActions'
 import { ArrowLeft, MessageSquare, Send, Users } from 'lucide-react'
 
 function formatTime(iso: string) {
@@ -39,6 +40,7 @@ export default function ClubChatPage({ params }: { params: Promise<{ clubId: str
   const [schoolClubs, setSchoolClubs] = useState<Club[]>([])
   const [club, setClub] = useState<Club | null>(null)
   const [clubLoading, setClubLoading] = useState(true)
+  const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set())
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -66,6 +68,19 @@ export default function ClubChatPage({ params }: { params: Promise<{ clubId: str
       cancelled = true
     }
   }, [clubId, currentUser.id])
+
+  // Load the set of users this person has blocked (Guideline 1.2).
+  useEffect(() => {
+    if (!currentUser.id) return
+    let cancelled = false
+    fetch('/api/school/chat/block', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data: { blockedIds?: string[] }) => {
+        if (!cancelled) setBlockedIds(new Set(data.blockedIds ?? []))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [currentUser.id])
 
   useEffect(() => {
     let cancelled = false
@@ -121,7 +136,9 @@ export default function ClubChatPage({ params }: { params: Promise<{ clubId: str
     ? schoolClubs
     : schoolClubs.filter((entry) => myClubIds.includes(entry.id) || entry.advisorId === currentUser.id)
 
-  const clubMessages = messages.filter((message) => message.clubId === clubId)
+  const clubMessages = messages.filter(
+    (message) => message.clubId === clubId && !blockedIds.has(message.senderId),
+  )
   const members = club.memberIds
     .map((memberId) => resolveUser(memberId))
     .filter((member): member is User => Boolean(member))
@@ -283,7 +300,7 @@ export default function ClubChatPage({ params }: { params: Promise<{ clubId: str
                   return (
                     <div
                       key={message.id}
-                      className={`flex items-end gap-2.5 ${isMe ? 'flex-row-reverse' : ''}`}
+                      className={`group flex items-end gap-2.5 ${isMe ? 'flex-row-reverse' : ''}`}
                     >
                       {!isMe && (
                         <div className="w-8 shrink-0">
@@ -315,6 +332,18 @@ export default function ClubChatPage({ params }: { params: Promise<{ clubId: str
                           {formatTime(message.sentAt)}
                         </p>
                       </div>
+
+                      {/* Moderation menu — report / block (Guideline 1.2). */}
+                      {!isMe && !message.id.startsWith('msg-temp-') && (
+                        <MessageActions
+                          messageId={message.id}
+                          senderId={message.senderId}
+                          senderName={sender?.name ?? 'this user'}
+                          onBlocked={(uid) =>
+                            setBlockedIds((prev) => new Set(prev).add(uid))
+                          }
+                        />
+                      )}
                     </div>
                   )
                 })}

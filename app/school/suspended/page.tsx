@@ -4,10 +4,12 @@ import { useState } from 'react'
 import { Ban, CreditCard, Mail, Loader2, LogOut } from 'lucide-react'
 import { useClerk } from '@clerk/nextjs'
 import { useMockAuth } from '@/lib/mock-auth'
+import { useIsNativeApp } from '@/lib/use-native-app'
 
 export default function SchoolSuspendedPage() {
   const { schoolName, schoolContactEmail, schoolStatus } = useMockAuth()
   const { signOut } = useClerk()
+  const isNative = useIsNativeApp()
   const [portalLoading, setPortalLoading] = useState(false)
 
   const isPaymentPaused = schoolStatus === 'payment_paused'
@@ -49,7 +51,9 @@ export default function SchoolSuspendedPage() {
           }
         </p>
 
-        {isPaymentPaused && (
+        {/* Apple Guideline 3.1.1: no Stripe payment management inside the iOS
+            app. On native, the contact card below directs admins to the web. */}
+        {isPaymentPaused && !isNative && (
           <button
             onClick={handleUpdatePayment}
             disabled={portalLoading}

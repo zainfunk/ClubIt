@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
+import { useIsNativeApp } from '@/lib/use-native-app'
 import RoleGuard from '@/components/layout/RoleGuard'
+import WebBillingNotice from '@/components/billing/WebBillingNotice'
 import { CreditCard, ExternalLink, Loader2, CheckCircle, XCircle, Clock, AlertTriangle, Sparkles } from 'lucide-react'
 
 interface Subscription {
@@ -34,6 +36,7 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; i
 
 export default function BillingPage() {
   const { actualUser } = useMockAuth()
+  const isNative = useIsNativeApp()
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [events, setEvents] = useState<PaymentEventRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -265,7 +268,13 @@ export default function BillingPage() {
 
   return (
     <RoleGuard allowed={['admin']}>
-      {content}
+      {/* Apple Guideline 3.1.1: no Stripe purchase/management UI inside the iOS
+          app. Show a web-only billing notice instead. */}
+      {isNative ? (
+        <div className="max-w-2xl mx-auto">
+          <WebBillingNotice />
+        </div>
+      ) : content}
     </RoleGuard>
   )
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { sanitizeText } from '@/lib/sanitize'
+import { checkContent } from '@/lib/content-filter'
 import { Role } from '@/types'
 import { randomUUID } from 'node:crypto'
 
@@ -72,7 +73,15 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to load messages' }, { status: 500 })
   }
 
-  return NextResponse.json({ messages: messages ?? [], accessibleClubIds: clubIds })
+  // Hide messages from users this requester has blocked (Guideline 1.2).
+  const { data: blocks } = await db
+    .from('user_blocks')
+    .select('blocked_id')
+    .eq('blocker_id', requester.userId)
+  const blockedIds = new Set((blocks ?? []).map((b) => b.blocked_id))
+  const visible = (messages ?? []).filter((m) => !blockedIds.has(m.sender_id))
+
+  return NextResponse.json({ messages: visible, accessibleClubIds: clubIds })
 }
 
 // POST — send a message to a club
@@ -86,6 +95,17 @@ export async function POST(request: NextRequest) {
 
   if (!clubId || !content) {
     return NextResponse.json({ error: 'clubId and content are required' }, { status: 400 })
+  }
+
+  // Objectionable-content gate (Guideline 1.2). Reject before storing so abusive
+  // language never reaches another student.
+  const check = checkContent(content)
+  if (!check.ok) {
+    console.warn(`chat: blocked message from ${requester.userId} (term: ${check.matched})`)
+    return NextResponse.json(
+      { error: 'Your message was blocked because it violates our community guidelines.' },
+      { status: 422 },
+    )
   }
 
   const db = createServiceClient()

@@ -79,6 +79,32 @@ Your school may have its own content / acceptable-use policies that
 also apply. Where the school's policy is stricter, the school's
 policy controls.
 
+### Zero tolerance for objectionable content and abusive users
+
+ClubIt has **zero tolerance** for objectionable content or abusive
+behavior. Because ClubIt is used by students, including minors, the
+following are strictly prohibited in chat and any other
+user-generated content: hate speech and slurs, sexual or sexually
+explicit content, harassment, bullying, threats, and content that
+exploits or endangers minors.
+
+We enforce this through:
+
+- **Automated filtering.** Messages containing prohibited language are
+  blocked before they are posted.
+- **Reporting.** Any user can report a message from inside the app.
+  Reports are queued for the school's administrators.
+- **Blocking.** Any user can block another user and will no longer see
+  that user's messages.
+- **Action within 24 hours.** Administrators (and ClubIt where needed)
+  review reports and remove violating content and/or eject the
+  offending user, with a target of acting within 24 hours of a report.
+
+By using ClubIt you agree not to post objectionable content. Accounts
+that violate this policy may be suspended or terminated. To report
+abuse you cannot resolve through in-app tools, contact
+`security@clubit.app`.
+
 ## 6. Privacy and education records
 
 Our handling of your data is governed by `PRIVACY_POLICY.md`. For

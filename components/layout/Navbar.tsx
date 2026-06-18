@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useClerk } from '@clerk/nextjs'
 import { useMockAuth } from '@/lib/mock-auth'
-import { Sparkles, LayoutDashboard, Calendar, FileText, Compass, User, ShieldCheck, MessageSquare, Settings, LogOut, Globe, X, Trophy } from 'lucide-react'
+import { Sparkles, LayoutDashboard, Calendar, FileText, Compass, User, ShieldCheck, MessageSquare, Settings, LogOut, Globe, X, Trophy, Flag } from 'lucide-react'
 import { fetchAdminSettings, getAdminSettings } from '@/lib/settings-store'
 import Avatar from '@/components/Avatar'
 import { HelpButton } from '@/components/HelpTour'
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { href: '/leaderboard', icon: Trophy,         label: 'Leaderboard', roles: ['student', 'advisor', 'admin'],                tourId: 'tour-nav-leaderboard' },
   { href: '/profile',    icon: User,            label: 'Profile',    roles: ['student', 'advisor', 'admin', 'superadmin'],  tourId: 'tour-nav-profile' },
   { href: '/admin',      icon: ShieldCheck,     label: 'Admin',      roles: ['admin'],                                      tourId: 'tour-nav-admin' },
+  { href: '/admin/moderation', icon: Flag,      label: 'Moderation', roles: ['admin'],                                      tourId: 'tour-nav-moderation' },
 ]
 
 export default function Sidebar() {
