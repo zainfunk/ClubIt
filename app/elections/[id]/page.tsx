@@ -21,6 +21,7 @@ import {
 import { Club, ClubForm, Poll, SchoolElection, User } from '@/types'
 import Avatar from '@/components/Avatar'
 import { CheckCircle2, ChevronLeft, Clock } from 'lucide-react'
+import { haptic } from '@/lib/haptics'
 
 function deadlineLabel(closesAt: string | null, isOpen: boolean): string {
   if (!closesAt) return isOpen ? 'Open now' : 'Closed'
@@ -160,6 +161,7 @@ export default function FormDetailPage({ params }: { params: Promise<{ id: strin
       await castPollVote(votingItem.id, pendingCandidate, currentUser.id)
     }
 
+    void haptic('success')
     await loadItem()
   }
 

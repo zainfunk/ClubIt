@@ -38,9 +38,15 @@ export default function TopBar() {
 
   return (
     <header
-      className="fixed top-0 left-0 md:left-64 right-0 h-14 md:h-16 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 flex justify-between items-center px-4 md:px-8 z-40"
-      style={{ fontFamily: 'var(--font-inter)' }}
+      className="fixed top-0 left-0 md:left-64 right-0 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 z-40"
+      // paddingTop carries the notch / Dynamic Island inset. A fixed element is
+      // positioned against the viewport, so it ignores the body's safe-area
+      // padding — without this the header renders under the status bar on
+      // notched iPhones. The blurred background fills up under the notch; the
+      // inner row keeps its normal height below it.
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)', fontFamily: 'var(--font-inter)' }}
     >
+      <div className="h-14 md:h-16 flex justify-between items-center px-4 md:px-8">
       <h1
         className="text-base md:text-lg font-bold tracking-tight text-slate-900 truncate"
         style={{ fontFamily: 'var(--font-manrope)' }}
@@ -74,11 +80,12 @@ export default function TopBar() {
         )}
         <div className="flex items-center gap-1.5 md:gap-2 text-slate-400">
           <NotificationBell />
-          <Link href="/settings" data-tour-id="tour-settings" className="p-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors">
+          <Link href="/settings" data-tour-id="tour-settings" className="flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:p-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors">
             <Settings className="w-4 h-4" />
           </Link>
           <UserButton />
         </div>
+      </div>
       </div>
     </header>
   )

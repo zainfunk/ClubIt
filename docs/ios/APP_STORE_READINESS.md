@@ -74,6 +74,9 @@ start doesn't look like a blank web page (helps Guideline 4.2).
 | 5.1.x | No third-party trackers; Clerk telemetry off | `docs/security/MINORS_PRIVACY.md`, `app/layout.tsx` |
 | 4.8 | Sign in with Apple readiness | `docs/ios/SIGN_IN_WITH_APPLE.md` |
 | 4.2 | Native capabilities beyond a web wrapper | `docs/ios/GUIDELINE_4_2_PLAN.md` |
+| 4.2 | In-app QR scanner for check-in | `components/ScanCheckInButton.tsx` (dashboard) |
+| 4.2 | Haptics on check-in / vote | `lib/haptics.ts`, `app/attend`, `app/elections/[id]` |
+| HIG | Safe-area insets (notch/Dynamic Island), 44pt touch targets, full mobile nav | `TopBar.tsx`, `MobileTabBar.tsx`, `Navbar.tsx`, `globals.css` |
 
 ### Database migrations to apply before/with the iOS release
 

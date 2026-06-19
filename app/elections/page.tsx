@@ -420,9 +420,9 @@ export default function FormsPage() {
       {(closedElections.length > 0 || closedForms.length > 0) && (
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-[#727785] mb-3">Closed Records</p>
-          <div className="rounded-2xl overflow-hidden"
+          <div className="rounded-2xl overflow-x-auto"
             style={{ background: '#ffffff', boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[360px] text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid #f3f4f5' }}>
                   {['Title', 'Type', 'Closed'].map((h) => (

@@ -9,6 +9,7 @@ import { fetchAdminSettings, getAdminSettings } from '@/lib/settings-store'
 import Avatar from '@/components/Avatar'
 import { HelpButton } from '@/components/HelpTour'
 import { useState, useEffect } from 'react'
+import { useMobileNav } from './MobileNavContext'
 
 const NAV_ITEMS = [
   { href: '/superadmin', icon: Globe,           label: 'Schools',    roles: ['superadmin'],                                tourId: 'tour-nav-superadmin' },
@@ -27,7 +28,8 @@ export default function Sidebar() {
   const { actualUser, schoolName } = useMockAuth()
   const { signOut } = useClerk()
   const pathname = usePathname()
-  const [mobileOpen, setMobileOpen] = useState(false)
+  // Drawer open state is shared with the MobileTabBar "More" button.
+  const { open: mobileOpen, setOpen: setMobileOpen } = useMobileNav()
 
   // Close mobile nav on route change
   useEffect(() => {
@@ -163,7 +165,11 @@ export default function Sidebar() {
           {/* Drawer */}
           <aside
             className="absolute left-0 top-0 h-full w-72 bg-white border-r border-slate-200/60 flex flex-col shadow-2xl"
-            style={{ fontFamily: 'var(--font-inter)' }}
+            style={{
+              fontFamily: 'var(--font-inter)',
+              paddingTop: 'env(safe-area-inset-top, 0px)',
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+            }}
           >
             {sidebarContent}
           </aside>

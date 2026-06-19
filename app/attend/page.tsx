@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase'
 import Avatar from '@/components/Avatar'
 import { AlertTriangle, CheckCircle, Clock, MapPin, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { haptic } from '@/lib/haptics'
 
 type Status =
   | 'idle'
@@ -130,6 +131,7 @@ function AttendContent() {
     } catch (err) {
       console.error('reward award failed', err)
     }
+    void haptic('success')
     setStatus('success')
   }
 

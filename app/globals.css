@@ -133,6 +133,15 @@
   html {
     font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   }
+  /* Remove the 300ms tap delay / double-tap-to-zoom on interactive controls so
+     taps feel native in the iOS WebView. Invisible on desktop. */
+  a,
+  button,
+  [role="button"],
+  label,
+  summary {
+    touch-action: manipulation;
+  }
 }
 
 .editorial-pattern-chess {

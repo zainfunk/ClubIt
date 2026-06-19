@@ -8,6 +8,7 @@ import { Users, BookOpen, Pin, Calendar, MessageSquare, CheckCircle, Clock, Aler
 import { Skeleton } from '@/components/ui/Skeleton'
 import { FadeIn, Stagger } from '@/components/ui/FadeIn'
 import ClubForm from '@/components/admin/ClubForm'
+import ScanCheckInButton from '@/components/ScanCheckInButton'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Club, ClubEvent, ClubNews, JoinRequest } from '@/types'
 import { toast } from 'sonner'
@@ -223,6 +224,9 @@ export default function DashboardPage() {
             </button>
           )}
         </div>
+
+        {/* Native-only: scan a meeting QR to check in (renders nothing on web) */}
+        <ScanCheckInButton className="mt-4 inline-flex items-center justify-center gap-2 min-h-[48px] rounded-xl bg-[#0058be] text-white text-sm font-bold px-5 py-3 shadow-lg shadow-blue-500/20 active:translate-y-px transition-transform touch-manipulation" />
 
         {showPending && pendingRequests.length > 0 && (
           <div className="mt-4 rounded-xl bg-white border border-slate-200/60 overflow-hidden" style={{ boxShadow: '0 4px 16px rgba(15,23,42,0.04)' }}>
