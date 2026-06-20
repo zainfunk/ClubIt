@@ -1,5 +1,8 @@
 'use client'
 
+import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import AdminLeaderboard from '@/components/mobile/screens/AdminLeaderboard'
+
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -21,6 +24,12 @@ interface Entry {
 type Tab = 'hours' | 'xp' | 'streak'
 
 export default function LeaderboardPage() {
+  const adminPhone = useIsAdminPhone()
+  if (adminPhone) return <AdminLeaderboard />
+  return <LeaderboardDesktop />
+}
+
+function LeaderboardDesktop() {
   const { currentUser } = useMockAuth()
   const [data, setData] = useState<{ byHours: Entry[]; byXp: Entry[]; byStreak: Entry[] } | null>(null)
   const [loading, setLoading] = useState(true)

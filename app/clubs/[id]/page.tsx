@@ -1,5 +1,8 @@
 'use client'
 
+import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import ClubDetailMobile from '@/components/mobile/screens/ClubDetail'
+
 import { use, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -54,6 +57,12 @@ interface PageProps {
 }
 
 export default function ClubDetailPage({ params }: PageProps) {
+  const adminPhone = useIsAdminPhone()
+  if (adminPhone) return <ClubDetailMobile />
+  return <ClubDetailDesktop params={params} />
+}
+
+function ClubDetailDesktop({ params }: PageProps) {
   const { id } = use(params)
   const { currentUser, devRole } = useMockAuth()
 

@@ -1,5 +1,8 @@
 'use client'
 
+import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import AdminSettingsScreen from '@/components/mobile/screens/AdminSettingsScreen'
+
 import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
 import {
@@ -86,6 +89,12 @@ function SettingRow({
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
+  const adminPhone = useIsAdminPhone()
+  if (adminPhone) return <AdminSettingsScreen />
+  return <SettingsDesktop />
+}
+
+function SettingsDesktop() {
   const { currentUser, schoolPrincipal, schoolContactEmail } = useMockAuth()
   const { darkMode, toggleDarkMode } = useAppSettings()
   const isAdmin = currentUser.role === 'admin'

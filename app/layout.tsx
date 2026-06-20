@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Manrope, Inter } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
+import { headers } from "next/headers";
+import { isMobileUserAgent } from "@/lib/platform";
+import { DeviceProvider } from "@/components/mobile/DeviceProvider";
 import { MockAuthProvider } from "@/lib/mock-auth";
 import { ChatProvider } from "@/lib/chat-store";
 import AppShell from "@/components/layout/AppShell";
@@ -58,11 +61,15 @@ export const viewport: Viewport = {
   themeColor: "#6366f1",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Seed phone vs desktop from the request UA so the native app and mobile
+  // browsers render the right shell on first paint (no hydration flash).
+  const ua = (await headers()).get("user-agent");
+  const initialIsPhone = isMobileUserAgent(ua);
   return (
     // Telemetry disabled: ClubIt serves minors, so we don't emit any
     // third-party usage telemetry (App Store kids/privacy posture).
@@ -79,6 +86,7 @@ export default function RootLayout({
             style: { fontFamily: 'var(--font-inter, sans-serif)', fontSize: '0.875rem' },
           }}
         />
+        <DeviceProvider initialIsPhone={initialIsPhone}>
         <MockAuthProvider>
           <RealtimeSyncProvider>
           <ChatProvider>
@@ -92,6 +100,7 @@ export default function RootLayout({
           </ChatProvider>
           </RealtimeSyncProvider>
         </MockAuthProvider>
+        </DeviceProvider>
       </body>
     </html>
     </ClerkProvider>

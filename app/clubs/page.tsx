@@ -1,5 +1,8 @@
 'use client'
 
+import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import AdminClubs from '@/components/mobile/screens/AdminClubs'
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
@@ -40,6 +43,12 @@ function capacityDot(memberCount: number, capacity: number | null): string {
 }
 
 export default function ClubsPage() {
+  const adminPhone = useIsAdminPhone()
+  if (adminPhone) return <AdminClubs />
+  return <ClubsDesktop />
+}
+
+function ClubsDesktop() {
   const { actualUser } = useMockAuth()
   const [clubs, setClubs] = useState<Club[]>([])
   const [myMembershipClubIds, setMyMembershipClubIds] = useState<string[]>([])

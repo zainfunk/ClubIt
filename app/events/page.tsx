@@ -1,5 +1,8 @@
 'use client'
 
+import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import AdminEvents from '@/components/mobile/screens/AdminEvents'
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
@@ -19,6 +22,12 @@ const PAST_COLORS = { spine: 'bg-gray-100', spineText: 'text-gray-500', badge: '
 const DEFAULT_COLORS = { spine: 'bg-blue-50', spineText: 'text-blue-800', badge: 'bg-blue-100', badgeText: 'text-blue-700', panel: 'bg-blue-50/60' }
 
 export default function EventsPage() {
+  const adminPhone = useIsAdminPhone()
+  if (adminPhone) return <AdminEvents />
+  return <EventsDesktop />
+}
+
+function EventsDesktop() {
   const { currentUser } = useMockAuth()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('upcoming')

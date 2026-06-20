@@ -1,5 +1,8 @@
 'use client'
 
+import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import Moderation from '@/components/mobile/screens/Moderation'
+
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import RoleGuard from '@/components/layout/RoleGuard'
@@ -17,6 +20,12 @@ interface Report {
 }
 
 export default function ModerationPage() {
+  const adminPhone = useIsAdminPhone()
+  if (adminPhone) return <Moderation />
+  return <ModerationDesktop />
+}
+
+function ModerationDesktop() {
   const [reports, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState<string | null>(null)

@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
+import { useIsPhone } from '@/components/mobile/DeviceProvider'
+import AdminHome from '@/components/mobile/screens/AdminHome'
 import { supabase } from '@/lib/supabase'
 import { Users, BookOpen, Pin, Calendar, MessageSquare, CheckCircle, Clock, AlertCircle, ChevronDown, ChevronUp, ArrowRight, Plus, X } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -28,6 +30,15 @@ const PATTERN_ICON_STYLES: Record<string, { bg: string; text: string }> = {
 }
 
 export default function DashboardPage() {
+  const isPhone = useIsPhone()
+  const { currentUser } = useMockAuth()
+  if (isPhone && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) {
+    return <AdminHome />
+  }
+  return <DesktopDashboard />
+}
+
+function DesktopDashboard() {
   const { currentUser } = useMockAuth()
   const [myClubs, setMyClubs] = useState<Club[]>([])
   const [advisorNames, setAdvisorNames] = useState<Record<string, string>>({})

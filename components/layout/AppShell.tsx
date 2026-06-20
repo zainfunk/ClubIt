@@ -5,17 +5,35 @@ import Navbar from './Navbar'
 import TopBar from './TopBar'
 import MobileTabBar from './MobileTabBar'
 import { MobileNavProvider } from './MobileNavContext'
+import { useIsPhone } from '@/components/mobile/DeviceProvider'
+import { useMockAuth } from '@/lib/mock-auth'
+import MobileShell from '@/components/mobile/MobileShell'
+
+// Roles whose phone experience has been migrated to the new mobile design.
+// Others keep the existing responsive layout until their versions ship.
+const MOBILE_ROLES = ['admin', 'superadmin']
 
 // Pages that should render without the sidebar/topbar shell
-const BARE_ROUTES = ['/sign-in', '/sign-up', '/onboard', '/join', '/setup', '/invite', '/school']
+const BARE_ROUTES = ['/sign-in', '/sign-up', '/onboard', '/join', '/setup', '/invite', '/school', '/admin/ios']
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const isPhone = useIsPhone()
+  const { currentUser } = useMockAuth()
   // The public landing page and checkout flow render bare (no sidebar/topbar).
   const isLanding = pathname === '/' || pathname.startsWith('/landing') || pathname.startsWith('/subscribe')
   const isBare = isLanding || BARE_ROUTES.some(r => pathname.startsWith(r))
 
   if (isBare) return <>{children}</>
+
+  // Phone-class clients on migrated roles get the new mobile experience.
+  if (isPhone && MOBILE_ROLES.includes(currentUser.role)) {
+    return (
+      <MobileShell role={currentUser.role} userName={currentUser.name}>
+        {children}
+      </MobileShell>
+    )
+  }
 
   return (
     <MobileNavProvider>

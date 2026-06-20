@@ -21,3 +21,18 @@ export const NATIVE_APP_UA_TOKEN = 'ClubItNativeApp'
 export function isNativeUserAgent(userAgent: string | null | undefined): boolean {
   return !!userAgent && userAgent.includes(NATIVE_APP_UA_TOKEN)
 }
+
+/**
+ * Detect a phone-class client from a user-agent string: the native iOS app, or
+ * any mobile browser. Used to decide (server-side, flash-free) whether to serve
+ * the new mobile experience. Tablets/desktops fall through to the desktop UI.
+ *
+ * This is the SSR seed only — the client refines it with a viewport media query
+ * (see DeviceProvider) so a narrow desktop window also gets the mobile UI.
+ */
+export function isMobileUserAgent(userAgent: string | null | undefined): boolean {
+  if (!userAgent) return false
+  if (isNativeUserAgent(userAgent)) return true
+  // Exclude iPad (desktop-class UA on modern iPadOS); target phones.
+  return /Android.+Mobile|iPhone|iPod|Windows Phone|BlackBerry|webOS|Opera Mini|IEMobile/i.test(userAgent)
+}

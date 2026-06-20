@@ -1,5 +1,8 @@
 'use client'
 
+import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import ChatThread from '@/components/mobile/screens/ChatThread'
+
 import { use, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -29,6 +32,12 @@ function formatDateGroup(iso: string) {
 }
 
 export default function ClubChatPage({ params }: { params: Promise<{ clubId: string }> }) {
+  const adminPhone = useIsAdminPhone()
+  if (adminPhone) return <ChatThread />
+  return <ClubChatDesktop params={params} />
+}
+
+function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
   const { clubId } = use(params)
   const router = useRouter()
   const { currentUser, devRole } = useMockAuth()

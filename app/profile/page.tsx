@@ -1,5 +1,8 @@
 'use client'
 
+import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import AdminProfile from '@/components/mobile/screens/AdminProfile'
+
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
@@ -37,6 +40,12 @@ const ROLE_LABEL: Record<string, string> = {
 type Tab = 'overview' | 'clubs' | 'attendance' | 'achievements'
 
 export default function ProfilePage() {
+  const adminPhone = useIsAdminPhone()
+  if (adminPhone) return <AdminProfile />
+  return <ProfileDesktop />
+}
+
+function ProfileDesktop() {
   const { currentUser } = useMockAuth()
   const profileUser = currentUser
   const canEdit = true

@@ -1,0 +1,70 @@
+'use client'
+
+// Events (route: /events, phone + admin). Live via fetchSchoolClubs + the events
+// table (RLS client).
+
+import { useEffect, useState } from 'react'
+import { useMockAuth } from '@/lib/mock-auth'
+import { supabase } from '@/lib/supabase'
+import { fetchSchoolClubs } from '@/lib/school-data'
+import { css, BOTTOM, tintFor } from '../css'
+import { ScreenHeader, Loader, EmptyState } from '../primitives'
+import { monthDay } from '../format'
+import { useToast } from '../toast'
+
+interface EvRow { id: string; club_id: string; title: string; date: string; location: string | null; is_public: boolean }
+interface Ev { id: string; clubName: string; tint: string; month: string; day: string; title: string; location: string | null; isPublic: boolean; date: string }
+
+export default function AdminEvents() {
+  const { actualUser } = useMockAuth()
+  const toast = useToast()
+  const [events, setEvents] = useState<Ev[] | null>(null)
+
+  useEffect(() => {
+    const schoolId = actualUser.schoolId
+    if (!schoolId) return
+    let cancelled = false
+    async function load() {
+      const clubs = await fetchSchoolClubs(schoolId!)
+      const clubMap: Record<string, string> = {}
+      for (const c of clubs) clubMap[c.id] = c.name
+      const ids = clubs.map(c => c.id)
+      if (ids.length === 0) { if (!cancelled) setEvents([]); return }
+      const { data } = await supabase.from('events').select('id, club_id, title, date, location, is_public').in('club_id', ids)
+      if (cancelled) return
+      const rows = (data ?? []) as EvRow[]
+      const mapped: Ev[] = rows
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map(r => ({ id: r.id, clubName: clubMap[r.club_id] ?? 'Club', tint: tintFor(r.club_id), ...monthDay(r.date), title: r.title, location: r.location, isPublic: r.is_public, date: r.date }))
+      setEvents(mapped)
+    }
+    load().catch(() => { if (!cancelled) setEvents([]) })
+    return () => { cancelled = true }
+  }, [actualUser.schoolId])
+
+  const addBtn = (
+    <button onClick={() => toast('Create events from a club page')} style={css('width:38px;height:38px;border-radius:13px;border:none;background:#0f1729;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+    </button>
+  )
+
+  return (
+    <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;animation:scIn .24s ease;')}>
+      <ScreenHeader title="Events" right={addBtn} />
+      {events === null ? <Loader /> : (
+        <div className="m-noscroll" style={{ ...css('flex:1;overflow-y:auto;padding:6px 20px 0;'), paddingBottom: `calc(${BOTTOM(0)} + 96px)` }}>
+          {events.length === 0 ? <EmptyState title="No events scheduled" sub="Upcoming club events will appear here." /> : events.map(ev => (
+            <div key={ev.id} style={css('display:flex;gap:14px;background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:14px;margin-bottom:11px;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
+              <div style={css(`width:50px;flex:none;text-align:center;background:${ev.tint};border-radius:14px;padding:9px 0;`)}><div style={css('font-size:10px;font-weight:800;color:#6366f1;letter-spacing:.06em;')}>{ev.month}</div><div style={css("font-family:var(--font-manrope);font-weight:800;font-size:20px;color:#0f1729;line-height:1;margin-top:2px;")}>{ev.day}</div></div>
+              <div style={css('flex:1;min-width:0;')}>
+                <div style={css("font-size:14.5px;font-weight:700;color:#0f1729;font-family:var(--font-manrope);")}>{ev.title}</div>
+                <div style={css('font-size:12px;color:#9aa0ac;font-weight:500;margin-top:3px;')}>{ev.clubName}{ev.location ? ` · ${ev.location}` : ''}</div>
+                <div style={css('display:flex;align-items:center;gap:7px;margin-top:9px;')}><span style={css(`font-size:11px;font-weight:700;padding:3px 8px;border-radius:7px;background:${ev.isPublic ? '#e8faf2' : '#fff7e6'};color:${ev.isPublic ? '#10b981' : '#b45309'};`)}>{ev.isPublic ? 'Public' : 'Members'}</span></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
