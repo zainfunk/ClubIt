@@ -1,5 +1,7 @@
 'use client'
 
+import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import AdminPanel from '@/components/mobile/screens/AdminPanel'
 import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
 import { supabase } from '@/lib/supabase'
@@ -13,6 +15,11 @@ import Avatar from '@/components/Avatar'
 import { Users, Shield, Vote, Plus, GraduationCap, MessageSquare, CheckCircle, Clock, Copy, Check, KeyRound } from 'lucide-react'
 
 export default function AdminPage() {
+  if (useIsAdminPhone()) return <AdminPanel />
+  return <AdminPageDesktop />
+}
+
+function AdminPageDesktop() {
   const { actualUser, schoolName } = useMockAuth()
   const [clubs, setClubs] = useState<Club[]>([])
   const [advisorNames, setAdvisorNames] = useState<Record<string, string>>({})

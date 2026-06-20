@@ -73,7 +73,7 @@ export default function AdminHome() {
   ]
 
   const quickActions = [
-    { bg: '#eef0ff', stroke: '#6366f1', icon: <path d="M12 5v14M5 12h14" />, label: 'New club', onClick: () => router.push('/admin') },
+    { bg: '#eef0ff', stroke: '#6366f1', icon: <path d="M12 5v14M5 12h14" />, label: 'New club', onClick: () => router.push('/admin/new-club') },
     { bg: '#f3edff', stroke: '#8b5cf6', icon: <path d="M9 12l2 2 4-4M5 7l7-4 7 4v6c0 5-3.5 7.5-7 8.5C8.5 20.5 5 18 5 13z" />, label: 'Start election', onClick: () => router.push('/admin') },
     { bg: '#e8faf2', stroke: '#10b981', icon: <path d="M21 2 11 12M21 2l-7 20-4-9-9-4z" />, label: 'Invite codes', onClick: () => router.push('/invites') },
     { bg: '#fff1e9', stroke: '#f59e0b', icon: <><rect x="3" y="4" width="18" height="18" rx="3" /><path d="M16 2v4M8 2v4M3 10h18" /></>, label: 'New event', onClick: () => router.push('/events') },

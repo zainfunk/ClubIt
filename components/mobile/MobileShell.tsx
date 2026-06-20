@@ -56,7 +56,6 @@ function moreItemsFor(role: Role): MoreItem[] {
     { label: 'Leaderboard', href: '/leaderboard', bg: '#fff7e6', stroke: '#f59e0b', icon: ICONS.trophy },
   ]
   if (role === 'admin' || role === 'superadmin') {
-    base.unshift({ label: 'Admin dashboard', href: '/admin', bg: '#eef0ff', stroke: '#6366f1', icon: ICONS.grid })
     base.push(
       { label: 'Moderation', href: '/admin/moderation', bg: '#fff1f2', stroke: '#ef4444', icon: ICONS.shield },
       { label: 'Invite codes', href: '/invites', bg: '#e8faf2', stroke: '#10b981', icon: ICONS.invite },
@@ -128,6 +127,13 @@ export default function MobileShell({ role, userName, children }: { role: Role; 
           <div onClick={() => setMoreOpen(false)} style={css('position:absolute;inset:0;background:rgba(15,23,41,.35);animation:fadeIn .2s ease;')} />
           <div style={{ ...css('position:absolute;left:0;right:0;bottom:0;background:#f2f2f7;border-radius:26px 26px 0 0;padding:10px 16px 0;animation:sheetUp .28s cubic-bezier(.32,.72,0,1);box-shadow:0 -8px 30px rgba(15,23,41,.18);'), paddingBottom: BOTTOM(34) }}>
             <div style={css('width:38px;height:5px;border-radius:3px;background:#d4d5db;margin:4px auto 14px;')} />
+            {(role === 'admin' || role === 'superadmin') && (
+              <button onClick={() => go('/admin')} style={css('width:100%;background:linear-gradient(135deg,#6366f1,#10b981);border:none;border-radius:16px;padding:15px 16px;display:flex;align-items:center;gap:13px;cursor:pointer;text-align:left;margin-bottom:11px;box-shadow:0 8px 18px -6px rgba(99,102,241,.5);')}>
+                <span style={css('width:42px;height:42px;border-radius:13px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;flex:none;')}><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V5z" /><path d="M9 12l2 2 4-4" /></svg></span>
+                <div style={css('flex:1;min-width:0;')}><div style={css("font-family:var(--font-manrope);font-weight:800;font-size:15px;color:#fff;")}>Admin panel</div><div style={css('font-size:11.5px;color:rgba(255,255,255,.82);font-weight:500;')}>Create clubs · manage staff &amp; access</div></div>
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
+              </button>
+            )}
             <div style={css('display:grid;grid-template-columns:1fr 1fr;gap:11px;')}>
               {moreItems.map(m => (
                 <button key={m.href} onClick={() => go(m.href)} style={css('background:#fff;border:1px solid #eef0f3;border-radius:16px;padding:15px;display:flex;align-items:center;gap:11px;cursor:pointer;text-align:left;position:relative;')}>
