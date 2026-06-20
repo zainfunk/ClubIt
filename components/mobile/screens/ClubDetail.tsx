@@ -1,12 +1,13 @@
 'use client'
 
 // Club detail (route: /clubs/[id], phone). Role-aware: managers see "Manage",
-// students see Join / Leave / Pending. Live via fetchClubDetail.
+// students see Join / Leave / Pending. Live via /api/school/clubs/[id]
+// (service-role; reliable on the phone shell — see lib/school-api.ts).
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { fetchClubDetail } from '@/lib/school-data'
+import { apiClubDetail, type ClubDetailPayload } from '@/lib/school-api'
 import type { User } from '@/types'
 import { css, TOP, avBg, clubIcon, gradientFor } from '../css'
 import { BackButton, Avatar, Loader } from '../primitives'
@@ -14,7 +15,7 @@ import { dayShort, timeRange } from '../format'
 import { useToast } from '../toast'
 import CreateEventSheet from './CreateEventSheet'
 
-type Detail = Awaited<ReturnType<typeof fetchClubDetail>>
+type Detail = ClubDetailPayload
 
 export default function ClubDetail() {
   const params = useParams<{ id: string }>()
@@ -28,22 +29,20 @@ export default function ClubDetail() {
   const [showEventSheet, setShowEventSheet] = useState(false)
 
   useEffect(() => {
-    const schoolId = actualUser.schoolId
-    if (!schoolId || !clubId) return
+    if (!actualUser.id || !clubId) return
     let cancelled = false
-    fetchClubDetail(clubId, schoolId)
+    apiClubDetail(clubId)
       .then(d => { if (!cancelled) { setData(d); setLoaded(true) } })
       .catch(() => { if (!cancelled) setLoaded(true) })
     return () => { cancelled = true }
-  }, [actualUser.schoolId, clubId])
+  }, [actualUser.id, clubId])
 
   async function reload() {
-    const schoolId = actualUser.schoolId
-    if (clubId && schoolId) setData(await fetchClubDetail(clubId, schoolId))
+    if (clubId) setData(await apiClubDetail(clubId))
   }
 
   async function membershipAction(action: 'join' | 'leave') {
-    if (!clubId || !actualUser.schoolId || busy) return
+    if (!clubId || busy) return
     setBusy(true)
     try {
       await fetch(`/api/school/clubs/${clubId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) })

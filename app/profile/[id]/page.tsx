@@ -4,7 +4,7 @@ import { use, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { fetchClubsByIds, fetchSchoolClubs, fetchUsersByIds } from '@/lib/school-data'
+import { apiSchoolUser } from '@/lib/school-api'
 import { supabase } from '@/lib/supabase'
 import { setName, setEmail } from '@/lib/user-store'
 import {
@@ -55,17 +55,33 @@ export default function ViewProfilePage({ params }: PageProps) {
   const [rawUser, setRawUser] = useState<User | null>(null)
   const [userLoading, setUserLoading] = useState(true)
 
+  // Profile clubs + related users — populated together by the single
+  // apiSchoolUser read below (service-role; reliable on every surface).
+  const [memberClubs, setMemberClubs] = useState<Club[]>([])
+  const [advisingClubs, setAdvisingClubs] = useState<Club[]>([])
+  const [usersById, setUsersById] = useState<Record<string, User>>({})
+
   useEffect(() => {
-    if (!currentUser.schoolId) {
+    if (!currentUser.id) {
       Promise.resolve().then(() => setUserLoading(false))
       return
     }
 
-    fetchUsersByIds([id]).then((users) => {
-      setRawUser(users[id] ?? null)
-      setUserLoading(false)
-    })
-  }, [currentUser.schoolId, id])
+    let cancelled = false
+    // Single service-role read resolves the user + their clubs reliably on any
+    // surface (the old client-side fetchUsersByIds was RLS-fragile → 404s).
+    apiSchoolUser(id)
+      .then(({ user, memberClubs, advisingClubs, usersById }) => {
+        if (cancelled) return
+        setRawUser(user)
+        setMemberClubs(memberClubs)
+        setAdvisingClubs(advisingClubs)
+        setUsersById(usersById)
+        setUserLoading(false)
+      })
+      .catch(() => { if (!cancelled) setUserLoading(false) })
+    return () => { cancelled = true }
+  }, [currentUser.id, id])
 
   // Safe placeholder so hooks below can always derive values (shown only during load)
   const profileUser = rawUser ?? { id, name: '', email: '', role: 'student' as Role }
@@ -146,46 +162,10 @@ export default function ViewProfilePage({ params }: PageProps) {
   }
 
   // ---- Clubs & attendance ----
-  const [memberClubs, setMemberClubs] = useState<Club[]>([])
-  const [advisingClubs, setAdvisingClubs] = useState<Club[]>([])
-  const [usersById, setUsersById] = useState<Record<string, User>>({})
   const displayClubs = profileUser.role === 'advisor' ? advisingClubs : memberClubs
 
-  useEffect(() => {
-    if (!profileUser.id || !currentUser.schoolId) return
-
-    supabase.from('memberships').select('club_id').eq('user_id', profileUser.id).then(({ data }) => {
-      const clubIds = (data ?? []).map((row) => row.club_id)
-      if (clubIds.length > 0) {
-        fetchClubsByIds(clubIds).then(setMemberClubs)
-      } else {
-        setMemberClubs([])
-      }
-    })
-
-    if (profileUser.role === 'advisor' || profileUser.role === 'admin') {
-      fetchSchoolClubs(currentUser.schoolId).then((clubs) => {
-        setAdvisingClubs(clubs.filter((club) => club.advisorId === profileUser.id))
-      })
-    } else {
-      Promise.resolve().then(() => setAdvisingClubs([]))
-    }
-  }, [currentUser.schoolId, profileUser.id, profileUser.role])
-
-  useEffect(() => {
-    const relatedUserIds = Array.from(new Set([
-      rawUser?.id ?? '',
-      ...memberClubs.flatMap((club) => [club.advisorId, ...club.memberIds]),
-      ...advisingClubs.flatMap((club) => [club.advisorId, ...club.memberIds]),
-    ].filter(Boolean)))
-
-    if (relatedUserIds.length === 0) {
-      Promise.resolve().then(() => setUsersById({}))
-      return
-    }
-
-    fetchUsersByIds(relatedUserIds).then(setUsersById)
-  }, [advisingClubs, memberClubs, rawUser?.id])
+  // memberClubs / advisingClubs / usersById are populated by the single
+  // apiSchoolUser read above (service-role), so no separate client fetch here.
 
   const [supabaseAttendance, setSupabaseAttendance] = useState<AttendanceRecord[]>([])
   useEffect(() => {

@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { fetchSchoolClubs, fetchSchoolUsers } from '@/lib/school-data'
+import { apiSchoolClubs, apiSchoolUsers } from '@/lib/school-api'
 import { css, TOP, BOTTOM, avBg, initials } from '../css'
 import { Chevron } from '../primitives'
 
@@ -17,18 +17,17 @@ export default function AdminProfile() {
   const [studentCount, setStudentCount] = useState<number | null>(null)
 
   useEffect(() => {
-    const schoolId = currentUser.schoolId
-    if (!schoolId) return
+    if (!currentUser.id) return
     let cancelled = false
-    Promise.all([fetchSchoolClubs(schoolId), fetchSchoolUsers(schoolId)])
-      .then(([clubs, users]) => {
+    Promise.all([apiSchoolClubs(), apiSchoolUsers()])
+      .then(([clubsRes, users]) => {
         if (cancelled) return
-        setClubCount(clubs.length)
+        setClubCount(clubsRes.clubs.length)
         setStudentCount(users.filter(u => u.role === 'student').length)
       })
       .catch(() => { if (!cancelled) { setClubCount(0); setStudentCount(0) } })
     return () => { cancelled = true }
-  }, [currentUser.schoolId])
+  }, [currentUser.id])
 
   const stats: [string, string][] = [
     [clubCount === null ? '—' : String(clubCount), 'Clubs'],

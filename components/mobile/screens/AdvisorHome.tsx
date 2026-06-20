@@ -1,27 +1,26 @@
 'use client'
 
 // Advisor home (route: /dashboard, phone + advisor). Their clubs + pending join
-// requests to approve, live via fetchSchoolClubs + join_requests.
+// requests to approve, live via /api/school/dashboard (service-role; reliable
+// on the phone shell — see lib/school-api.ts).
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { supabase } from '@/lib/supabase'
-import { fetchSchoolClubs, fetchUsersByIds } from '@/lib/school-data'
-import type { Club, User } from '@/types'
+import { apiDashboard } from '@/lib/school-api'
+import type { Club } from '@/types'
 import { css, TOP, BOTTOM, avBg, initials, clubIcon, tintFor } from '../css'
 import { Loader } from '../primitives'
 import { useToast } from '../toast'
 
-interface ReqRow { id: string; club_id: string; user_id: string; status: string }
+interface Approval { id: string; clubId: string; clubName: string; userId: string; userName: string }
 
 export default function AdvisorHome() {
   const { actualUser, currentUser, schoolName } = useMockAuth()
   const router = useRouter()
   const toast = useToast()
   const [clubs, setClubs] = useState<Club[] | null>(null)
-  const [requests, setRequests] = useState<ReqRow[]>([])
-  const [usersById, setUsersById] = useState<Record<string, User>>({})
+  const [requests, setRequests] = useState<Approval[]>([])
 
   const greeting = useMemo(() => {
     const h = new Date().getHours()
@@ -29,33 +28,21 @@ export default function AdvisorHome() {
   }, [])
 
   useEffect(() => {
-    const schoolId = actualUser.schoolId
-    if (!schoolId) return
+    if (!actualUser.id) return
     let cancelled = false
-    async function load() {
-      const all = await fetchSchoolClubs(schoolId!)
-      const mine = all.filter(c => c.advisorId === actualUser.id)
+    apiDashboard().then(dash => {
       if (cancelled) return
-      setClubs(mine)
-      const ids = mine.map(c => c.id)
-      if (ids.length === 0) return
-      const { data } = await supabase.from('join_requests').select('id, club_id, user_id, status').in('club_id', ids).eq('status', 'pending')
-      if (cancelled) return
-      const reqs = (data ?? []) as ReqRow[]
-      setRequests(reqs)
-      setUsersById(await fetchUsersByIds(reqs.map(r => r.user_id)))
-    }
-    load().catch(() => { if (!cancelled) setClubs([]) })
+      setClubs(dash?.clubs ?? [])
+      setRequests((dash?.pendingApprovals ?? []) as Approval[])
+    }).catch(() => { if (!cancelled) setClubs([]) })
     return () => { cancelled = true }
-  }, [actualUser.schoolId, actualUser.id])
+  }, [actualUser.id])
 
-  const clubName = (id: string) => clubs?.find(c => c.id === id)?.name ?? 'Club'
-
-  async function decide(req: ReqRow, action: 'approve' | 'reject') {
+  async function decide(req: Approval, action: 'approve' | 'reject') {
     setRequests(prev => prev.filter(r => r.id !== req.id))
     toast(action === 'approve' ? 'Member approved' : 'Request declined')
     try {
-      await fetch(`/api/school/clubs/${req.club_id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, requestId: req.id }) })
+      await fetch(`/api/school/clubs/${req.clubId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, requestId: req.id }) })
     } catch { /* optimistic */ }
   }
 
@@ -88,11 +75,10 @@ export default function AdvisorHome() {
               </div>
               <div style={css('background:#fff;border:1px solid #eef0f3;border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
                 {requests.map((r, i) => {
-                  const u = usersById[r.user_id]
                   return (
                     <div key={r.id} style={css(`display:flex;align-items:center;gap:11px;padding:12px 15px;${i < requests.length - 1 ? 'border-bottom:1px solid #f4f5f7;' : ''}`)}>
-                      <span style={css(`width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;font-family:var(--font-manrope);flex:none;background:${avBg(u?.name ?? r.user_id)};`)}>{initials(u?.name ?? '?')}</span>
-                      <div style={css('flex:1;min-width:0;')}><div style={css('font-size:13.5px;font-weight:700;color:#1f2734;')}>{u?.name ?? 'Student'}</div><div style={css('font-size:11.5px;color:#9aa0ac;font-weight:500;')}>wants to join {clubName(r.club_id)}</div></div>
+                      <span style={css(`width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;font-family:var(--font-manrope);flex:none;background:${avBg(r.userName ?? r.userId)};`)}>{initials(r.userName ?? '?')}</span>
+                      <div style={css('flex:1;min-width:0;')}><div style={css('font-size:13.5px;font-weight:700;color:#1f2734;')}>{r.userName ?? 'Student'}</div><div style={css('font-size:11.5px;color:#9aa0ac;font-weight:500;')}>wants to join {r.clubName}</div></div>
                       <button onClick={() => decide(r, 'reject')} style={css('width:32px;height:32px;border-radius:10px;border:1px solid #eceef1;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#98a2b3" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
                       <button onClick={() => decide(r, 'approve')} style={css('width:32px;height:32px;border-radius:10px;border:none;background:#10b981;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg></button>
                     </div>
@@ -115,7 +101,7 @@ export default function AdvisorHome() {
                 </button>
               </div>
             ) : clubs.map(c => {
-              const pendingForClub = requests.filter(r => r.club_id === c.id).length
+              const pendingForClub = requests.filter(r => r.clubId === c.id).length
               return (
                 <button key={c.id} onClick={() => router.push(`/clubs/${c.id}`)} style={css('width:100%;display:flex;align-items:center;gap:13px;background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:13px;margin-bottom:10px;cursor:pointer;text-align:left;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
                   <span style={css(`width:50px;height:50px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:25px;flex:none;background:${tintFor(c.id)};`)}>{clubIcon(c.tags, c.name)}</span>

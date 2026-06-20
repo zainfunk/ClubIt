@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { fetchSchoolUsers } from '@/lib/school-data'
+import { apiSchoolUsers } from '@/lib/school-api'
 import type { Role, User } from '@/types'
 import { css, TOP, BOTTOM, avBg, initials } from '../css'
 import { BackButton, Loader } from '../primitives'
@@ -27,14 +27,13 @@ export default function StaffRoles() {
   const [people, setPeople] = useState<User[] | null>(null)
 
   useEffect(() => {
-    const schoolId = actualUser.schoolId
-    if (!schoolId) return
+    if (!actualUser.id) return
     let cancelled = false
-    fetchSchoolUsers(schoolId).then(users => {
+    apiSchoolUsers().then(users => {
       if (!cancelled) setPeople(users.filter(u => u.role !== 'superadmin' && u.id !== currentUser.id))
     }).catch(() => { if (!cancelled) setPeople([]) })
     return () => { cancelled = true }
-  }, [actualUser.schoolId, currentUser.id])
+  }, [actualUser.id, currentUser.id])
 
   async function setRole(userId: string, role: SettableRole) {
     setPeople(prev => prev ? prev.map(p => p.id === userId ? { ...p, role: role as Role } : p) : prev)

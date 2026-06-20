@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { supabase } from '@/lib/supabase'
-import { fetchSchoolClubs } from '@/lib/school-data'
+import { apiSchoolClubs } from '@/lib/school-api'
 import { computeUserTotalHours, formatHours } from '@/lib/rewards/hours'
 import { xpToLevel, levelTitle } from '@/lib/rewards/xp'
 import type { Club } from '@/types'
@@ -29,21 +29,20 @@ export default function SelfProfile() {
   const [clubs, setClubs] = useState<Club[] | null>(null)
 
   useEffect(() => {
-    const schoolId = currentUser.schoolId
-    if (!schoolId) return
+    if (!currentUser.id) return
     let cancelled = false
     Promise.all([
       supabase.from('users').select('xp_total').eq('id', currentUser.id).maybeSingle(),
       computeUserTotalHours(currentUser.id),
-      fetchSchoolClubs(schoolId),
+      apiSchoolClubs(),
     ]).then(([xpRes, h, c]) => {
       if (cancelled) return
       setXp((xpRes.data?.xp_total as number | undefined) ?? 0)
       setHours(formatHours(h.totalMinutes))
-      setClubs(c)
+      setClubs(c.clubs)
     }).catch(() => { if (!cancelled) setClubs([]) })
     return () => { cancelled = true }
-  }, [currentUser.id, currentUser.schoolId])
+  }, [currentUser.id])
 
   const myClubs = useMemo(() => (clubs ?? [])
     .filter(c => c.memberIds.includes(currentUser.id) || c.advisorId === currentUser.id)

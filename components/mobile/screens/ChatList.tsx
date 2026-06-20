@@ -1,13 +1,13 @@
 'use client'
 
 // Chat list (route: /chat, phone + admin). Threads = school clubs with their
-// last message, from useChatStore + fetchSchoolClubs.
+// last message, from useChatStore + /api/school/clubs.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { useChatStore } from '@/lib/chat-store'
-import { fetchSchoolClubs } from '@/lib/school-data'
+import { apiSchoolClubs } from '@/lib/school-api'
 import type { Club } from '@/types'
 import { css, BOTTOM, clubIcon, tintFor } from '../css'
 import { ScreenHeader, SearchBar, Loader, EmptyState } from '../primitives'
@@ -20,12 +20,11 @@ export default function ChatList() {
   const [clubs, setClubs] = useState<Club[] | null>(null)
 
   useEffect(() => {
-    const schoolId = actualUser.schoolId
-    if (!schoolId) return
+    if (!actualUser.id) return
     let cancelled = false
-    fetchSchoolClubs(schoolId).then(c => { if (!cancelled) setClubs(c) }).catch(() => { if (!cancelled) setClubs([]) })
+    apiSchoolClubs().then(r => { if (!cancelled) setClubs(r.clubs) }).catch(() => { if (!cancelled) setClubs([]) })
     return () => { cancelled = true }
-  }, [actualUser.schoolId])
+  }, [actualUser.id])
 
   const threads = useMemo(() => {
     if (!clubs) return []

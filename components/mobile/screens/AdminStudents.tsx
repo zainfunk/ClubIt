@@ -1,12 +1,12 @@
 'use client'
 
-// Students roster (route: /students, phone + admin). Live via fetchSchoolUsers
-// + fetchSchoolClubs (to label each student's clubs).
+// Students roster (route: /students, phone + admin). Live via /api/school/users
+// + /api/school/clubs (to label each student's clubs).
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { fetchSchoolClubs, fetchSchoolUsers } from '@/lib/school-data'
+import { apiSchoolClubs, apiSchoolUsers } from '@/lib/school-api'
 import type { Club, User } from '@/types'
 import { css, BOTTOM, avBg, initials } from '../css'
 import { ScreenHeader, SearchBar, Loader, EmptyState } from '../primitives'
@@ -18,14 +18,13 @@ export default function AdminStudents() {
   const [clubs, setClubs] = useState<Club[]>([])
 
   useEffect(() => {
-    const schoolId = actualUser.schoolId
-    if (!schoolId) return
+    if (!actualUser.id) return
     let cancelled = false
-    Promise.all([fetchSchoolUsers(schoolId), fetchSchoolClubs(schoolId)])
-      .then(([u, c]) => { if (!cancelled) { setUsers(u); setClubs(c) } })
+    Promise.all([apiSchoolUsers(), apiSchoolClubs()])
+      .then(([u, c]) => { if (!cancelled) { setUsers(u); setClubs(c.clubs) } })
       .catch(() => { if (!cancelled) setUsers([]) })
     return () => { cancelled = true }
-  }, [actualUser.schoolId])
+  }, [actualUser.id])
 
   const clubsByUser = useMemo(() => {
     const map: Record<string, string[]> = {}

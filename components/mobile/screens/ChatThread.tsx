@@ -1,13 +1,13 @@
 'use client'
 
 // Chat thread (route: /chat/[clubId], phone). Live via useChatStore; sender
-// names + club meta via fetchUsersByIds / fetchClubsByIds.
+// names + club meta via /api/school/* (service-role; reliable on the phone shell).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { useChatStore } from '@/lib/chat-store'
-import { fetchClubsByIds, fetchUsersByIds } from '@/lib/school-data'
+import { apiSchoolClubs, apiSchoolUsers } from '@/lib/school-api'
 import type { Club, User } from '@/types'
 import { css, TOP, BOTTOM, clubIcon, tintFor } from '../css'
 import { useToast } from '../toast'
@@ -32,18 +32,21 @@ export default function ChatThread() {
   useEffect(() => {
     if (!clubId) return
     let cancelled = false
-    fetchClubsByIds([clubId]).then(c => { if (!cancelled) setClub(c[0] ?? null) }).catch(() => {})
+    apiSchoolClubs().then(r => { if (!cancelled) setClub(r.clubs.find(c => c.id === clubId) ?? null) }).catch(() => {})
     return () => { cancelled = true }
   }, [clubId])
 
   // Resolve sender names for whoever appears in the thread.
   useEffect(() => {
-    const ids = Array.from(new Set(clubMessages.map(m => m.senderId).filter(id => id && !usersById[id])))
-    if (ids.length === 0) return
     let cancelled = false
-    fetchUsersByIds(ids).then(map => { if (!cancelled) setUsersById(prev => ({ ...prev, ...map })) }).catch(() => {})
+    apiSchoolUsers().then(users => {
+      if (cancelled) return
+      const map: Record<string, User> = {}
+      for (const u of users) map[u.id] = u
+      setUsersById(map)
+    }).catch(() => {})
     return () => { cancelled = true }
-  }, [clubMessages, usersById])
+  }, [clubId])
 
   // Keep pinned to the latest message.
   useEffect(() => {

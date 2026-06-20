@@ -1,13 +1,13 @@
 'use client'
 
 // Admin panel (route: /admin, phone + admin). The iOS-friendly hub for setting
-// up clubs and managing staff/access. Live via fetchSchoolClubs.
+// up clubs and managing staff/access. Live via /api/school/clubs.
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { fetchSchoolClubs, fetchUsersByIds } from '@/lib/school-data'
-import type { Club, User } from '@/types'
+import { apiSchoolClubs } from '@/lib/school-api'
+import type { Club } from '@/types'
 import { css, TOP, BOTTOM, clubIcon, tintFor } from '../css'
 import { Loader } from '../primitives'
 
@@ -25,17 +25,15 @@ export default function AdminPanel() {
   const [advisorNames, setAdvisorNames] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    const schoolId = actualUser.schoolId
-    if (!schoolId) return
+    if (!actualUser.id) return
     let cancelled = false
-    fetchSchoolClubs(schoolId).then(async c => {
+    apiSchoolClubs().then(r => {
       if (cancelled) return
-      setClubs(c)
-      const byId = await fetchUsersByIds(c.map(x => x.advisorId))
-      if (!cancelled) setAdvisorNames(Object.fromEntries(Object.entries(byId).map(([id, u]) => [id, (u as User).name])))
+      setClubs(r.clubs)
+      setAdvisorNames(r.advisorNames)
     }).catch(() => { if (!cancelled) setClubs([]) })
     return () => { cancelled = true }
-  }, [actualUser.schoolId])
+  }, [actualUser.id])
 
   return (
     <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;animation:scIn .24s ease;')}>

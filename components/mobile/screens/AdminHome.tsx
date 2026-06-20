@@ -1,12 +1,12 @@
 'use client'
 
 // Admin home (route: /dashboard, phone + admin). Live data from /api/school/clubs,
-// /api/school/elections, /api/admin/reports and the users / issue_reports tables.
+// /api/school/elections, /api/admin/reports, /api/school/users and /api/school/issues.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { supabase } from '@/lib/supabase'
+import { apiSchoolIssues, apiSchoolUsers, apiResolveIssue } from '@/lib/school-api'
 import type { Club } from '@/types'
 import { css, TOP, BOTTOM, avBg, initials } from '../css'
 import { Loader } from '../primitives'
@@ -33,33 +33,32 @@ export default function AdminHome() {
   }, [])
 
   useEffect(() => {
-    const schoolId = actualUser.schoolId
-    if (!schoolId) return
+    if (!actualUser.id) return
     let cancelled = false
 
     async function load() {
-      const [clubsRes, electionsRes, reportsRes, usersRes, issuesRes] = await Promise.all([
+      const [clubsRes, electionsRes, reportsRes, users, issues] = await Promise.all([
         fetch('/api/school/clubs', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch('/api/school/elections', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch('/api/admin/reports', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
-        supabase.from('users').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).eq('role', 'student'),
-        supabase.from('issue_reports').select('id, message, reporter_name, status, created_at').eq('school_id', schoolId).eq('status', 'open').order('created_at', { ascending: false }),
+        apiSchoolUsers().catch(() => []),
+        apiSchoolIssues().catch(() => []),
       ])
       if (cancelled) return
       setClubs(clubsRes?.clubs ?? [])
       setOpenElections((electionsRes?.elections ?? []).filter((e: { isOpen: boolean }) => e.isOpen).length)
       setReports((reportsRes?.reports ?? []).filter((r: ReportRow) => !r.removed))
-      setStudentCount(usersRes.count ?? 0)
-      setIssues((issuesRes.data as IssueRow[]) ?? [])
+      setStudentCount(users.filter(u => u.role === 'student').length)
+      setIssues(issues as IssueRow[])
       setLoading(false)
     }
     load()
     return () => { cancelled = true }
-  }, [actualUser.schoolId])
+  }, [actualUser.id])
 
   async function resolveIssue(id: string) {
     setIssues(prev => prev.filter(i => i.id !== id))
-    await supabase.from('issue_reports').update({ status: 'resolved' }).eq('id', id)
+    try { await apiResolveIssue(id) } catch { /* optimistic */ }
     toast('Issue marked resolved')
   }
 

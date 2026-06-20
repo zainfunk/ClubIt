@@ -1,12 +1,12 @@
 'use client'
 
-// Student profile (route: /students/[id], phone + admin). Live via fetchUsersByIds
-// + fetchSchoolClubs (clubs + role).
+// Student profile (route: /students/[id], phone + admin). Live via
+// /api/school/users/[id] (service-role; reliable on the phone shell).
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { fetchSchoolClubs, fetchUsersByIds } from '@/lib/school-data'
+import { apiSchoolUser } from '@/lib/school-api'
 import type { Club, User } from '@/types'
 import { css, TOP, avBg, clubIcon } from '../css'
 import { BackButton, Loader } from '../primitives'
@@ -21,14 +21,18 @@ export default function StudentProfile() {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    const schoolId = actualUser.schoolId
-    if (!schoolId || !studentId) return
+    if (!actualUser.id || !studentId) return
     let cancelled = false
-    Promise.all([fetchUsersByIds([studentId]), fetchSchoolClubs(schoolId)])
-      .then(([byId, c]) => { if (!cancelled) { setUser(byId[studentId] ?? null); setClubs(c); setLoaded(true) } })
+    apiSchoolUser(studentId)
+      .then(({ user, memberClubs, advisingClubs }) => {
+        if (cancelled) return
+        setUser(user)
+        setClubs([...memberClubs, ...advisingClubs])
+        setLoaded(true)
+      })
       .catch(() => { if (!cancelled) setLoaded(true) })
     return () => { cancelled = true }
-  }, [actualUser.schoolId, studentId])
+  }, [actualUser.id, studentId])
 
   const myClubs = useMemo(() => clubs
     .filter(c => studentId && c.memberIds.includes(studentId))

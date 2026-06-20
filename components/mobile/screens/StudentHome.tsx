@@ -1,12 +1,12 @@
 'use client'
 
 // Student home (route: /dashboard, phone + student). Live via /api/school/dashboard
-// + users.xp_total for the level card.
+// (includes xpTotal for the level card).
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { supabase } from '@/lib/supabase'
+import { apiDashboard } from '@/lib/school-api'
 import { xpToLevel, levelTitle } from '@/lib/rewards/xp'
 import type { Club, ClubEvent, JoinRequest } from '@/types'
 import { css, TOP, BOTTOM, avBg, initials, clubIcon, tintFor } from '../css'
@@ -34,12 +34,9 @@ export default function StudentHome() {
   }, [])
 
   useEffect(() => {
-    if (!actualUser.schoolId) return
+    if (!actualUser.id) return
     let cancelled = false
-    Promise.all([
-      fetch('/api/school/dashboard', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
-      supabase.from('users').select('xp_total').eq('id', actualUser.id).maybeSingle(),
-    ]).then(([dash, xpRes]) => {
+    apiDashboard().then(dash => {
       if (cancelled) return
       setData({
         clubs: dash?.clubs ?? [],
@@ -47,10 +44,10 @@ export default function StudentHome() {
         nextEvents: dash?.nextEvents ?? {},
         pendingRequests: dash?.pendingRequests ?? [],
       })
-      setXp((xpRes.data?.xp_total as number | undefined) ?? 0)
-    })
+      setXp(dash?.xpTotal ?? 0)
+    }).catch(() => { if (!cancelled) setData({ clubs: [], advisorNames: {}, nextEvents: {}, pendingRequests: [] }) })
     return () => { cancelled = true }
-  }, [actualUser.schoolId, actualUser.id])
+  }, [actualUser.id])
 
   const level = xpToLevel(xp)
   const curBase = xpForLevel(level)

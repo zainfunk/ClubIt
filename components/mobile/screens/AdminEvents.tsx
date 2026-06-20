@@ -1,18 +1,16 @@
 'use client'
 
-// Events (route: /events, phone + admin). Live via fetchSchoolClubs + the events
-// table (RLS client).
+// Events (route: /events, phone + admin). Live via /api/school/events
+// (service-role; reliable on the phone shell — see lib/school-api.ts).
 
 import { useEffect, useState } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
-import { supabase } from '@/lib/supabase'
-import { fetchSchoolClubs } from '@/lib/school-data'
+import { apiSchoolEvents } from '@/lib/school-api'
 import { css, BOTTOM, tintFor } from '../css'
 import { ScreenHeader, Loader, EmptyState } from '../primitives'
 import { monthDay } from '../format'
 import { useToast } from '../toast'
 
-interface EvRow { id: string; club_id: string; title: string; date: string; location: string | null; is_public: boolean }
 interface Ev { id: string; clubName: string; tint: string; month: string; day: string; title: string; location: string | null; isPublic: boolean; date: string }
 
 export default function AdminEvents() {
@@ -21,26 +19,16 @@ export default function AdminEvents() {
   const [events, setEvents] = useState<Ev[] | null>(null)
 
   useEffect(() => {
-    const schoolId = actualUser.schoolId
-    if (!schoolId) return
+    if (!actualUser.id) return
     let cancelled = false
-    async function load() {
-      const clubs = await fetchSchoolClubs(schoolId!)
-      const clubMap: Record<string, string> = {}
-      for (const c of clubs) clubMap[c.id] = c.name
-      const ids = clubs.map(c => c.id)
-      if (ids.length === 0) { if (!cancelled) setEvents([]); return }
-      const { data } = await supabase.from('events').select('id, club_id, title, date, location, is_public').in('club_id', ids)
+    apiSchoolEvents().then(rows => {
       if (cancelled) return
-      const rows = (data ?? []) as EvRow[]
       const mapped: Ev[] = rows
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .map(r => ({ id: r.id, clubName: clubMap[r.club_id] ?? 'Club', tint: tintFor(r.club_id), ...monthDay(r.date), title: r.title, location: r.location, isPublic: r.is_public, date: r.date }))
+        .map(r => ({ id: r.id, clubName: r.clubName, tint: tintFor(r.clubId), ...monthDay(r.date), title: r.title, location: r.location, isPublic: r.isPublic, date: r.date }))
       setEvents(mapped)
-    }
-    load().catch(() => { if (!cancelled) setEvents([]) })
+    }).catch(() => { if (!cancelled) setEvents([]) })
     return () => { cancelled = true }
-  }, [actualUser.schoolId])
+  }, [actualUser.id])
 
   const addBtn = (
     <button onClick={() => toast('Create events from a club page')} style={css('width:38px;height:38px;border-radius:13px;border:none;background:#0f1729;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}>

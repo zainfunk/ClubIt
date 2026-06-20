@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { fetchSchoolUsers } from '@/lib/school-data'
+import { apiSchoolUsers } from '@/lib/school-api'
 import type { User } from '@/types'
 import { css, TOP, BOTTOM } from '../css'
 import { useToast } from '../toast'
@@ -30,17 +30,16 @@ export default function CreateClub() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    const schoolId = actualUser.schoolId
-    if (!schoolId) return
+    if (!actualUser.id) return
     let cancelled = false
-    fetchSchoolUsers(schoolId).then(users => {
+    apiSchoolUsers().then(users => {
       if (cancelled) return
       const elig = users.filter(u => u.role === 'advisor' || u.role === 'admin' || u.role === 'superadmin')
       setAdvisors(elig)
       setAdvisorId(elig.some(u => u.id === currentUser.id) ? currentUser.id : (elig[0]?.id ?? ''))
     }).catch(() => {})
     return () => { cancelled = true }
-  }, [actualUser.schoolId, currentUser.id])
+  }, [actualUser.id, currentUser.id])
 
   const canCreate = name.trim().length > 0 && !busy
 

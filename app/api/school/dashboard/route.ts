@@ -13,7 +13,7 @@ export async function GET() {
   // Look up the user's role and school
   const { data: userRow } = await db
     .from('users')
-    .select('school_id, role, name')
+    .select('school_id, role, name, xp_total')
     .eq('id', userId)
     .maybeSingle()
 
@@ -25,7 +25,9 @@ export async function GET() {
       pinnedNews: {},
       nextEvents: {},
       pendingRequests: [],
+      pendingApprovals: [],
       issueReports: [],
+      xpTotal: 0,
     })
   }
 
@@ -162,6 +164,41 @@ export async function GET() {
     }
   })
 
+  // Pending approvals — join requests an advisor/admin can action, across the
+  // clubs they manage (advisor: own clubs; admin: all school clubs).
+  let pendingApprovals: { id: string; clubId: string; clubName: string; userId: string; userName: string }[] = []
+  if (role === 'advisor' || role === 'admin' || role === 'superadmin') {
+    const manageIds = myClubIds
+    if (manageIds.length > 0) {
+      const { data: approvalRows } = await db
+        .from('join_requests')
+        .select('id, club_id, user_id, requested_at')
+        .in('club_id', manageIds)
+        .eq('status', 'pending')
+
+      const requesterIds = [...new Set((approvalRows ?? []).map((r) => r.user_id as string))]
+      const nameById: Record<string, string> = {}
+      if (requesterIds.length > 0) {
+        const { data: requesterRows } = await db
+          .from('users')
+          .select('id, name')
+          .in('id', requesterIds)
+        for (const u of requesterRows ?? []) nameById[u.id] = u.name
+      }
+
+      pendingApprovals = (approvalRows ?? []).map((r) => {
+        const clubRow = allClubs.find((c) => c.id === r.club_id)
+        return {
+          id: r.id,
+          clubId: r.club_id,
+          clubName: clubRow?.name ?? 'Club',
+          userId: r.user_id,
+          userName: nameById[r.user_id] ?? 'Student',
+        }
+      })
+    }
+  }
+
   // Issue reports
   const issueReports = (issueRows ?? []).map((r) => {
     const row = r as Record<string, unknown>
@@ -178,7 +215,9 @@ export async function GET() {
     pinnedNews,
     nextEvents,
     pendingRequests,
+    pendingApprovals,
     issueReports,
+    xpTotal: (userRow.xp_total as number | undefined) ?? 0,
     role,
     userName: userRow.name,
   })

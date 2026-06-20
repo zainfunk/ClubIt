@@ -2,12 +2,12 @@
 
 // Elections (route: /elections, phone). Role-aware: managers can create/close;
 // everyone can vote in an open election (once). Live via /api/school/elections;
-// candidate names via fetchUsersByIds; votes via election-store.
+// candidate names via /api/school/users; votes via election-store.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { fetchUsersByIds } from '@/lib/school-data'
+import { apiSchoolUsers } from '@/lib/school-api'
 import { castVote } from '@/lib/election-store'
 import type { SchoolElection, User } from '@/types'
 import { css, BOTTOM } from '../css'
@@ -25,20 +25,22 @@ export default function AdminElections() {
   const canManage = currentUser.role === 'admin' || currentUser.role === 'superadmin'
 
   useEffect(() => {
-    if (!actualUser.schoolId) return
+    if (!actualUser.id) return
     let cancelled = false
     fetch('/api/school/elections', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
       .then(async data => {
         if (cancelled || !data?.elections) { if (!cancelled) setElections([]); return }
         const els = data.elections as SchoolElection[]
-        const ids = Array.from(new Set(els.flatMap(e => e.candidates.map(c => c.userId))))
-        const map = await fetchUsersByIds(ids)
+        const ids = new Set(els.flatMap(e => e.candidates.map(c => c.userId)))
+        const users = await apiSchoolUsers().catch(() => [])
+        const map: Record<string, User> = {}
+        for (const u of users) if (ids.has(u.id)) map[u.id] = u
         if (!cancelled) { setElections(els); setUsersById(map) }
       })
       .catch(() => { if (!cancelled) setElections([]) })
     return () => { cancelled = true }
-  }, [actualUser.schoolId])
+  }, [actualUser.id])
 
   async function closeElection(id: string) {
     setElections(prev => prev ? prev.map(e => e.id === id ? { ...e, isOpen: false } : e) : prev)

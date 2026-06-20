@@ -1,11 +1,12 @@
 'use client'
 
-// Clubs list (route: /clubs, phone + admin). Live via fetchSchoolClubs.
+// Clubs list (route: /clubs, phone — all roles). Live via /api/school/clubs
+// (service-role; reliable on the phone shell — see lib/school-api.ts).
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { fetchSchoolClubs } from '@/lib/school-data'
+import { apiSchoolClubs } from '@/lib/school-api'
 import type { Club } from '@/types'
 import { css, BOTTOM, clubIcon, tintFor } from '../css'
 import { ScreenHeader, SearchBar, Loader, EmptyState } from '../primitives'
@@ -16,12 +17,11 @@ export default function AdminClubs() {
   const [clubs, setClubs] = useState<Club[] | null>(null)
 
   useEffect(() => {
-    const schoolId = actualUser.schoolId
-    if (!schoolId) return
+    if (!actualUser.id) return
     let cancelled = false
-    fetchSchoolClubs(schoolId).then(c => { if (!cancelled) setClubs(c) }).catch(() => { if (!cancelled) setClubs([]) })
+    apiSchoolClubs().then(r => { if (!cancelled) setClubs(r.clubs) }).catch(() => { if (!cancelled) setClubs([]) })
     return () => { cancelled = true }
-  }, [actualUser.schoolId])
+  }, [actualUser.id])
 
   const addBtn = (
     <button onClick={() => router.push('/admin/new-club')} style={css('width:38px;height:38px;border-radius:13px;border:none;background:#0f1729;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}>
