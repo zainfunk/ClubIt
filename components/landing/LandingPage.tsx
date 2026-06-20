@@ -64,9 +64,11 @@ export default function LandingPage() {
       >
         <nav className="max-w-7xl mx-auto flex items-center justify-between px-6 lg:px-8 h-16">
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-emerald-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
+            <img
+              src="/clubit-logo.png"
+              alt="ClubIt"
+              className="w-12 h-12 rounded-xl object-contain group-hover:scale-105 transition-transform"
+            />
             <span
               className="text-xl font-extrabold tracking-tight text-slate-900"
               style={{ fontFamily: 'var(--font-manrope)' }}
@@ -898,9 +900,11 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-5 gap-8 mb-10">
             <div className="md:col-span-2">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-emerald-500 flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-white" />
-                </div>
+                <img
+                  src="/clubit-logo.png"
+                  alt="ClubIt"
+                  className="w-12 h-12 rounded-xl object-contain"
+                />
                 <span className="text-xl font-extrabold" style={{ fontFamily: 'var(--font-manrope)' }}>ClubIt</span>
               </div>
               <p className="text-sm text-slate-500 max-w-xs">

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useClerk } from '@clerk/nextjs'
 import { useMockAuth } from '@/lib/mock-auth'
-import { Sparkles, LayoutDashboard, Calendar, FileText, Compass, User, ShieldCheck, MessageSquare, Settings, LogOut, Globe, X, Trophy, Flag } from 'lucide-react'
+import { LayoutDashboard, Calendar, FileText, Compass, User, ShieldCheck, MessageSquare, Settings, LogOut, Globe, X, Trophy, Flag } from 'lucide-react'
 import { fetchAdminSettings, getAdminSettings } from '@/lib/settings-store'
 import Avatar from '@/components/Avatar'
 import { HelpButton } from '@/components/HelpTour'
@@ -59,9 +59,11 @@ export default function Sidebar() {
       {/* Brand */}
       <div className="flex items-center justify-between px-5 h-16 shrink-0 border-b border-slate-100/80">
         <Link href="/landing" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-indigo-600 to-emerald-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
-            <Sparkles className="w-4 h-4 text-white" />
-          </div>
+          <img
+            src="/clubit-logo.png"
+            alt="ClubIt"
+            className="w-11 h-11 rounded-lg object-contain group-hover:scale-105 transition-transform"
+          />
           <div>
             <span
               className="text-base font-extrabold tracking-tight text-slate-900 leading-none block"
