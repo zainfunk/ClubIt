@@ -1,7 +1,7 @@
 'use client'
 
-// Create club (route: /admin/new-club, phone + admin). Posts to
-// POST /api/school/clubs and returns to the clubs list.
+// Create club (routes: /admin/new-club for admin, /clubs/new for advisor).
+// POSTs to /api/school/clubs and returns to the clubs list.
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -76,7 +76,7 @@ export default function CreateClub() {
   return (
     <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;background:#f2f2f7;animation:scIn .24s ease;')}>
       <div style={{ ...css('padding:0 18px 12px;display:flex;align-items:center;justify-content:space-between;flex:none;border-bottom:1px solid #e9e9ee;background:rgba(242,242,247,.88);backdrop-filter:blur(14px);'), paddingTop: TOP(14) }}>
-        <button onClick={() => router.push('/admin')} style={css('border:none;background:none;font-size:15px;font-weight:600;color:#6366f1;cursor:pointer;padding:0;')}>Cancel</button>
+        <button onClick={() => router.back()} style={css('border:none;background:none;font-size:15px;font-weight:600;color:#6366f1;cursor:pointer;padding:0;')}>Cancel</button>
         <span style={css("font-family:var(--font-manrope);font-weight:800;font-size:16px;color:#0f1729;")}>New club</span>
         <button disabled={!canCreate} onClick={create} style={css(`border:none;background:none;font-size:15px;font-weight:700;cursor:${canCreate ? 'pointer' : 'default'};padding:0;color:${canCreate ? '#6366f1' : '#c0c4cd'};`)}>Create</button>
       </div>

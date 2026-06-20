@@ -68,7 +68,12 @@ export default function AdvisorHome() {
             <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:25px;letter-spacing:-.03em;color:#0f1729;line-height:1.1;margin-top:1px;")}>{currentUser.name || 'Advisor'}</div>
             <div style={css('font-size:12.5px;color:#9aa0ac;font-weight:500;margin-top:2px;')}>{schoolName || 'Your school'}</div>
           </div>
-          <button onClick={() => router.push('/profile')} style={{ ...css("width:40px;height:40px;border-radius:50%;border:none;color:#fff;font-weight:700;font-size:14px;font-family:var(--font-manrope);cursor:pointer;box-shadow:0 4px 10px rgba(99,102,241,.25);flex:none;"), background: avBg(currentUser.name || 'Advisor') }}>{initials(currentUser.name || 'Advisor')}</button>
+          <div style={css('display:flex;align-items:center;gap:10px;flex:none;')}>
+            <button onClick={() => router.push('/clubs/new')} aria-label="Create club" style={css('width:40px;height:40px;border-radius:14px;border:none;background:#0f1729;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 10px rgba(15,23,41,.22);')}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+            </button>
+            <button onClick={() => router.push('/profile')} style={{ ...css("width:40px;height:40px;border-radius:50%;border:none;color:#fff;font-weight:700;font-size:14px;font-family:var(--font-manrope);cursor:pointer;box-shadow:0 4px 10px rgba(99,102,241,.25);"), background: avBg(currentUser.name || 'Advisor') }}>{initials(currentUser.name || 'Advisor')}</button>
+          </div>
         </div>
       </div>
 
@@ -102,8 +107,12 @@ export default function AdvisorHome() {
             <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:16.5px;letter-spacing:-.02em;color:#0f1729;margin-bottom:11px;")}>Your clubs</div>
             {clubs.length === 0 ? (
               <div style={css('background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:24px 20px;text-align:center;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
-                <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:15px;color:#0f1729;")}>No clubs assigned yet</div>
-                <div style={css('font-size:12px;color:#9aa0ac;font-weight:500;margin-top:3px;')}>An admin can assign you as an advisor.</div>
+                <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:15px;color:#0f1729;")}>You aren’t advising any clubs yet</div>
+                <div style={css('font-size:12px;color:#9aa0ac;font-weight:500;margin-top:3px;')}>Start one to begin accepting members.</div>
+                <button onClick={() => router.push('/clubs/new')} style={css('margin-top:14px;display:inline-flex;align-items:center;gap:6px;background:#0f1729;color:#fff;border:none;border-radius:12px;padding:10px 16px;font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer;box-shadow:0 4px 10px rgba(15,23,41,.22);')}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                  Create your first club
+                </button>
               </div>
             ) : clubs.map(c => {
               const pendingForClub = requests.filter(r => r.club_id === c.id).length
