@@ -9,12 +9,10 @@ import { fetchSchoolClubs } from '@/lib/school-data'
 import type { Club } from '@/types'
 import { css, BOTTOM, clubIcon, tintFor } from '../css'
 import { ScreenHeader, SearchBar, Loader, EmptyState } from '../primitives'
-import { useToast } from '../toast'
 
 export default function AdminClubs() {
   const { actualUser } = useMockAuth()
   const router = useRouter()
-  const toast = useToast()
   const [clubs, setClubs] = useState<Club[] | null>(null)
 
   useEffect(() => {
@@ -26,7 +24,7 @@ export default function AdminClubs() {
   }, [actualUser.schoolId])
 
   const addBtn = (
-    <button onClick={() => toast('Create clubs from the admin dashboard')} style={css('width:38px;height:38px;border-radius:13px;border:none;background:#0f1729;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}>
+    <button onClick={() => router.push('/admin')} style={css('width:38px;height:38px;border-radius:13px;border:none;background:#0f1729;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
     </button>
   )

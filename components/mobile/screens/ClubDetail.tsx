@@ -10,7 +10,6 @@ import type { User } from '@/types'
 import { css, TOP, avBg, clubIcon, gradientFor } from '../css'
 import { BackButton, Avatar, Loader } from '../primitives'
 import { dayShort, timeRange } from '../format'
-import { useToast } from '../toast'
 
 type Detail = Awaited<ReturnType<typeof fetchClubDetail>>
 
@@ -19,7 +18,6 @@ export default function ClubDetail() {
   const clubId = params?.id
   const { actualUser } = useMockAuth()
   const router = useRouter()
-  const toast = useToast()
   const [data, setData] = useState<Detail | null>(null)
   const [loaded, setLoaded] = useState(false)
 
@@ -65,7 +63,7 @@ export default function ClubDetail() {
     <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;background:#f2f2f7;animation:scIn .24s ease;')}>
       <div style={css(`height:170px;position:relative;flex:none;background:${gradientFor(club.id)};`)}>
         <div style={{ position: 'absolute', top: TOP(8), left: 16 }}><BackButton light onClick={() => router.push('/clubs')} /></div>
-        <div style={{ position: 'absolute', top: TOP(8), right: 16 }}><button onClick={() => toast('Manage from the admin dashboard')} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;')}>Manage</button></div>
+        <div style={{ position: 'absolute', top: TOP(8), right: 16 }}><button onClick={() => router.push('/admin')} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;')}>Manage</button></div>
         <div style={css('position:absolute;bottom:-30px;left:20px;width:72px;height:72px;border-radius:22px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:38px;box-shadow:0 8px 20px rgba(15,23,42,.18);')}>{clubIcon(club.tags, club.name)}</div>
       </div>
       <div className="m-noscroll" style={css('flex:1;overflow-y:auto;padding:42px 20px 40px;')}>

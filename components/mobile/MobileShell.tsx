@@ -29,6 +29,7 @@ const ICONS = {
   invite: <path d="M21 2 11 12M21 2l-7 20-4-9-9-4z" />,
   settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82M4.6 9a1.65 1.65 0 0 0-.33-1.82" /></>,
   user: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
+  grid: <><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></>,
 }
 
 function tabsFor(role: Role): Tab[] {
@@ -55,6 +56,7 @@ function moreItemsFor(role: Role): MoreItem[] {
     { label: 'Leaderboard', href: '/leaderboard', bg: '#fff7e6', stroke: '#f59e0b', icon: ICONS.trophy },
   ]
   if (role === 'admin' || role === 'superadmin') {
+    base.unshift({ label: 'Admin dashboard', href: '/admin', bg: '#eef0ff', stroke: '#6366f1', icon: ICONS.grid })
     base.push(
       { label: 'Moderation', href: '/admin/moderation', bg: '#fff1f2', stroke: '#ef4444', icon: ICONS.shield },
       { label: 'Invite codes', href: '/invites', bg: '#e8faf2', stroke: '#10b981', icon: ICONS.invite },
@@ -95,7 +97,9 @@ export default function MobileShell({ role, userName, children }: { role: Role; 
     <ToastProvider>
       <GlobalMobileStyles />
       <div style={css('position:fixed;inset:0;background:#f2f2f7;font-family:var(--font-inter),system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;')}>
-        <div style={css('flex:1;position:relative;overflow:hidden;')}>{children}</div>
+        {/* Mobile screens fill inset:0 and scroll internally; desktop-flow pages
+            (e.g. /admin) scroll via this container's overflow-y:auto. */}
+        <div style={css('flex:1;position:relative;overflow-y:auto;overflow-x:hidden;')}>{children}</div>
 
         {showTabBar && (
           <div style={{ ...css('flex:none;z-index:70;background:rgba(248,248,250,.86);backdrop-filter:blur(20px);border-top:1px solid #e2e2e8;'), paddingBottom: BOTTOM(14) }}>

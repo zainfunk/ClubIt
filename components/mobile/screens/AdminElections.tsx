@@ -4,6 +4,7 @@
 // candidate names via fetchUsersByIds; close via PATCH /api/school/elections/[id].
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { fetchUsersByIds } from '@/lib/school-data'
 import type { SchoolElection, User } from '@/types'
@@ -13,6 +14,7 @@ import { useToast } from '../toast'
 
 export default function AdminElections() {
   const { actualUser } = useMockAuth()
+  const router = useRouter()
   const toast = useToast()
   const [elections, setElections] = useState<SchoolElection[] | null>(null)
   const [usersById, setUsersById] = useState<Record<string, User>>({})
@@ -45,7 +47,7 @@ export default function AdminElections() {
   const shown = useMemo(() => (elections ?? []).filter(e => e.isOpen === (tab === 'open')), [elections, tab])
 
   const newBtn = (
-    <button onClick={() => toast('Create elections from the admin dashboard')} style={css('height:36px;padding:0 14px;border-radius:18px;border:none;background:#0f1729;color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;flex:none;')}>
+    <button onClick={() => router.push('/admin')} style={css('height:36px;padding:0 14px;border-radius:18px;border:none;background:#0f1729;color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;flex:none;')}>
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>New
     </button>
   )

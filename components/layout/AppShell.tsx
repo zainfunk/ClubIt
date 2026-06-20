@@ -22,7 +22,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { currentUser } = useMockAuth()
   // The public landing page and checkout flow render bare (no sidebar/topbar).
   const isLanding = pathname === '/' || pathname.startsWith('/landing') || pathname.startsWith('/subscribe')
-  const isBare = isLanding || BARE_ROUTES.some(r => pathname.startsWith(r))
+  // Match exact route or a sub-path — NOT a string prefix, so e.g. the
+  // admin "/invites" page is not swallowed by the "/invite" redemption route.
+  const isBare = isLanding || BARE_ROUTES.some(r => pathname === r || pathname.startsWith(r + '/'))
 
   if (isBare) return <>{children}</>
 
