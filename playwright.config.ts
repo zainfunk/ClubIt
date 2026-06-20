@@ -1,4 +1,8 @@
 import { defineConfig } from '@playwright/test'
+import { config as loadEnv } from 'dotenv'
+
+// Load .env.local so tests inherit CLERK_SECRET_KEY, SUPABASE_*, etc.
+loadEnv({ path: '.env.local', quiet: true })
 
 export default defineConfig({
   // Pick up both the existing E2E suite and the security regression suite.
