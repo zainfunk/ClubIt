@@ -1,6 +1,6 @@
 'use client'
 
-import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import { useIsMobilePhone } from '@/components/mobile/useIsAdminPhone'
 import AdminClubs from '@/components/mobile/screens/AdminClubs'
 
 import { useState, useEffect } from 'react'
@@ -43,8 +43,8 @@ function capacityDot(memberCount: number, capacity: number | null): string {
 }
 
 export default function ClubsPage() {
-  const adminPhone = useIsAdminPhone()
-  if (adminPhone) return <AdminClubs />
+  const mobile = useIsMobilePhone()
+  if (mobile) return <AdminClubs />
   return <ClubsDesktop />
 }
 

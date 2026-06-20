@@ -3,8 +3,9 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
-import { useIsPhone } from '@/components/mobile/DeviceProvider'
+import { useIsMobilePhone } from '@/components/mobile/useIsAdminPhone'
 import AdminHome from '@/components/mobile/screens/AdminHome'
+import StudentHome from '@/components/mobile/screens/StudentHome'
 import { supabase } from '@/lib/supabase'
 import { Users, BookOpen, Pin, Calendar, MessageSquare, CheckCircle, Clock, AlertCircle, ChevronDown, ChevronUp, ArrowRight, Plus, X } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -30,11 +31,9 @@ const PATTERN_ICON_STYLES: Record<string, { bg: string; text: string }> = {
 }
 
 export default function DashboardPage() {
-  const isPhone = useIsPhone()
+  const mobile = useIsMobilePhone()
   const { currentUser } = useMockAuth()
-  if (isPhone && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) {
-    return <AdminHome />
-  }
+  if (mobile) return currentUser.role === 'student' ? <StudentHome /> : <AdminHome />
   return <DesktopDashboard />
 }
 

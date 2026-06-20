@@ -1,6 +1,6 @@
 'use client'
 
-import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import { useIsMobilePhone } from '@/components/mobile/useIsAdminPhone'
 import AdminElections from '@/components/mobile/screens/AdminElections'
 
 import Link from 'next/link'
@@ -53,8 +53,8 @@ const FORM_TYPE_TEXT: Record<string, string> = {
 type FilterTab = 'all' | 'elections' | 'forms'
 
 export default function FormsPage() {
-  const adminPhone = useIsAdminPhone()
-  if (adminPhone) return <AdminElections />
+  const mobile = useIsMobilePhone()
+  if (mobile) return <AdminElections />
   return <FormsDesktop />
 }
 

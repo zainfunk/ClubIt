@@ -14,7 +14,7 @@ import { ScreenHeader, SearchBar, Loader, EmptyState } from '../primitives'
 import { relTime } from '../format'
 
 export default function ChatList() {
-  const { actualUser } = useMockAuth()
+  const { actualUser, currentUser } = useMockAuth()
   const router = useRouter()
   const { messages } = useChatStore()
   const [clubs, setClubs] = useState<Club[] | null>(null)
@@ -29,12 +29,15 @@ export default function ChatList() {
 
   const threads = useMemo(() => {
     if (!clubs) return []
+    // Admins see every club; everyone else sees clubs they're in or advise.
+    const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin'
+    const visible = isAdmin ? clubs : clubs.filter(c => c.memberIds.includes(currentUser.id) || c.advisorId === currentUser.id)
     const lastByClub: Record<string, { content: string; sentAt: string }> = {}
     for (const m of messages) {
       const cur = lastByClub[m.clubId]
       if (!cur || m.sentAt > cur.sentAt) lastByClub[m.clubId] = { content: m.content, sentAt: m.sentAt }
     }
-    return clubs
+    return visible
       .map(c => ({ club: c, last: lastByClub[c.id] }))
       .sort((a, b) => {
         if (a.last && b.last) return b.last.sentAt.localeCompare(a.last.sentAt)
@@ -42,7 +45,7 @@ export default function ChatList() {
         if (b.last) return 1
         return a.club.name.localeCompare(b.club.name)
       })
-  }, [clubs, messages])
+  }, [clubs, messages, currentUser.id, currentUser.role])
 
   return (
     <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;animation:scIn .24s ease;')}>

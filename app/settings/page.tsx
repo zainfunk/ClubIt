@@ -1,7 +1,8 @@
 'use client'
 
-import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import { useIsMobilePhone } from '@/components/mobile/useIsAdminPhone'
 import AdminSettingsScreen from '@/components/mobile/screens/AdminSettingsScreen'
+import StudentSettings from '@/components/mobile/screens/StudentSettings'
 
 import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
@@ -89,8 +90,9 @@ function SettingRow({
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const adminPhone = useIsAdminPhone()
-  if (adminPhone) return <AdminSettingsScreen />
+  const mobile = useIsMobilePhone()
+  const { currentUser } = useMockAuth()
+  if (mobile) return (currentUser.role === 'admin' || currentUser.role === 'superadmin') ? <AdminSettingsScreen /> : <StudentSettings />
   return <SettingsDesktop />
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import { useIsMobilePhone } from '@/components/mobile/useIsAdminPhone'
 import ChatThread from '@/components/mobile/screens/ChatThread'
 
 import { use, useEffect, useRef, useState } from 'react'
@@ -32,8 +32,8 @@ function formatDateGroup(iso: string) {
 }
 
 export default function ClubChatPage({ params }: { params: Promise<{ clubId: string }> }) {
-  const adminPhone = useIsAdminPhone()
-  if (adminPhone) return <ChatThread />
+  const mobile = useIsMobilePhone()
+  if (mobile) return <ChatThread />
   return <ClubChatDesktop params={params} />
 }
 

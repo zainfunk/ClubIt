@@ -1,6 +1,6 @@
 'use client'
 
-import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import { useIsMobilePhone } from '@/components/mobile/useIsAdminPhone'
 import AdminLeaderboard from '@/components/mobile/screens/AdminLeaderboard'
 
 import { useEffect, useState } from 'react'
@@ -24,8 +24,8 @@ interface Entry {
 type Tab = 'hours' | 'xp' | 'streak'
 
 export default function LeaderboardPage() {
-  const adminPhone = useIsAdminPhone()
-  if (adminPhone) return <AdminLeaderboard />
+  const mobile = useIsMobilePhone()
+  if (mobile) return <AdminLeaderboard />
   return <LeaderboardDesktop />
 }
 

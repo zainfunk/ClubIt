@@ -8,10 +8,7 @@ import { MobileNavProvider } from './MobileNavContext'
 import { useIsPhone } from '@/components/mobile/DeviceProvider'
 import { useMockAuth } from '@/lib/mock-auth'
 import MobileShell from '@/components/mobile/MobileShell'
-
-// Roles whose phone experience has been migrated to the new mobile design.
-// Others keep the existing responsive layout until their versions ship.
-const MOBILE_ROLES = ['admin', 'superadmin']
+import { MOBILE_ROLES } from '@/components/mobile/useIsAdminPhone'
 
 // Pages that should render without the sidebar/topbar shell
 const BARE_ROUTES = ['/sign-in', '/sign-up', '/onboard', '/join', '/setup', '/invite', '/school', '/admin/ios']

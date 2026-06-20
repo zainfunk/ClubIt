@@ -1,12 +1,24 @@
 'use client'
 
-// True when the current client is phone-class AND the signed-in user is an
-// admin/superadmin — i.e. should see the new mobile admin experience. Used by
-// route pages to branch between the mobile screen and the desktop view.
+// Phone-class + role gating for the new mobile experience. Roles listed in
+// MOBILE_ROLES get the mobile design; others keep the existing responsive UI
+// until their version ships.
 
 import { useIsPhone } from './DeviceProvider'
 import { useMockAuth } from '@/lib/mock-auth'
+import type { Role } from '@/types'
 
+// Roles migrated to the new mobile design. Keep in sync with AppShell.
+export const MOBILE_ROLES: Role[] = ['admin', 'superadmin', 'student']
+
+/** Phone-class client whose role has been migrated to the mobile design. */
+export function useIsMobilePhone(): boolean {
+  const isPhone = useIsPhone()
+  const { currentUser } = useMockAuth()
+  return isPhone && MOBILE_ROLES.includes(currentUser.role)
+}
+
+/** Phone-class client who is specifically an admin/superadmin. */
 export function useIsAdminPhone(): boolean {
   const isPhone = useIsPhone()
   const { currentUser } = useMockAuth()

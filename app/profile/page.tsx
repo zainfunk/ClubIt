@@ -1,7 +1,8 @@
 'use client'
 
-import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import { useIsMobilePhone } from '@/components/mobile/useIsAdminPhone'
 import AdminProfile from '@/components/mobile/screens/AdminProfile'
+import SelfProfile from '@/components/mobile/screens/SelfProfile'
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
@@ -40,8 +41,9 @@ const ROLE_LABEL: Record<string, string> = {
 type Tab = 'overview' | 'clubs' | 'attendance' | 'achievements'
 
 export default function ProfilePage() {
-  const adminPhone = useIsAdminPhone()
-  if (adminPhone) return <AdminProfile />
+  const mobile = useIsMobilePhone()
+  const { currentUser } = useMockAuth()
+  if (mobile) return currentUser.role === 'student' ? <SelfProfile /> : <AdminProfile />
   return <ProfileDesktop />
 }
 

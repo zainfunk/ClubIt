@@ -1,6 +1,6 @@
 'use client'
 
-import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import { useIsMobilePhone } from '@/components/mobile/useIsAdminPhone'
 import ClubDetailMobile from '@/components/mobile/screens/ClubDetail'
 
 import { use, useState, useEffect, useRef } from 'react'
@@ -57,8 +57,8 @@ interface PageProps {
 }
 
 export default function ClubDetailPage({ params }: PageProps) {
-  const adminPhone = useIsAdminPhone()
-  if (adminPhone) return <ClubDetailMobile />
+  const mobile = useIsMobilePhone()
+  if (mobile) return <ClubDetailMobile />
   return <ClubDetailDesktop params={params} />
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
+import { useIsMobilePhone } from '@/components/mobile/useIsAdminPhone'
 import ChatList from '@/components/mobile/screens/ChatList'
 
 import Link from 'next/link'
@@ -13,8 +13,8 @@ import Avatar from '@/components/Avatar'
 import { MessageSquare, Users, ArrowRight } from 'lucide-react'
 
 export default function ChatPage() {
-  const adminPhone = useIsAdminPhone()
-  if (adminPhone) return <ChatList />
+  const mobile = useIsMobilePhone()
+  if (mobile) return <ChatList />
   return <ChatDesktop />
 }
 

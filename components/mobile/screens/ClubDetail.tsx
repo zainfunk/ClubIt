@@ -1,6 +1,7 @@
 'use client'
 
-// Club detail (route: /clubs/[id], phone + admin). Live via fetchClubDetail.
+// Club detail (route: /clubs/[id], phone). Role-aware: managers see "Manage",
+// students see Join / Leave / Pending. Live via fetchClubDetail.
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -10,16 +11,19 @@ import type { User } from '@/types'
 import { css, TOP, avBg, clubIcon, gradientFor } from '../css'
 import { BackButton, Avatar, Loader } from '../primitives'
 import { dayShort, timeRange } from '../format'
+import { useToast } from '../toast'
 
 type Detail = Awaited<ReturnType<typeof fetchClubDetail>>
 
 export default function ClubDetail() {
   const params = useParams<{ id: string }>()
   const clubId = params?.id
-  const { actualUser } = useMockAuth()
+  const { actualUser, currentUser } = useMockAuth()
   const router = useRouter()
+  const toast = useToast()
   const [data, setData] = useState<Detail | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     const schoolId = actualUser.schoolId
@@ -30,6 +34,21 @@ export default function ClubDetail() {
       .catch(() => { if (!cancelled) setLoaded(true) })
     return () => { cancelled = true }
   }, [actualUser.schoolId, clubId])
+
+  async function membershipAction(action: 'join' | 'leave') {
+    const schoolId = actualUser.schoolId
+    if (!clubId || !schoolId || busy) return
+    setBusy(true)
+    try {
+      await fetch(`/api/school/clubs/${clubId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) })
+      setData(await fetchClubDetail(clubId, schoolId))
+      toast(action === 'join' ? 'Request sent' : 'Left club')
+    } catch {
+      toast('Something went wrong')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   if (!loaded) {
     return (
@@ -49,7 +68,10 @@ export default function ClubDetail() {
     )
   }
 
-  const { club, usersById, memberships } = data
+  const { club, usersById, memberships, requests } = data
+  const isManager = currentUser.role === 'admin' || currentUser.role === 'superadmin' || club.advisorId === currentUser.id
+  const isMember = club.memberIds.includes(currentUser.id)
+  const pending = requests.some(r => r.userId === currentUser.id && r.status === 'pending')
   const advisor = usersById[club.advisorId]
   const presidentPos = club.leadershipPositions.find(p => /president/i.test(p.title) && p.userId)
   const president = presidentPos?.userId ? usersById[presidentPos.userId] : undefined
@@ -63,7 +85,17 @@ export default function ClubDetail() {
     <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;background:#f2f2f7;animation:scIn .24s ease;')}>
       <div style={css(`height:170px;position:relative;flex:none;background:${gradientFor(club.id)};`)}>
         <div style={{ position: 'absolute', top: TOP(8), left: 16 }}><BackButton light onClick={() => router.push('/clubs')} /></div>
-        <div style={{ position: 'absolute', top: TOP(8), right: 16 }}><button onClick={() => router.push('/admin')} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;')}>Manage</button></div>
+        <div style={{ position: 'absolute', top: TOP(8), right: 16 }}>
+          {isManager ? (
+            <button onClick={() => router.push('/admin')} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;')}>Manage</button>
+          ) : isMember ? (
+            <button disabled={busy} onClick={() => membershipAction('leave')} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;')}>Leave</button>
+          ) : pending ? (
+            <span style={css('height:38px;padding:0 15px;border-radius:19px;background:rgba(255,255,255,.18);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;')}>Pending</span>
+          ) : (
+            <button disabled={busy} onClick={() => membershipAction('join')} style={css('height:38px;padding:0 18px;border-radius:19px;border:none;background:#fff;color:#0f1729;font-size:13px;font-weight:800;cursor:pointer;')}>Join</button>
+          )}
+        </div>
         <div style={css('position:absolute;bottom:-30px;left:20px;width:72px;height:72px;border-radius:22px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:38px;box-shadow:0 8px 20px rgba(15,23,42,.18);')}>{clubIcon(club.tags, club.name)}</div>
       </div>
       <div className="m-noscroll" style={css('flex:1;overflow-y:auto;padding:42px 20px 40px;')}>
