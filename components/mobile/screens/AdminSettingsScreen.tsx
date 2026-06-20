@@ -13,6 +13,7 @@ import { isNativeUserAgent } from '@/lib/platform'
 import { css, TOP, BOTTOM } from '../css'
 import { Loader } from '../primitives'
 import { useToast } from '../toast'
+import AccountActions from '../AccountActions'
 
 type Key = keyof AdminSettings
 const FEATURES: { key: Key; bg: string; stroke: string; icon: React.ReactNode; title: string; sub: string }[] = [
@@ -79,7 +80,8 @@ export default function AdminSettingsScreen() {
             {!isNative && (
               <button onClick={() => router.push('/admin/billing')} style={css('width:100%;display:flex;align-items:center;gap:12px;padding:13px 0;border:none;border-bottom:1px solid #f4f5f7;background:none;cursor:pointer;text-align:left;')}><span style={css('width:34px;height:34px;border-radius:10px;background:#f3edff;display:flex;align-items:center;justify-content:center;flex:none;')}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="3" /><path d="M2 10h20" /></svg></span><span style={css('flex:1;font-size:13.5px;font-weight:600;color:#1f2734;')}>Billing &amp; subscription</span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#c5cad3" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg></button>
             )}
-            <button onClick={() => { toast('Signing out…'); void signOut(() => router.push('/')) }} style={css('width:100%;display:flex;align-items:center;gap:12px;padding:13px 0;border:none;background:none;cursor:pointer;text-align:left;')}><span style={css('width:34px;height:34px;border-radius:10px;background:#fff1f2;display:flex;align-items:center;justify-content:center;flex:none;')}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg></span><span style={css('flex:1;font-size:13.5px;font-weight:600;color:#ef4444;')}>Sign out</span></button>
+            <AccountActions />
+            <button onClick={() => { toast('Signing out…'); void signOut(() => router.push('/')) }} style={css('width:100%;display:flex;align-items:center;gap:12px;padding:13px 0;border:none;border-top:1px solid #f4f5f7;background:none;cursor:pointer;text-align:left;')}><span style={css('width:34px;height:34px;border-radius:10px;background:#fff1f2;display:flex;align-items:center;justify-content:center;flex:none;')}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg></span><span style={css('flex:1;font-size:13.5px;font-weight:600;color:#ef4444;')}>Sign out</span></button>
           </div>
           <div style={css('text-align:center;font-size:11px;color:#b3b9c4;font-weight:500;margin-top:20px;')}>ClubIt · {currentUser.name}</div>
         </div>

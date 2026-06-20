@@ -22,12 +22,43 @@ export default function ChatThread() {
   const [draft, setDraft] = useState('')
   const [club, setClub] = useState<Club | null>(null)
   const [usersById, setUsersById] = useState<Record<string, User>>({})
+  const [blocked, setBlocked] = useState<Set<string>>(new Set())
+  const [actionMsg, setActionMsg] = useState<{ id: string; senderId: string; name: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const clubMessages = useMemo(
-    () => messages.filter(m => m.clubId === clubId).sort((a, b) => a.sentAt.localeCompare(b.sentAt)),
-    [messages, clubId]
+    () => messages
+      .filter(m => m.clubId === clubId && !blocked.has(m.senderId))
+      .sort((a, b) => a.sentAt.localeCompare(b.sentAt)),
+    [messages, clubId, blocked]
   )
+
+  // Load who this user has blocked so their messages stay hidden.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/school/chat/block', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d?.blockedIds) setBlocked(new Set(d.blockedIds as string[])) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  async function reportMessage(id: string) {
+    setActionMsg(null)
+    try {
+      const res = await fetch('/api/school/chat/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: id }) })
+      toast(res.ok ? 'Report sent — an admin will review it' : 'Could not submit the report')
+    } catch { toast('Could not submit the report') }
+  }
+
+  async function blockUser(senderId: string, name: string) {
+    setActionMsg(null)
+    try {
+      const res = await fetch('/api/school/chat/block', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: senderId }) })
+      if (res.ok) { setBlocked(prev => new Set(prev).add(senderId)); toast(`Blocked ${name.split(' ')[0]}`) }
+      else toast('Could not block this user')
+    } catch { toast('Could not block this user') }
+  }
 
   useEffect(() => {
     if (!clubId) return
@@ -83,7 +114,10 @@ export default function ChatThread() {
             <div key={m.id} style={css(`display:flex;flex-direction:column;align-items:${mine ? 'flex-end' : 'flex-start'};`)}>
               <div style={css(`max-width:80%;display:flex;flex-direction:column;align-items:${mine ? 'flex-end' : 'flex-start'};`)}>
                 {showName && <span style={css('font-size:10.5px;font-weight:700;color:#9aa0ac;margin:0 0 3px 4px;')}>{usersById[m.senderId]?.name ?? '…'}</span>}
-                <div style={css(`padding:9px 13px;border-radius:${mine ? '18px 18px 5px 18px' : '18px 18px 18px 5px'};font-size:13.5px;line-height:1.4;font-weight:500;background:${mine ? '#6366f1' : '#ffffff'};color:${mine ? '#ffffff' : '#1f2734'};box-shadow:0 1px 1px rgba(16,24,40,.05);`)}>{m.content}</div>
+                <div
+                  onClick={mine ? undefined : () => setActionMsg({ id: m.id, senderId: m.senderId, name: usersById[m.senderId]?.name ?? 'this user' })}
+                  style={css(`padding:9px 13px;border-radius:${mine ? '18px 18px 5px 18px' : '18px 18px 18px 5px'};font-size:13.5px;line-height:1.4;font-weight:500;background:${mine ? '#6366f1' : '#ffffff'};color:${mine ? '#ffffff' : '#1f2734'};box-shadow:0 1px 1px rgba(16,24,40,.05);${mine ? '' : 'cursor:pointer;'}`)}
+                >{m.content}</div>
               </div>
             </div>
           )
@@ -100,6 +134,21 @@ export default function ChatThread() {
         />
         <button onClick={send} style={css('width:40px;height:40px;border-radius:50%;border:none;background:#6366f1;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></svg></button>
       </div>
+
+      {/* Per-message moderation sheet (App Store Guideline 1.2). */}
+      {actionMsg && (
+        <div style={css('position:fixed;inset:0;z-index:140;')}>
+          <div onClick={() => setActionMsg(null)} style={css('position:absolute;inset:0;background:rgba(15,23,41,.35);animation:fadeIn .2s ease;')} />
+          <div style={{ ...css('position:absolute;left:0;right:0;bottom:0;background:#f2f2f7;border-radius:26px 26px 0 0;padding:10px 16px 0;animation:sheetUp .28s cubic-bezier(.32,.72,0,1);box-shadow:0 -8px 30px rgba(15,23,41,.18);'), paddingBottom: BOTTOM(20) }}>
+            <div style={css('width:38px;height:5px;border-radius:3px;background:#d4d5db;margin:4px auto 14px;')} />
+            <div style={css('background:#fff;border-radius:16px;overflow:hidden;margin-bottom:10px;')}>
+              <button onClick={() => reportMessage(actionMsg.id)} style={css('width:100%;display:flex;align-items:center;gap:12px;padding:15px 16px;border:none;border-bottom:1px solid #f4f5f7;background:none;cursor:pointer;text-align:left;')}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7" /></svg><span style={css('font-size:14.5px;font-weight:600;color:#1f2734;')}>Report message</span></button>
+              <button onClick={() => blockUser(actionMsg.senderId, actionMsg.name)} style={css('width:100%;display:flex;align-items:center;gap:12px;padding:15px 16px;border:none;background:none;cursor:pointer;text-align:left;')}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="m4.9 4.9 14.2 14.2" /></svg><span style={css('font-size:14.5px;font-weight:600;color:#ef4444;')}>Block {actionMsg.name.split(' ')[0]}</span></button>
+            </div>
+            <button onClick={() => setActionMsg(null)} style={css('width:100%;background:#fff;border:none;border-radius:16px;padding:15px;font-size:15px;font-weight:700;color:#6366f1;cursor:pointer;')}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

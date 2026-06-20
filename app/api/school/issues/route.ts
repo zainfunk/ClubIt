@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { Role } from '@/types'
+import { sanitizeText } from '@/lib/sanitize'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,6 +57,49 @@ export async function PATCH(request: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: 'Failed to resolve issue' }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true })
+}
+
+// POST /api/school/issues { message } — submit an issue report. Any signed-in
+// member of a school can file one (routed to the school's admins/advisors).
+export async function POST(request: NextRequest) {
+  const { userId } = await auth()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = (await request.json().catch(() => ({}))) as { message?: string }
+  const message = typeof body.message === 'string' ? sanitizeText(body.message.trim()) : ''
+  if (!message) return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+
+  const db = createServiceClient()
+  const { data: userRow } = await db
+    .from('users')
+    .select('school_id, name, email')
+    .eq('id', userId)
+    .maybeSingle()
+
+  let name = userRow?.name ?? 'A member'
+  let email = userRow?.email ?? ''
+  try {
+    const client = await clerkClient()
+    const clerkUser = await client.users.getUser(userId)
+    name = clerkUser.fullName ?? clerkUser.username ?? name
+    email = clerkUser.primaryEmailAddress?.emailAddress ?? email
+  } catch { /* fall back to DB values */ }
+
+  const { error } = await db.from('issue_reports').insert({
+    school_id: userRow?.school_id ?? null,
+    reporter_id: userId,
+    reporter_name: name,
+    reporter_email: email,
+    message,
+    status: 'open',
+  })
+
+  if (error) {
+    console.error('issue submit error', error)
+    return NextResponse.json({ error: 'Failed to submit report' }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true })

@@ -612,3 +612,51 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }
+
+// DELETE /api/school/clubs/[id] — permanently delete a club. Allowed for the
+// club's advisor (owner), school admins, and superadmins. All club_id foreign
+// keys are ON DELETE CASCADE (memberships, join_requests, leadership_positions,
+// social links, meeting times, events, news, polls, dues, attendance, chat), so
+// removing the club row removes everything tied to it.
+export async function DELETE(_request: NextRequest, { params }: PageProps) {
+  const { userId } = await auth()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const db = createServiceClient()
+  const { id: clubId } = await params
+
+  const { data: userRow } = await db
+    .from('users')
+    .select('school_id, role')
+    .eq('id', userId)
+    .maybeSingle()
+
+  const schoolId = userRow?.school_id as string | null
+  if (!schoolId) return NextResponse.json({ error: 'No school context' }, { status: 400 })
+
+  const { data: clubRow } = await db
+    .from('clubs')
+    .select('id, advisor_id')
+    .eq('id', clubId)
+    .eq('school_id', schoolId)
+    .maybeSingle()
+
+  if (!clubRow) return NextResponse.json({ error: 'Club not found' }, { status: 404 })
+
+  const canDelete =
+    clubRow.advisor_id === userId ||
+    userRow?.role === 'admin' ||
+    userRow?.role === 'superadmin'
+
+  if (!canDelete) {
+    return NextResponse.json({ error: 'Only the club advisor or a school admin can delete this club' }, { status: 403 })
+  }
+
+  const { error } = await db.from('clubs').delete().eq('id', clubId).eq('school_id', schoolId)
+  if (error) {
+    console.error('club delete error', error)
+    return NextResponse.json({ error: 'Failed to delete club' }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true })
+}

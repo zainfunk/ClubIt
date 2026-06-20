@@ -115,6 +115,36 @@ export async function apiClubDetail(id: string): Promise<ClubDetailPayload | nul
   return (await res.json()) as ClubDetailPayload
 }
 
+/**
+ * Run a management action on a club (PATCH /api/school/clubs/[id]). The action
+ * discriminator + payload mirror the desktop club page: save_edit, save_capacity,
+ * toggle_auto_accept, add/remove_leadership_position, appoint_leader, vacate_leader,
+ * add/remove_meeting_time, create_event, delete_event, post_news, delete_news,
+ * create_poll, cast_poll_vote, close_poll, appoint_poll_winner, set_event_creators,
+ * set_dues_amount, mark_dues_paid, mark_dues_unpaid, approve, reject.
+ * Throws on a non-OK response with the server error message.
+ */
+export async function clubAction(clubId: string, body: Record<string, unknown>): Promise<void> {
+  const res = await fetch(`/api/school/clubs/${clubId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error((data as { error?: string }).error ?? `Action failed (${res.status})`)
+  }
+}
+
+/** Permanently delete a club (advisor owner / admin / superadmin only). */
+export async function deleteClub(clubId: string): Promise<void> {
+  const res = await fetch(`/api/school/clubs/${clubId}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error((data as { error?: string }).error ?? `Delete failed (${res.status})`)
+  }
+}
+
 export interface DashboardPayload {
   clubs: Club[]
   advisorNames: Record<string, string>

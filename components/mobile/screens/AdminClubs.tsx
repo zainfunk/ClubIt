@@ -15,6 +15,7 @@ export default function AdminClubs() {
   const { actualUser } = useMockAuth()
   const router = useRouter()
   const [clubs, setClubs] = useState<Club[] | null>(null)
+  const [q, setQ] = useState('')
 
   useEffect(() => {
     if (!actualUser.id) return
@@ -22,6 +23,12 @@ export default function AdminClubs() {
     apiSchoolClubs().then(r => { if (!cancelled) setClubs(r.clubs) }).catch(() => { if (!cancelled) setClubs([]) })
     return () => { cancelled = true }
   }, [actualUser.id])
+
+  const visible = (clubs ?? []).filter(c => {
+    const s = q.trim().toLowerCase()
+    if (!s) return true
+    return c.name.toLowerCase().includes(s) || (c.tags ?? []).some(t => t.toLowerCase().includes(s))
+  })
 
   const addBtn = (
     <button onClick={() => router.push('/admin/new-club')} style={css('width:38px;height:38px;border-radius:13px;border:none;background:#0f1729;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}>
@@ -32,11 +39,11 @@ export default function AdminClubs() {
   return (
     <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;animation:scIn .24s ease;')}>
       <ScreenHeader title="Clubs" right={addBtn}>
-        <SearchBar placeholder="Search clubs" />
+        <SearchBar placeholder="Search clubs" value={q} onChange={setQ} />
       </ScreenHeader>
       {clubs === null ? <Loader /> : (
         <div className="m-noscroll" style={{ ...css('flex:1;overflow-y:auto;padding:8px 20px 0;'), paddingBottom: `calc(${BOTTOM(0)} + 96px)` }}>
-          {clubs.length === 0 ? <EmptyState title="No clubs yet" sub="Clubs you create will show up here." /> : clubs.map(c => {
+          {visible.length === 0 ? <EmptyState title={clubs.length === 0 ? 'No clubs yet' : 'No matches'} sub={clubs.length === 0 ? 'Clubs you create will show up here.' : 'Try a different search.'} /> : visible.map(c => {
             const count = c.memberIds.length
             const full = c.capacity !== null && count >= c.capacity
             const barW = c.capacity ? Math.min(Math.round((count / c.capacity) * 100), 100) : Math.min(Math.round((count / 40) * 100), 100)

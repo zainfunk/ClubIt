@@ -7,13 +7,15 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { apiClubDetail, type ClubDetailPayload } from '@/lib/school-api'
+import { apiClubDetail, clubAction, type ClubDetailPayload } from '@/lib/school-api'
 import type { User } from '@/types'
 import { css, TOP, avBg, clubIcon, gradientFor } from '../css'
 import { BackButton, Avatar, Loader } from '../primitives'
-import { dayShort, timeRange } from '../format'
+import { dayShort, timeRange, monthDay, relTime } from '../format'
 import { useToast } from '../toast'
 import CreateEventSheet from './CreateEventSheet'
+import CreateNewsSheet from './CreateNewsSheet'
+import CreatePollSheet from './CreatePollSheet'
 
 type Detail = ClubDetailPayload
 
@@ -27,6 +29,8 @@ export default function ClubDetail() {
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
   const [showEventSheet, setShowEventSheet] = useState(false)
+  const [showNewsSheet, setShowNewsSheet] = useState(false)
+  const [showPollSheet, setShowPollSheet] = useState(false)
 
   useEffect(() => {
     if (!actualUser.id || !clubId) return
@@ -65,6 +69,36 @@ export default function ClubDetail() {
     } catch { /* optimistic */ }
   }
 
+  // Content + poll actions reuse the shared PATCH actions via clubAction().
+  async function contentAction(body: Record<string, unknown>, okMsg?: string) {
+    if (!clubId || busy) return
+    setBusy(true)
+    try {
+      await clubAction(clubId, body)
+      await reload()
+      if (okMsg) toast(okMsg)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Something went wrong')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function vote(pollId: string, candidateUserId: string) {
+    // Optimistic: mark my vote immediately.
+    setData(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        polls: prev.polls.map(p => p.id === pollId
+          ? { ...p, myVoteCandidateId: candidateUserId, candidates: p.candidates.map(c => c.userId === candidateUserId ? { ...c, voteCount: c.voteCount + 1 } : c) }
+          : p),
+      }
+    })
+    toast('Vote cast')
+    try { await clubAction(clubId!, { action: 'cast_poll_vote', pollId, candidateUserId }); await reload() } catch { /* optimistic */ }
+  }
+
   if (!loaded) {
     return (
       <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;background:#f2f2f7;')}>
@@ -83,9 +117,10 @@ export default function ClubDetail() {
     )
   }
 
-  const { club, usersById, memberships, requests } = data
+  const { club, usersById, memberships, requests, news, events, polls, duesPayments } = data
   const isManager = currentUser.role === 'admin' || currentUser.role === 'superadmin' || club.advisorId === currentUser.id
   const isMember = club.memberIds.includes(currentUser.id)
+  const canCreateContent = isManager || club.eventCreatorIds.includes(currentUser.id)
   const pending = requests.some(r => r.userId === currentUser.id && r.status === 'pending')
   const advisor = usersById[club.advisorId]
   const presidentPos = club.leadershipPositions.find(p => /president/i.test(p.title) && p.userId)
@@ -96,17 +131,19 @@ export default function ClubDetail() {
   for (const p of club.leadershipPositions) if (p.userId) roleByUser[p.userId] = p.title
   const members: User[] = club.memberIds.map(id => usersById[id]).filter(Boolean) as User[]
 
+  const today = new Date().toISOString().split('T')[0]
+  const upcomingEvents = events.filter(e => e.date >= today).slice(0, 4)
+  const duesCents = club.duesAmountCents ?? 0
+  const myDuesPaid = duesPayments.some(p => p.userId === currentUser.id && p.paid)
+  const socials = club.socialLinks ?? []
+
   return (
     <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;background:#f2f2f7;animation:scIn .24s ease;')}>
       <div style={css(`height:170px;position:relative;flex:none;background:${gradientFor(club.id)};`)}>
         <div style={{ position: 'absolute', top: TOP(8), left: 16 }}><BackButton light onClick={() => router.push('/clubs')} /></div>
         <div style={{ position: 'absolute', top: TOP(8), right: 16 }}>
           {isManager ? (
-            (currentUser.role === 'admin' || currentUser.role === 'superadmin') ? (
-              <button onClick={() => router.push('/admin')} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;')}>Manage</button>
-            ) : (
-              <button onClick={() => setShowEventSheet(true)} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;')}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>Event</button>
-            )
+            <button onClick={() => router.push(`/clubs/${club.id}/manage`)} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;')}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82M4.6 9a1.65 1.65 0 0 0-.33-1.82" /></svg>Manage</button>
           ) : isMember ? (
             <button disabled={busy} onClick={() => membershipAction('leave')} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;')}>Leave</button>
           ) : pending ? (
@@ -150,6 +187,131 @@ export default function ClubDetail() {
           </div>
         )}
 
+        {socials.length > 0 && (
+          <div style={css('display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;')}>
+            {socials.map((s, i) => (
+              <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" style={css('display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#6366f1;background:#fff;border:1px solid #eef0f3;padding:7px 12px;border-radius:10px;text-decoration:none;')}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" /><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></svg>
+                {s.platform}
+              </a>
+            ))}
+          </div>
+        )}
+
+        {isMember && duesCents > 0 && (
+          <div style={css('background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:14px 16px;margin-top:18px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
+            <div><div style={css('font-size:13.5px;font-weight:700;color:#1f2734;')}>Membership dues</div><div style={css('font-size:11.5px;color:#9aa0ac;')}>${(duesCents / 100).toFixed(2)} per member</div></div>
+            <span style={css(`font-size:11px;font-weight:800;padding:5px 11px;border-radius:9px;background:${myDuesPaid ? '#e8faf2' : '#fff7e6'};color:${myDuesPaid ? '#10b981' : '#b45309'};`)}>{myDuesPaid ? 'Paid' : 'Unpaid'}</span>
+          </div>
+        )}
+
+        {/* ── Updates / news ── */}
+        {(news.length > 0 || canCreateContent) && (
+          <>
+            <div style={css('display:flex;align-items:center;justify-content:space-between;margin:22px 4px 11px;')}>
+              <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:16px;color:#0f1729;")}>Updates</div>
+              {canCreateContent && <button onClick={() => setShowNewsSheet(true)} style={css('font-size:12.5px;font-weight:700;color:#6366f1;background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:4px;')}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>Post</button>}
+            </div>
+            {news.length === 0 ? (
+              <div style={css('background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:18px;text-align:center;font-size:12.5px;color:#9aa0ac;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>No updates yet.</div>
+            ) : news.slice(0, 5).map(n => {
+              const author = usersById[n.authorId]
+              const canDelete = isManager || n.authorId === currentUser.id
+              return (
+                <div key={n.id} style={css('background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:15px 16px;margin-bottom:10px;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
+                  <div style={css('display:flex;align-items:flex-start;justify-content:space-between;gap:8px;')}>
+                    <div style={css('flex:1;min-width:0;')}>
+                      <div style={css('display:flex;align-items:center;gap:7px;')}>
+                        {n.isPinned && <span style={css('font-size:9px;font-weight:800;color:#6366f1;background:#eef0ff;padding:2px 6px;border-radius:6px;')}>PINNED</span>}
+                        <span style={css("font-family:var(--font-manrope);font-weight:700;font-size:14.5px;color:#0f1729;")}>{n.title}</span>
+                      </div>
+                      <p style={css('font-size:13px;line-height:1.5;color:#5b6270;font-weight:500;margin:6px 0 0;')}>{n.content}</p>
+                      <div style={css('font-size:11px;color:#9aa0ac;font-weight:500;margin-top:8px;')}>{author?.name ?? 'Staff'} · {relTime(n.createdAt)}</div>
+                    </div>
+                    {canDelete && <button onClick={() => contentAction({ action: 'delete_news', newsId: n.id }, 'Update deleted')} style={css('width:30px;height:30px;border-radius:9px;border:1px solid #eceef1;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd0d8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg></button>}
+                  </div>
+                </div>
+              )
+            })}
+          </>
+        )}
+
+        {/* ── Events ── */}
+        {(upcomingEvents.length > 0 || canCreateContent) && (
+          <>
+            <div style={css('display:flex;align-items:center;justify-content:space-between;margin:22px 4px 11px;')}>
+              <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:16px;color:#0f1729;")}>Events</div>
+              {canCreateContent && <button onClick={() => setShowEventSheet(true)} style={css('font-size:12.5px;font-weight:700;color:#6366f1;background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:4px;')}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>Add</button>}
+            </div>
+            {upcomingEvents.length === 0 ? (
+              <div style={css('background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:18px;text-align:center;font-size:12.5px;color:#9aa0ac;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>No upcoming events.</div>
+            ) : upcomingEvents.map(ev => {
+              const md = monthDay(ev.date)
+              const canDelete = isManager || ev.createdBy === currentUser.id
+              return (
+                <div key={ev.id} style={css('display:flex;gap:13px;align-items:center;background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:13px;margin-bottom:10px;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
+                  <div style={css('width:48px;flex:none;text-align:center;background:#eef0ff;border-radius:13px;padding:8px 0;')}><div style={css('font-size:10px;font-weight:800;color:#6366f1;letter-spacing:.05em;')}>{md.month}</div><div style={css("font-family:var(--font-manrope);font-weight:800;font-size:19px;color:#0f1729;line-height:1;margin-top:2px;")}>{md.day}</div></div>
+                  <div style={css('flex:1;min-width:0;')}><div style={css('font-size:14px;font-weight:700;color:#0f1729;font-family:var(--font-manrope);')}>{ev.title}</div><div style={css('font-size:11.5px;color:#9aa0ac;font-weight:500;margin-top:2px;')}>{ev.location || (ev.isPublic ? 'Public' : 'Members only')}</div></div>
+                  {canDelete && <button onClick={() => contentAction({ action: 'delete_event', eventId: ev.id }, 'Event deleted')} style={css('width:30px;height:30px;border-radius:9px;border:1px solid #eceef1;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd0d8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg></button>}
+                </div>
+              )
+            })}
+          </>
+        )}
+
+        {/* ── Elections / polls ── */}
+        {(polls.length > 0 || isManager) && (
+          <>
+            <div style={css('display:flex;align-items:center;justify-content:space-between;margin:22px 4px 11px;')}>
+              <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:16px;color:#0f1729;")}>Elections</div>
+              {isManager && <button onClick={() => setShowPollSheet(true)} style={css('font-size:12.5px;font-weight:700;color:#6366f1;background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:4px;')}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>New</button>}
+            </div>
+            {polls.length === 0 ? (
+              <div style={css('background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:18px;text-align:center;font-size:12.5px;color:#9aa0ac;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>No elections running.</div>
+            ) : polls.map(p => {
+              const total = p.candidates.reduce((a, c) => a + c.voteCount, 0)
+              const canVote = p.isOpen && isMember && currentUser.role === 'student' && !p.myVoteCandidateId
+              const sorted = [...p.candidates].sort((a, b) => b.voteCount - a.voteCount)
+              return (
+                <div key={p.id} style={css('background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:16px;margin-bottom:11px;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
+                  <div style={css('display:flex;align-items:center;justify-content:space-between;gap:8px;')}>
+                    <span style={css("font-family:var(--font-manrope);font-weight:700;font-size:15px;color:#0f1729;")}>{p.positionTitle}</span>
+                    <span style={css(`font-size:10px;font-weight:800;padding:4px 9px;border-radius:8px;background:${p.isOpen ? '#e8faf2' : '#eef0f3'};color:${p.isOpen ? '#10b981' : '#94a0b0'};`)}>{p.isOpen ? 'OPEN' : 'CLOSED'}</span>
+                  </div>
+                  {canVote && <div style={css('font-size:11.5px;font-weight:600;color:#6366f1;margin-top:10px;')}>Tap a candidate to vote</div>}
+                  <div style={css('margin-top:11px;display:flex;flex-direction:column;gap:10px;')}>
+                    {sorted.map(c => {
+                      const pct = total ? Math.round((c.voteCount / total) * 100) : 0
+                      const mine = p.myVoteCandidateId === c.userId
+                      const row = (
+                        <>
+                          <div style={css('display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;gap:8px;')}>
+                            <span style={css('font-size:12.5px;font-weight:600;color:#1f2734;display:flex;align-items:center;gap:6px;min-width:0;')}>{usersById[c.userId]?.name ?? 'Candidate'}{mine && <span style={css('font-size:9px;font-weight:800;color:#10b981;background:#e8faf2;padding:2px 6px;border-radius:6px;flex:none;')}>YOUR VOTE</span>}</span>
+                            {canVote ? <span style={css('font-size:11.5px;font-weight:700;color:#6366f1;flex:none;')}>Vote</span> : <span style={css('font-size:11.5px;font-weight:700;color:#8a8f9a;flex:none;')}>{c.voteCount} · {pct}%</span>}
+                          </div>
+                          <div style={css('height:8px;border-radius:6px;background:#eef0f3;overflow:hidden;')}><div style={css(`height:100%;border-radius:6px;background:${mine ? 'linear-gradient(90deg,#10b981,#34d399)' : '#cbd0d8'};width:${canVote ? 0 : pct}%;`)} /></div>
+                        </>
+                      )
+                      return canVote
+                        ? <button key={c.userId} onClick={() => vote(p.id, c.userId)} style={css('width:100%;text-align:left;border:1px solid #eef0f3;border-radius:12px;background:#fbfbfd;padding:10px 12px;cursor:pointer;')}>{row}</button>
+                        : <div key={c.userId}>{row}</div>
+                    })}
+                  </div>
+                  <div style={css('display:flex;align-items:center;justify-content:space-between;margin-top:13px;')}>
+                    <span style={css('font-size:11.5px;color:#9aa0ac;font-weight:500;')}>{total} total {total === 1 ? 'vote' : 'votes'}</span>
+                    {isManager && p.isOpen && (
+                      <div style={css('display:flex;gap:8px;')}>
+                        <button onClick={() => contentAction({ action: 'close_poll', pollId: p.id }, 'Election closed')} style={css('font-size:12px;font-weight:700;color:#64748b;background:#f1f2f4;border:none;padding:6px 11px;border-radius:9px;cursor:pointer;')}>Close</button>
+                        <button onClick={() => contentAction({ action: 'appoint_poll_winner', pollId: p.id }, 'Winner appointed')} style={css('font-size:12px;font-weight:700;color:#fff;background:#10b981;border:none;padding:6px 11px;border-radius:9px;cursor:pointer;')}>Close &amp; appoint</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </>
+        )}
+
         {isManager && requests.some(r => r.status === 'pending') && (
           <>
             <div style={css('display:flex;align-items:center;justify-content:space-between;margin:20px 4px 11px;')}>
@@ -190,6 +352,8 @@ export default function ClubDetail() {
         </div>
       </div>
       {showEventSheet && clubId && <CreateEventSheet clubId={clubId} onClose={() => setShowEventSheet(false)} onCreated={reload} />}
+      {showNewsSheet && clubId && <CreateNewsSheet clubId={clubId} onClose={() => setShowNewsSheet(false)} onCreated={reload} />}
+      {showPollSheet && clubId && <CreatePollSheet clubId={clubId} members={members} onClose={() => setShowPollSheet(false)} onCreated={reload} />}
     </div>
   )
 }

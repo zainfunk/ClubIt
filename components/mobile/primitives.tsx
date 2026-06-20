@@ -117,8 +117,26 @@ export function EmptyState({ title, sub, tone = 'neutral' }: { title: string; su
   )
 }
 
-/** iOS-style search field placeholder (visual only; tapping can route to search). */
-export function SearchBar({ placeholder, onClick }: { placeholder: string; onClick?: () => void }) {
+/**
+ * iOS-style search field. When `onChange` is provided it renders a live,
+ * controlled input that filters in place; otherwise it stays a tappable
+ * placeholder (for screens that route elsewhere to search).
+ */
+export function SearchBar({ placeholder, value, onChange, onClick }: { placeholder: string; value?: string; onChange?: (v: string) => void; onClick?: () => void }) {
+  if (onChange) {
+    return (
+      <div style={css('display:flex;align-items:center;gap:9px;background:#e6e6ec;border-radius:12px;padding:9px 13px;margin-top:12px;')}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a8f9a" strokeWidth="2.2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+        <input
+          value={value ?? ''}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={css('flex:1;min-width:0;border:none;background:none;outline:none;font-size:14px;color:#1f2734;font-weight:500;font-family:inherit;')}
+        />
+        {value ? <button onClick={() => onChange('')} style={css('border:none;background:none;cursor:pointer;padding:0;display:flex;')}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a8f9a" strokeWidth="2.4" strokeLinecap="round"><circle cx="12" cy="12" r="10" fill="#c9cbd2" stroke="none" /><path d="M15 9l-6 6M9 9l6 6" stroke="#fff" /></svg></button> : null}
+      </div>
+    )
+  }
   return (
     <div onClick={onClick} style={css('display:flex;align-items:center;gap:9px;background:#e6e6ec;border-radius:12px;padding:9px 13px;margin-top:12px;cursor:pointer;')}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a8f9a" strokeWidth="2.2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>

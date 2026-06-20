@@ -321,6 +321,29 @@ function ClubDetailDesktop({ params }: PageProps) {
     await patch({ action: 'toggle_auto_accept' })
   }
 
+  function handleDeleteClub() {
+    confirm({
+      title: `Delete ${club.name}?`,
+      description: 'This permanently removes the club and all of its members, events, news, polls, dues and attendance. This cannot be undone.',
+      confirmLabel: 'Delete Club',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/school/clubs/${id}`, { method: 'DELETE' })
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            toast.error(data.error ?? 'Failed to delete club')
+            return
+          }
+          toast.success('Club deleted')
+          window.location.href = '/clubs'
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Network error — please try again')
+        }
+      },
+    })
+  }
+
   // --- Edit mode ---
   function startEdit() {
     setEditIcon(club.iconUrl ?? '')
@@ -853,6 +876,10 @@ function ClubDetailDesktop({ params }: PageProps) {
                   }`}>
                   <span className={`w-2 h-2 rounded-full ${club.autoAccept ? 'bg-emerald-500' : 'bg-gray-400'}`} />
                   Auto-accept {club.autoAccept ? 'on' : 'off'}
+                </button>
+                <button onClick={handleDeleteClub}
+                  className="flex items-center gap-2 text-sm font-semibold bg-white/80 text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-gray-200/60 rounded-xl px-4 py-2.5 transition-all">
+                  <Trash2 className="w-4 h-4" />Delete Club
                 </button>
               </>
             )}
