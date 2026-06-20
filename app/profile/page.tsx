@@ -43,7 +43,7 @@ type Tab = 'overview' | 'clubs' | 'attendance' | 'achievements'
 export default function ProfilePage() {
   const mobile = useIsMobilePhone()
   const { currentUser } = useMockAuth()
-  if (mobile) return currentUser.role === 'student' ? <SelfProfile /> : <AdminProfile />
+  if (mobile) return (currentUser.role === 'admin' || currentUser.role === 'superadmin') ? <AdminProfile /> : <SelfProfile />
   return <ProfileDesktop />
 }
 

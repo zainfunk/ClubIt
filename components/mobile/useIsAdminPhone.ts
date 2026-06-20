@@ -9,7 +9,7 @@ import { useMockAuth } from '@/lib/mock-auth'
 import type { Role } from '@/types'
 
 // Roles migrated to the new mobile design. Keep in sync with AppShell.
-export const MOBILE_ROLES: Role[] = ['admin', 'superadmin', 'student']
+export const MOBILE_ROLES: Role[] = ['admin', 'superadmin', 'student', 'advisor']
 
 /** Phone-class client whose role has been migrated to the mobile design. */
 export function useIsMobilePhone(): boolean {

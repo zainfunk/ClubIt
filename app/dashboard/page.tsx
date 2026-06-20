@@ -6,6 +6,7 @@ import { useMockAuth } from '@/lib/mock-auth'
 import { useIsMobilePhone } from '@/components/mobile/useIsAdminPhone'
 import AdminHome from '@/components/mobile/screens/AdminHome'
 import StudentHome from '@/components/mobile/screens/StudentHome'
+import AdvisorHome from '@/components/mobile/screens/AdvisorHome'
 import { supabase } from '@/lib/supabase'
 import { Users, BookOpen, Pin, Calendar, MessageSquare, CheckCircle, Clock, AlertCircle, ChevronDown, ChevronUp, ArrowRight, Plus, X } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -33,7 +34,11 @@ const PATTERN_ICON_STYLES: Record<string, { bg: string; text: string }> = {
 export default function DashboardPage() {
   const mobile = useIsMobilePhone()
   const { currentUser } = useMockAuth()
-  if (mobile) return currentUser.role === 'student' ? <StudentHome /> : <AdminHome />
+  if (mobile) {
+    if (currentUser.role === 'student') return <StudentHome />
+    if (currentUser.role === 'advisor') return <AdvisorHome />
+    return <AdminHome />
+  }
   return <DesktopDashboard />
 }
 

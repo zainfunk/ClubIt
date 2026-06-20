@@ -12,6 +12,7 @@ import { css, TOP, avBg, clubIcon, gradientFor } from '../css'
 import { BackButton, Avatar, Loader } from '../primitives'
 import { dayShort, timeRange } from '../format'
 import { useToast } from '../toast'
+import CreateEventSheet from './CreateEventSheet'
 
 type Detail = Awaited<ReturnType<typeof fetchClubDetail>>
 
@@ -24,6 +25,7 @@ export default function ClubDetail() {
   const [data, setData] = useState<Detail | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [showEventSheet, setShowEventSheet] = useState(false)
 
   useEffect(() => {
     const schoolId = actualUser.schoolId
@@ -35,19 +37,33 @@ export default function ClubDetail() {
     return () => { cancelled = true }
   }, [actualUser.schoolId, clubId])
 
-  async function membershipAction(action: 'join' | 'leave') {
+  async function reload() {
     const schoolId = actualUser.schoolId
-    if (!clubId || !schoolId || busy) return
+    if (clubId && schoolId) setData(await fetchClubDetail(clubId, schoolId))
+  }
+
+  async function membershipAction(action: 'join' | 'leave') {
+    if (!clubId || !actualUser.schoolId || busy) return
     setBusy(true)
     try {
       await fetch(`/api/school/clubs/${clubId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) })
-      setData(await fetchClubDetail(clubId, schoolId))
+      await reload()
       toast(action === 'join' ? 'Request sent' : 'Left club')
     } catch {
       toast('Something went wrong')
     } finally {
       setBusy(false)
     }
+  }
+
+  async function decideRequest(reqId: string, action: 'approve' | 'reject') {
+    if (!clubId) return
+    setData(prev => prev ? { ...prev, requests: prev.requests.filter(r => r.id !== reqId) } : prev)
+    toast(action === 'approve' ? 'Member approved' : 'Request declined')
+    try {
+      await fetch(`/api/school/clubs/${clubId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, requestId: reqId }) })
+      await reload()
+    } catch { /* optimistic */ }
   }
 
   if (!loaded) {
@@ -87,7 +103,11 @@ export default function ClubDetail() {
         <div style={{ position: 'absolute', top: TOP(8), left: 16 }}><BackButton light onClick={() => router.push('/clubs')} /></div>
         <div style={{ position: 'absolute', top: TOP(8), right: 16 }}>
           {isManager ? (
-            <button onClick={() => router.push('/admin')} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;')}>Manage</button>
+            (currentUser.role === 'admin' || currentUser.role === 'superadmin') ? (
+              <button onClick={() => router.push('/admin')} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;')}>Manage</button>
+            ) : (
+              <button onClick={() => setShowEventSheet(true)} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;')}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>Event</button>
+            )
           ) : isMember ? (
             <button disabled={busy} onClick={() => membershipAction('leave')} style={css('height:38px;padding:0 15px;border-radius:19px;border:none;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:700;cursor:pointer;')}>Leave</button>
           ) : pending ? (
@@ -131,6 +151,28 @@ export default function ClubDetail() {
           </div>
         )}
 
+        {isManager && requests.some(r => r.status === 'pending') && (
+          <>
+            <div style={css('display:flex;align-items:center;justify-content:space-between;margin:20px 4px 11px;')}>
+              <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:16px;color:#0f1729;")}>Requests</div>
+              <span style={css('font-size:11px;font-weight:800;color:#b45309;background:#fef3c7;padding:3px 9px;border-radius:9px;')}>{requests.filter(r => r.status === 'pending').length}</span>
+            </div>
+            <div style={css('background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:4px 16px;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
+              {requests.filter(r => r.status === 'pending').map((r, i, arr) => {
+                const u = usersById[r.userId]
+                return (
+                  <div key={r.id} style={css(`display:flex;align-items:center;gap:11px;padding:11px 0;${i < arr.length - 1 ? 'border-bottom:1px solid #f4f5f7;' : ''}`)}>
+                    <Avatar name={u?.name ?? '?'} size={36} bg={avBg(u?.name ?? r.userId)} />
+                    <div style={css('flex:1;min-width:0;')}><div style={css('font-size:13.5px;font-weight:600;color:#1f2734;')}>{u?.name ?? 'Student'}</div><div style={css('font-size:11px;color:#9aa0ac;')}>Wants to join</div></div>
+                    <button onClick={() => decideRequest(r.id, 'reject')} style={css('width:32px;height:32px;border-radius:10px;border:1px solid #eceef1;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#98a2b3" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
+                    <button onClick={() => decideRequest(r.id, 'approve')} style={css('width:32px;height:32px;border-radius:10px;border:none;background:#10b981;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg></button>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+
         <div style={css('display:flex;align-items:center;justify-content:space-between;margin:20px 4px 11px;')}>
           <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:16px;color:#0f1729;")}>Members</div>
           <span style={css('font-size:12px;font-weight:600;color:#9aa0ac;')}>{countLabel}</span>
@@ -148,6 +190,7 @@ export default function ClubDetail() {
           <MembershipNote count={memberships.length} shown={members.length} />
         </div>
       </div>
+      {showEventSheet && clubId && <CreateEventSheet clubId={clubId} onClose={() => setShowEventSheet(false)} onCreated={reload} />}
     </div>
   )
 }
