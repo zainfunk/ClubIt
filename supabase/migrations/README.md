@@ -22,6 +22,9 @@ migrations/
   0005_invite_code_binding.sql       -- W2.5: single-use admin/advisor codes, email-domain bind
   0006_audit_log.sql                 -- W3.3: append-only audit_log table + app.audit() helper
   0007_club_dues.sql                 -- per-club dues amount + per-member club_dues_payments table
+  0008_account_self_deletion.sql     -- 5.1.1(v): users.deleted_at tombstone for in-app account deletion
+  0009_chat_moderation.sql           -- 1.2: chat_message_reports + user_blocks (UGC moderation)
+  0010_push_device_tokens.sql        -- 4.2: device_push_tokens for APNs push notifications
 
 rollbacks/
   *.down.sql                         -- one per forward migration; apply manually if you need to revert

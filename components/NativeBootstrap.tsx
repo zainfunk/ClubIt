@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Capacitor } from '@capacitor/core'
+import { registerPush } from '@/lib/push-client'
 
 /**
  * Native runtime setup for the Capacitor iOS shell. Renders nothing on web.
@@ -66,6 +67,13 @@ export default function NativeBootstrap() {
         } catch { /* ignore malformed deep links */ }
       })
       cleanups.push(() => { void urlHandle.remove() })
+
+      // Push notifications: request permission, register the APNs token with the
+      // server, and route deep links on tap. Dormant on the server side until
+      // the APNs key is configured (lib/push-send.ts), but registration is safe
+      // to run now so tokens are already collected when sending goes live.
+      const pushCleanup = await registerPush((path) => router.push(path))
+      cleanups.push(pushCleanup)
     })()
 
     return () => { cleanups.forEach((fn) => fn()) }

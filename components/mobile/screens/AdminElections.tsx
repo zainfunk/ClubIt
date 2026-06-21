@@ -51,11 +51,19 @@ export default function AdminElections() {
   }
 
   async function vote(electionId: string, candidateUserId: string) {
+    const snapshot = elections
     setElections(prev => prev ? prev.map(e => e.id === electionId
       ? { ...e, myVoteCandidateId: candidateUserId, candidates: e.candidates.map(c => c.userId === candidateUserId ? { ...c, voteCount: c.voteCount + 1 } : c) }
       : e) : prev)
-    toast('Vote cast')
-    try { await castVote(electionId, candidateUserId, currentUser.id) } catch { /* optimistic */ }
+    try {
+      await castVote(electionId, candidateUserId, currentUser.id)
+      toast('Vote cast')
+    } catch (err) {
+      // Server rejected the vote (closed, already voted, network) — revert the
+      // optimistic update so the UI never shows a vote that didn't persist.
+      setElections(snapshot)
+      toast(err instanceof Error ? err.message : 'Could not cast vote')
+    }
   }
 
   const shown = useMemo(() => (elections ?? []).filter(e => e.isOpen === (tab === 'open')), [elections, tab])

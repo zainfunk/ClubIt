@@ -35,13 +35,25 @@ marketing site, and (b) add genuine native capabilities.
   fires success feedback on attendance check-in (`app/attend/page.tsx`)
   and vote cast (`app/elections/[id]/page.tsx`), and on a successful scan.
 
+- **Push notifications** — scaffolding shipped in code (dormant until the
+  APNs key exists). Client registration requests permission + registers the
+  APNs token and POSTs it to the server (`lib/push-client.ts`, wired in
+  `components/NativeBootstrap.tsx`); tokens are stored per-user
+  (`device_push_tokens`, migration `0010`) via `app/api/push/register`; the
+  sender (`lib/push-send.ts`) signs an ES256 provider JWT and delivers over
+  APNs HTTP/2. Notification taps deep-link in-app. `sendPushToUser()` no-ops
+  safely until the `APNS_*` env vars are set, so it's safe in prod today.
+
 ## Pending — do on the Mac (needs the native project + a device to test)
 
-### 1. Push notifications (strong secondary native signal)
+### 1. Activate push notifications
 
-Wire `@capacitor/push-notifications` for chat mentions, event reminders,
-and election openings. Register the APNs token, store it per user, send
-via a server route. Also a genuine native capability for 4.2.
+The code is done. To turn it on: enroll in the Apple Developer Program,
+create an APNs Auth Key (.p8) in the developer portal, add the Push
+Notifications capability in Xcode, set `APNS_TEAM_ID` / `APNS_KEY_ID` /
+`APNS_AUTH_KEY` / `APNS_BUNDLE_ID` / `APNS_PRODUCTION` in the server env,
+apply migration `0010`, then call `sendPushToUser()` from the flows that
+should notify (chat mentions, event reminders, election openings).
 
 ## If Apple still pushes back
 

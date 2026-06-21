@@ -78,13 +78,16 @@ start doesn't look like a blank web page (helps Guideline 4.2).
 | 4.2 | Haptics on check-in / vote | `lib/haptics.ts`, `app/attend`, `app/elections/[id]` |
 | HIG | Safe-area insets (notch/Dynamic Island), 44pt touch targets, full mobile nav | `TopBar.tsx`, `MobileTabBar.tsx`, `Navbar.tsx`, `globals.css` |
 
-### Database migrations to apply before/with the iOS release
+### Database migrations
 
-These are additive and idempotent but **must be applied** (they back the
-features above):
+- `0008_account_self_deletion.sql` (`users.deleted_at`) — **applied to prod ✅**
+- `0009_chat_moderation.sql` (reports + blocks) — **applied to prod ✅**
+- `0010_push_device_tokens.sql` (`device_push_tokens`) — **NOT yet applied.**
+  Dormant (push doesn't fire until the APNs key is set), so it can ship with
+  the Mac-day push activation. Apply via the dashboard SQL Editor (paste the
+  file) or `supabase db push`.
 
-- `supabase/migrations/0008_account_self_deletion.sql` — `users.deleted_at`
-- `supabase/migrations/0009_chat_moderation.sql` — reports + blocks tables
+(0008/0009 were verified live by probing the prod schema on 2026-06-21.)
 
 ## App Store Connect (you, at submission)
 

@@ -8,16 +8,15 @@ import {
   castPollVote,
   castVote,
   hasPollVoted,
-  hasVoted,
 } from '@/lib/election-store'
 import { addResponse, getResponseCount, hasResponded } from '@/lib/forms-store'
 import {
   fetchClubFormById,
   fetchClubsByIds,
   fetchPollById,
-  fetchSchoolElectionById,
   fetchUsersByIds,
 } from '@/lib/school-data'
+import { apiSchoolUsers } from '@/lib/school-api'
 import { Club, ClubForm, Poll, SchoolElection, User } from '@/types'
 import Avatar from '@/components/Avatar'
 import { CheckCircle2, ChevronLeft, Clock } from 'lucide-react'
@@ -75,11 +74,21 @@ export default function FormDetailPage({ params }: { params: Promise<{ id: strin
 
     setLoading(true)
 
-    const [nextElection, nextPoll, nextForm] = await Promise.all([
-      fetchSchoolElectionById(id, currentUser.schoolId),
-      fetchPollById(id, currentUser.schoolId),
-      fetchClubFormById(id, currentUser.schoolId),
-    ])
+    // School elections read through the service-role server route so the page
+    // works on the iOS shell (client-side RLS reads return empty there). Club
+    // polls/forms are only surfaced on desktop, where the client reads work, so
+    // we only fall back to them when the id isn't a school election.
+    const electionRes = await fetch(`/api/school/elections/${id}`, { cache: 'no-store' })
+    const nextElection = electionRes.ok
+      ? ((await electionRes.json()) as { election: SchoolElection }).election
+      : null
+
+    const [nextPoll, nextForm] = nextElection
+      ? [null, null]
+      : await Promise.all([
+          fetchPollById(id, currentUser.schoolId),
+          fetchClubFormById(id, currentUser.schoolId),
+        ])
 
     const resolvedKind: ItemKind | null = nextElection ? 'election' : nextPoll ? 'poll' : nextForm ? 'form' : null
     setKind(resolvedKind)
@@ -98,10 +107,19 @@ export default function FormDetailPage({ params }: { params: Promise<{ id: strin
     const candidateIds = nextElection?.candidates.map((candidate) => candidate.userId)
       ?? nextPoll?.candidates.map((candidate) => candidate.userId)
       ?? []
-    setUsersById(await fetchUsersByIds(candidateIds))
+    if (nextElection) {
+      // Resolve candidate names through the server (mobile-safe) for elections.
+      const all = await apiSchoolUsers().catch(() => [] as User[])
+      const map: Record<string, User> = {}
+      for (const u of all) if (candidateIds.includes(u.id)) map[u.id] = u
+      setUsersById(map)
+    } else {
+      setUsersById(await fetchUsersByIds(candidateIds))
+    }
 
     if (resolvedKind === 'election' && nextElection) {
-      setVoted(await hasVoted(nextElection.id, currentUser.id))
+      // Server already computed the caller's own-vote pointer (secret ballot).
+      setVoted(nextElection.myVoteCandidateId != null)
     } else if (resolvedKind === 'poll' && nextPoll) {
       setVoted(await hasPollVoted(nextPoll.id, currentUser.id))
     } else {
