@@ -13,7 +13,7 @@ export async function GET() {
   // Look up the user's role and school
   const { data: userRow } = await db
     .from('users')
-    .select('school_id, role, name, xp_total')
+    .select('school_id, role, name')
     .eq('id', userId)
     .maybeSingle()
 
@@ -27,7 +27,6 @@ export async function GET() {
       pendingRequests: [],
       pendingApprovals: [],
       issueReports: [],
-      xpTotal: 0,
     })
   }
 
@@ -217,7 +216,6 @@ export async function GET() {
     pendingRequests,
     pendingApprovals,
     issueReports,
-    xpTotal: (userRow.xp_total as number | undefined) ?? 0,
     role,
     userName: userRow.name,
   })

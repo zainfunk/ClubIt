@@ -154,7 +154,6 @@ export interface DashboardPayload {
   pendingRequests: (JoinRequest & { clubName: string; clubIcon?: string })[]
   pendingApprovals: { id: string; clubId: string; clubName: string; userId: string; userName: string }[]
   issueReports: SchoolIssue[]
-  xpTotal: number
   role: string
   userName: string
 }

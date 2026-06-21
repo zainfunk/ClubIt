@@ -53,7 +53,6 @@ function moreItemsFor(role: Role): MoreItem[] {
   const base: MoreItem[] = [
     { label: 'Events', href: '/events', bg: '#fff1e9', stroke: '#f59e0b', icon: ICONS.calendar },
     { label: 'Elections', href: '/elections', bg: '#f3edff', stroke: '#8b5cf6', icon: ICONS.vote },
-    { label: 'Leaderboard', href: '/leaderboard', bg: '#fff7e6', stroke: '#f59e0b', icon: ICONS.trophy },
   ]
   if (role === 'admin' || role === 'superadmin') {
     base.push(

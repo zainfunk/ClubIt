@@ -14,7 +14,7 @@ const TABS = [
 
 // Routes that live behind the "More" drawer rather than a dedicated tab. When
 // the user is on one of these, the More button shows as active.
-const MORE_ROUTES = ['/settings', '/elections', '/events', '/leaderboard', '/admin']
+const MORE_ROUTES = ['/settings', '/elections', '/events', '/admin']
 
 export default function MobileTabBar() {
   const pathname = usePathname()

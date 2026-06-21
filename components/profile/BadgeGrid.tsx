@@ -129,7 +129,6 @@ function BadgeTile({ badge, earned }: { badge: BadgeDef; earned: boolean }) {
               Locked
             </span>
           )}
-          <span className="text-[10px] text-slate-400">+{badge.xp} XP</span>
         </div>
       </div>
     </div>

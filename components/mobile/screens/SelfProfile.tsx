@@ -1,15 +1,13 @@
 'use client'
 
 // Current user's own profile (route: /profile, phone + student/advisor).
-// Live XP/level/hours + their clubs & roles.
+// Live hours + their clubs & roles.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import { supabase } from '@/lib/supabase'
 import { apiSchoolClubs } from '@/lib/school-api'
 import { computeUserTotalHours, formatHours } from '@/lib/rewards/hours'
-import { xpToLevel, levelTitle } from '@/lib/rewards/xp'
 import type { Club } from '@/types'
 import { css, TOP, BOTTOM, avBg, initials, clubIcon } from '../css'
 import { Loader } from '../primitives'
@@ -24,7 +22,6 @@ const ROLE_BADGE: Record<string, { label: string; bg: string; color: string }> =
 export default function SelfProfile() {
   const { currentUser } = useMockAuth()
   const router = useRouter()
-  const [xp, setXp] = useState(0)
   const [hours, setHours] = useState('—')
   const [clubs, setClubs] = useState<Club[] | null>(null)
 
@@ -32,12 +29,10 @@ export default function SelfProfile() {
     if (!currentUser.id) return
     let cancelled = false
     Promise.all([
-      supabase.from('users').select('xp_total').eq('id', currentUser.id).maybeSingle(),
       computeUserTotalHours(currentUser.id),
       apiSchoolClubs(),
-    ]).then(([xpRes, h, c]) => {
+    ]).then(([h, c]) => {
       if (cancelled) return
-      setXp((xpRes.data?.xp_total as number | undefined) ?? 0)
       setHours(formatHours(h.totalMinutes))
       setClubs(c.clubs)
     }).catch(() => { if (!cancelled) setClubs([]) })
@@ -52,9 +47,8 @@ export default function SelfProfile() {
       return { id: c.id, name: c.name, icon: clubIcon(c.tags, c.name), role }
     }), [clubs, currentUser.id])
 
-  const level = xpToLevel(xp)
   const badge = ROLE_BADGE[currentUser.role] ?? ROLE_BADGE.student
-  const stats: [string, string][] = [[String(level), levelTitle(level)], [xp.toLocaleString(), 'XP'], [hours, 'Hours']]
+  const stats: [string, string][] = [[hours, 'Hours'], [String(myClubs.length), myClubs.length === 1 ? 'Club' : 'Clubs']]
 
   return (
     <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;animation:scIn .24s ease;')}>

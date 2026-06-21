@@ -32,7 +32,6 @@ const PROTECTED_API_ROUTES = [
   { method: 'GET',  path: '/api/school/dashboard' },
   { method: 'GET',  path: '/api/school/notifications' },
   { method: 'GET',  path: '/api/school/elections' },
-  { method: 'GET',  path: '/api/school/leaderboard' },
   { method: 'GET',  path: '/api/superadmin/schools' },
   { method: 'GET',  path: '/api/user/profile' },
   { method: 'GET',  path: '/api/user/sync' },

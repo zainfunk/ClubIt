@@ -17,8 +17,6 @@ import AccountActions from '../AccountActions'
 
 type Key = keyof AdminSettings
 const FEATURES: { key: Key; bg: string; stroke: string; icon: React.ReactNode; title: string; sub: string }[] = [
-  { key: 'leaderboardsEnabled', bg: '#fff7e6', stroke: '#f59e0b', icon: <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6m12 5h1.5a2.5 2.5 0 0 0 0-5H18M6 4h12v5a6 6 0 0 1-12 0zM8 21h8M12 15v6" />, title: 'Leaderboards', sub: 'Show XP rankings to students' },
-  { key: 'pointsEnabled', bg: '#eef0ff', stroke: '#6366f1', icon: <path d="M12 2 9.9 8.6 3 8.6l5.6 4.1L6.5 19 12 15l5.5 4-2.1-6.3L21 8.6l-6.9 0z" />, title: 'Points & XP', sub: 'Award engagement points' },
   { key: 'streaksEnabled', bg: '#fff1e9', stroke: '#f97316', icon: <path d="M12 2c1 3 4 4 4 8a4 4 0 0 1-8 0c0-1 .5-2 1-2.5C9 9 9 6 12 2z" />, title: 'Streaks', sub: 'Reward consistent attendance' },
   { key: 'attendanceFeatureEnabled', bg: '#e8faf2', stroke: '#10b981', icon: <><rect x="3" y="4" width="18" height="18" rx="3" /><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4" /></>, title: 'Attendance', sub: 'QR check-in at meetings' },
   { key: 'hoursTrackingEnabled', bg: '#f3edff', stroke: '#8b5cf6', icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>, title: 'Hours tracking', sub: 'Log member service hours' },

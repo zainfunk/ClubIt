@@ -108,9 +108,7 @@ function SettingsDesktop() {
     attendanceFeatureEnabled: true,
     clubsFeatureEnabled: true,
     studentSocialsEnabled: true,
-    pointsEnabled: true,
     streaksEnabled: true,
-    leaderboardsEnabled: true,
     hoursTrackingEnabled: true,
   })
   const [privacy, setPrivacyState] = useState<UserPrivacySettings>({
@@ -341,17 +339,6 @@ function SettingsDesktop() {
           />
 
           <SettingRow
-            label="Award points & levels"
-            description="When on, students earn XP for check-ins, hours, and badges, and a level appears on their profile."
-            control={
-              <Toggle
-                checked={adminSettings.pointsEnabled}
-                onChange={(v) => updateAdmin({ pointsEnabled: v })}
-              />
-            }
-          />
-
-          <SettingRow
             label="Track attendance streaks"
             description="When on, consecutive meeting attendance is tracked and streak badges become eligible."
             control={
@@ -362,16 +349,6 @@ function SettingsDesktop() {
             }
           />
 
-          <SettingRow
-            label="Show school leaderboard"
-            description="When on, students see a school-wide leaderboard ranking by hours, XP, and longest streak."
-            control={
-              <Toggle
-                checked={adminSettings.leaderboardsEnabled}
-                onChange={(v) => updateAdmin({ leaderboardsEnabled: v })}
-              />
-            }
-          />
         </Section>
       )}
 

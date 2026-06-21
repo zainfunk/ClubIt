@@ -1,10 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { computeUserTotalHours, formatHours, MemberHours } from '@/lib/rewards/hours'
 import { computeStreak, StreakInfo } from '@/lib/rewards/streaks'
-import { levelProgress, levelTitle } from '@/lib/rewards/xp'
 import { getRecordsByClub } from '@/lib/attendance-store'
 import { getAdminSettings } from '@/lib/settings-store'
 import { Clock, Flame } from 'lucide-react'
@@ -17,7 +15,6 @@ interface Props {
 export default function RewardsSummary({ userId, clubIds }: Props) {
   const [hours, setHours] = useState<MemberHours>({ autoMinutes: 0, adjustmentMinutes: 0, totalMinutes: 0 })
   const [streak, setStreak] = useState<StreakInfo>({ current: 0, longest: 0 })
-  const [xp, setXp] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const settings = getAdminSettings()
 
@@ -29,22 +26,18 @@ export default function RewardsSummary({ userId, clubIds }: Props) {
       Promise.all(clubIds.map((id) => getRecordsByClub(id))).then((r) =>
         r.flat().filter((rec) => rec.userId === userId),
       ),
-      supabase.from('users').select('xp_total').eq('id', userId).maybeSingle(),
-    ]).then(([h, records, userRes]) => {
+    ]).then(([h, records]) => {
       if (cancelled) return
       setHours(h)
       setStreak(computeStreak(records))
-      setXp((userRes.data?.xp_total as number | null) ?? 0)
       setLoading(false)
     })
     return () => { cancelled = true }
   }, [userId, clubIds])
 
-  if (!settings.hoursTrackingEnabled && !settings.pointsEnabled && !settings.streaksEnabled) {
+  if (!settings.hoursTrackingEnabled && !settings.streaksEnabled) {
     return null
   }
-
-  const lp = levelProgress(xp)
 
   return (
     <div className="rounded-2xl bg-white border border-slate-200/60 p-6 space-y-5"
@@ -52,40 +45,6 @@ export default function RewardsSummary({ userId, clubIds }: Props) {
       <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
         Rewards
       </h3>
-
-      {settings.pointsEnabled && (
-        <div>
-          <div className="flex items-baseline justify-between mb-1.5">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white text-xs font-extrabold shadow-md shadow-indigo-500/20">
-                {lp.level}
-              </span>
-              <div>
-                <p className="text-sm font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>
-                  {levelTitle(lp.level)}
-                </p>
-                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-                  Level {lp.level}
-                </p>
-              </div>
-            </div>
-            <span className="text-xs text-slate-500">
-              {loading ? '…' : `${xp.toLocaleString()} XP`}
-            </span>
-          </div>
-          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all"
-              style={{ width: `${lp.progressPct * 100}%` }}
-            />
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1">
-            {lp.nextLevelXp - xp > 0
-              ? `${(lp.nextLevelXp - xp).toLocaleString()} XP to Level ${lp.level + 1}`
-              : 'Max level'}
-          </p>
-        </div>
-      )}
 
       <div className="grid grid-cols-2 gap-3">
         {settings.hoursTrackingEnabled && (

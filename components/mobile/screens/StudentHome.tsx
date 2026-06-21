@@ -1,13 +1,11 @@
 'use client'
 
-// Student home (route: /dashboard, phone + student). Live via /api/school/dashboard
-// (includes xpTotal for the level card).
+// Student home (route: /dashboard, phone + student). Live via /api/school/dashboard.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { apiDashboard } from '@/lib/school-api'
-import { xpToLevel, levelTitle } from '@/lib/rewards/xp'
 import type { Club, ClubEvent, JoinRequest } from '@/types'
 import { css, TOP, BOTTOM, avBg, initials, clubIcon, tintFor } from '../css'
 import { Loader } from '../primitives'
@@ -20,13 +18,10 @@ interface DashData {
   pendingRequests: (JoinRequest & { clubName: string })[]
 }
 
-const xpForLevel = (l: number) => 50 * l * l
-
 export default function StudentHome() {
   const { actualUser, currentUser, schoolName } = useMockAuth()
   const router = useRouter()
   const [data, setData] = useState<DashData | null>(null)
-  const [xp, setXp] = useState(0)
 
   const greeting = useMemo(() => {
     const h = new Date().getHours()
@@ -44,15 +39,9 @@ export default function StudentHome() {
         nextEvents: dash?.nextEvents ?? {},
         pendingRequests: dash?.pendingRequests ?? [],
       })
-      setXp(dash?.xpTotal ?? 0)
     }).catch(() => { if (!cancelled) setData({ clubs: [], advisorNames: {}, nextEvents: {}, pendingRequests: [] }) })
     return () => { cancelled = true }
   }, [actualUser.id])
-
-  const level = xpToLevel(xp)
-  const curBase = xpForLevel(level)
-  const nextBase = xpForLevel(level + 1)
-  const pct = Math.max(0, Math.min(100, Math.round(((xp - curBase) / (nextBase - curBase)) * 100)))
 
   return (
     <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;animation:scIn .24s ease;')}>
@@ -69,16 +58,6 @@ export default function StudentHome() {
 
       {data === null ? <Loader /> : (
         <div className="m-noscroll" style={{ ...css('flex:1;overflow-y:auto;padding:6px 20px 0;'), paddingBottom: `calc(${BOTTOM(0)} + 96px)` }}>
-          {/* level card */}
-          <div style={css('background:#0f1729;border-radius:20px;padding:18px;margin-top:8px;color:#fff;animation:fadeIn .3s ease;box-shadow:0 12px 28px -12px rgba(15,23,41,.5);')}>
-            <div style={css('display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;')}>
-              <div style={css('font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#9aa3b8;')}>Level {level} · {levelTitle(level)}</div>
-              <span style={css('font-size:11px;font-weight:700;color:#34d399;background:rgba(52,211,153,.14);padding:3px 8px;border-radius:8px;')}>{xp.toLocaleString()} XP</span>
-            </div>
-            <div style={css('height:9px;border-radius:6px;background:rgba(255,255,255,.14);overflow:hidden;')}><div style={css(`height:100%;border-radius:6px;background:linear-gradient(90deg,#818cf8,#34d399);width:${pct}%;`)} /></div>
-            <div style={css('font-size:11px;color:#9aa3b8;font-weight:600;margin-top:8px;')}>{nextBase - xp > 0 ? `${(nextBase - xp).toLocaleString()} XP to level ${level + 1}` : 'Max level reached'}</div>
-          </div>
-
           {/* pending requests */}
           {data.pendingRequests.length > 0 && (
             <div style={css('margin-top:18px;')}>

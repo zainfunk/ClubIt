@@ -30,9 +30,7 @@ const DEFAULTS = {
   attendance_enabled: true,
   clubs_enabled: true,
   student_socials_enabled: true,
-  points_enabled: true,
   streaks_enabled: true,
-  leaderboards_enabled: true,
   hours_tracking_enabled: true,
 }
 
@@ -44,7 +42,7 @@ export async function GET() {
   const db = createServiceClient()
   const { data } = await db
     .from('admin_settings')
-    .select('achievements_enabled, attendance_enabled, clubs_enabled, student_socials_enabled, points_enabled, streaks_enabled, leaderboards_enabled, hours_tracking_enabled')
+    .select('achievements_enabled, attendance_enabled, clubs_enabled, student_socials_enabled, streaks_enabled, hours_tracking_enabled')
     .eq('school_id', requester.schoolId)
     .maybeSingle()
 
@@ -55,9 +53,7 @@ export async function GET() {
     attendanceFeatureEnabled: row.attendance_enabled ?? true,
     clubsFeatureEnabled: row.clubs_enabled ?? true,
     studentSocialsEnabled: row.student_socials_enabled ?? true,
-    pointsEnabled: row.points_enabled ?? true,
     streaksEnabled: row.streaks_enabled ?? true,
-    leaderboardsEnabled: row.leaderboards_enabled ?? true,
     hoursTrackingEnabled: row.hours_tracking_enabled ?? true,
   })
 }
@@ -78,9 +74,7 @@ export async function PATCH(request: NextRequest) {
   if (typeof body.attendanceFeatureEnabled === 'boolean') patch.attendance_enabled = body.attendanceFeatureEnabled
   if (typeof body.clubsFeatureEnabled === 'boolean') patch.clubs_enabled = body.clubsFeatureEnabled
   if (typeof body.studentSocialsEnabled === 'boolean') patch.student_socials_enabled = body.studentSocialsEnabled
-  if (typeof body.pointsEnabled === 'boolean') patch.points_enabled = body.pointsEnabled
   if (typeof body.streaksEnabled === 'boolean') patch.streaks_enabled = body.streaksEnabled
-  if (typeof body.leaderboardsEnabled === 'boolean') patch.leaderboards_enabled = body.leaderboardsEnabled
   if (typeof body.hoursTrackingEnabled === 'boolean') patch.hours_tracking_enabled = body.hoursTrackingEnabled
 
   if (Object.keys(patch).length === 0) {
