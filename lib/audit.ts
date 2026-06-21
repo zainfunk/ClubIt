@@ -45,6 +45,9 @@ export type AuditAction =
   // invites
   | 'invite.redeemed'
   | 'invite.code_used'
+  // staff access requests (admin/advisor elevation gate)
+  | 'staff_request.approved'
+  | 'staff_request.denied'
   // election
   | 'election.created'
   | 'election.opened'

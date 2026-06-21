@@ -25,6 +25,7 @@ migrations/
   0008_account_self_deletion.sql     -- 5.1.1(v): users.deleted_at tombstone for in-app account deletion
   0009_chat_moderation.sql           -- 1.2: chat_message_reports + user_blocks (UGC moderation)
   0010_push_device_tokens.sql        -- 4.2: device_push_tokens for APNs push notifications
+  0011_staff_access_requests.sql     -- anti-leak: admin/advisor codes file a request that an existing admin must approve
 
 rollbacks/
   *.down.sql                         -- one per forward migration; apply manually if you need to revert

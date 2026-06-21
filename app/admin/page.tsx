@@ -31,6 +31,8 @@ function AdminPageDesktop() {
   const [roleError, setRoleError] = useState<string | null>(null)
   const [invites, setInvites] = useState<{ studentCode: string | null; advisorCode: string | null; adminCode: string | null } | null>(null)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
+  const [staffRequests, setStaffRequests] = useState<{ id: string; name: string; email: string; requestedRole: 'admin' | 'advisor' }[]>([])
+  const [actingRequest, setActingRequest] = useState<string | null>(null)
 
   function applyClubsPayload(payload: {
     clubs?: Club[]
@@ -97,6 +99,11 @@ function AdminPageDesktop() {
         })
       })
       .catch(() => { /* ignore */ })
+    // Pending staff-access requests (admin/advisor code redemptions awaiting approval).
+    fetch('/api/school/staff-requests', { cache: 'no-store' })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => { if (!cancelled && data?.requests) setStaffRequests(data.requests) })
+      .catch(() => { /* ignore */ })
     return () => { cancelled = true }
   }, [actualUser.schoolId])
 
@@ -107,6 +114,23 @@ function AdminPageDesktop() {
       setTimeout(() => setCopiedCode((current) => current === label ? null : current), 1500)
     } catch {
       /* clipboard may be unavailable — silently ignore */
+    }
+  }
+
+  async function decideRequest(id: string, decision: 'approve' | 'deny') {
+    setActingRequest(id)
+    try {
+      const res = await fetch('/api/school/staff-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId: id, decision }),
+      })
+      if (!res.ok) throw new Error()
+      setStaffRequests((prev) => prev.filter((r) => r.id !== id))
+    } catch {
+      setRoleError('Could not update the access request. Please try again.')
+    } finally {
+      setActingRequest(null)
     }
   }
 
@@ -252,6 +276,51 @@ function AdminPageDesktop() {
   return (
     <RoleGuard allowed={['admin']}>
       <div className="space-y-6" style={{ fontFamily: 'var(--font-inter)' }}>
+
+        {/* ── Staff Access Requests ── */}
+        {staffRequests.length > 0 && (
+          <div className="rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50/60 via-white to-white p-4 md:p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 to-rose-600 flex items-center justify-center shadow-lg shadow-rose-500/20">
+                <Shield className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>Staff Access Requests</h2>
+                <p className="text-xs text-slate-500">Used the admin/advisor code — they only become staff once <span className="font-semibold">you approve</span></p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {staffRequests.map((r) => (
+                <div key={r.id} className="flex items-center gap-3 rounded-xl bg-white border border-slate-100 p-3 shadow-sm">
+                  <Avatar name={r.name} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-900 truncate">{r.name}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${r.requestedRole === 'admin' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>{r.requestedRole}</span>
+                    </div>
+                    {r.email && <p className="text-xs text-slate-500 truncate">{r.email}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      disabled={actingRequest === r.id}
+                      onClick={() => decideRequest(r.id, 'approve')}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 transition disabled:opacity-50"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      disabled={actingRequest === r.id}
+                      onClick={() => decideRequest(r.id, 'deny')}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition disabled:opacity-50"
+                    >
+                      Deny
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Invite Codes ── */}
         {invites && (invites.studentCode || invites.advisorCode || invites.adminCode) && (

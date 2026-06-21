@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { sanitizeText } from '@/lib/sanitize'
-import { checkContent } from '@/lib/content-filter'
+import { checkContent, censorProfanity } from '@/lib/content-filter'
 import { Role } from '@/types'
 import { randomUUID } from 'node:crypto'
 
@@ -91,15 +91,20 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json()
   const clubId = typeof body.clubId === 'string' ? body.clubId.trim() : ''
-  const content = typeof body.content === 'string' ? sanitizeText(body.content.trim()) : ''
+  const rawContent = typeof body.content === 'string' ? sanitizeText(body.content.trim()) : ''
 
-  if (!clubId || !content) {
+  if (!clubId || !rawContent) {
     return NextResponse.json({ error: 'clubId and content are required' }, { status: 400 })
   }
 
-  // Objectionable-content gate (Guideline 1.2). Reject before storing so abusive
-  // language never reaches another student.
-  const check = checkContent(content)
+  // Two-tier moderation (Guideline 1.2):
+  //  1. Hard block: unambiguous slurs / explicit sexual language are rejected
+  //     before storage so they never reach another student.
+  //  2. Profanity censor: ordinary swearing is masked in place ("damn" ->
+  //     "****") and the message still goes through. Censoring happens
+  //     server-side so the cleaned text is what gets stored and broadcast —
+  //     clients can never render the uncensored original.
+  const check = checkContent(rawContent)
   if (!check.ok) {
     console.warn(`chat: blocked message from ${requester.userId} (term: ${check.matched})`)
     return NextResponse.json(
@@ -107,6 +112,8 @@ export async function POST(request: NextRequest) {
       { status: 422 },
     )
   }
+
+  const content = censorProfanity(rawContent).text
 
   const db = createServiceClient()
 

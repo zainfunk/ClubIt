@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { joinLimiter } from '@/lib/rate-limit'
+import { randomUUID } from 'node:crypto'
 import type { Role } from '@/types'
 
 /**
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest) {
   }
 
   const incomingRole: Role = isAdminCode ? 'admin' : isAdvisorCode ? 'advisor' : 'student'
+  const isElevated = isAdminCode || isAdvisorCode
 
   const { data: existingUser } = await db
     .from('users')
@@ -139,13 +141,72 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const name = clerkUser.fullName ?? clerkUser.username ?? existingUser?.role ?? 'New User'
+  const name = clerkUser.fullName ?? clerkUser.username ?? 'New User'
 
-  // Assign user to this school and persist the promoted role.
+  // ── Admin / advisor codes NEVER grant the role directly. ──────────────────
+  // A leaked code must not be enough to become staff. The redeemer is enrolled
+  // as a student and a pending request is filed for an existing admin /
+  // superadmin to approve (/api/school/staff-requests). The single-use code is
+  // NOT consumed here — it's consumed on approval, so a leak that produces only
+  // unapproved requests doesn't burn the legitimate invitee's code. We FAIL
+  // CLOSED: if the request can't be recorded, no elevation and no role change.
+  if (isElevated) {
+    if (!existingUser) {
+      const { error: enrollErr } = await db
+        .from('users')
+        .upsert(
+          { id: userId, name, email: callerEmail, school_id: school.id, role: 'student' },
+          { onConflict: 'id' },
+        )
+      if (enrollErr) {
+        console.error('join: student enroll before staff request failed', enrollErr)
+        return NextResponse.json({ error: 'Failed to join the school. Please try again.' }, { status: 500 })
+      }
+    }
+
+    const { error: reqErr } = await db.from('staff_access_requests').insert({
+      id: `req-${randomUUID()}`,
+      user_id: userId,
+      school_id: school.id,
+      requested_role: incomingRole,
+      status: 'pending',
+    })
+
+    if (reqErr) {
+      // 23505 = the one-open-request-per-user unique index: already requested.
+      if ((reqErr as { code?: string }).code === '23505') {
+        return NextResponse.json({
+          schoolId: school.id,
+          schoolName: school.name,
+          schoolStatus: school.status,
+          role: existingUser?.role ?? 'student',
+          pendingRole: incomingRole,
+          pending: true,
+          alreadyPending: true,
+        })
+      }
+      console.error('join: staff request insert failed (failing closed)', reqErr)
+      return NextResponse.json(
+        { error: 'Could not submit your staff access request. Please contact your school administrator.' },
+        { status: 500 },
+      )
+    }
+
+    return NextResponse.json({
+      schoolId: school.id,
+      schoolName: school.name,
+      schoolStatus: school.status,
+      role: existingUser?.role ?? 'student',
+      pendingRole: incomingRole,
+      pending: true,
+    })
+  }
+
+  // ── Student code: instant, multi-use enrollment (low risk). ───────────────
   const { error } = await db
     .from('users')
     .upsert(
-      { id: userId, name, email: callerEmail, school_id: school.id, role: incomingRole },
+      { id: userId, name, email: callerEmail, school_id: school.id, role: 'student' },
       { onConflict: 'id' }
     )
 
@@ -154,29 +215,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to save your school role. Please try the code again.' }, { status: 500 })
   }
 
-  // Mark single-use codes as consumed AFTER the role write succeeds, with
-  // an UPDATE that's idempotent on the used_at field. The condition
-  // ensures we only set used_at if it's still NULL, so two concurrent
-  // redeemers can't both succeed.
-  if (isAdminCode) {
-    const { error: useErr } = await db
-      .from('schools')
-      .update({ admin_code_used_at: new Date().toISOString() })
-      .eq('id', school.id)
-      .is('admin_code_used_at', null)
-    if (useErr) console.warn('join: admin_code_used_at write failed', useErr)
-  } else if (isAdvisorCode) {
-    const { error: useErr } = await db
-      .from('schools')
-      .update({ advisor_code_used_at: new Date().toISOString() })
-      .eq('id', school.id)
-      .is('advisor_code_used_at', null)
-    if (useErr) console.warn('join: advisor_code_used_at write failed', useErr)
-  }
-
   try {
     await client.users.updateUserMetadata(userId, {
-      publicMetadata: { ...clerkUser.publicMetadata, role: incomingRole },
+      publicMetadata: { ...clerkUser.publicMetadata, role: 'student' },
     })
   } catch (metadataError) {
     console.warn('join metadata sync warning', metadataError)
@@ -186,6 +227,6 @@ export async function POST(request: NextRequest) {
     schoolId: school.id,
     schoolName: school.name,
     schoolStatus: school.status,
-    role: incomingRole,
+    role: 'student',
   })
 }
