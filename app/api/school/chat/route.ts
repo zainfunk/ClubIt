@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { sanitizeText } from '@/lib/sanitize'
 import { checkContent, censorProfanity } from '@/lib/content-filter'
+import { notifyNewChatMessage } from '@/lib/notify'
 import { Role } from '@/types'
 import { randomUUID } from 'node:crypto'
 
@@ -163,6 +164,10 @@ export async function POST(request: NextRequest) {
     console.error('chat message insert error', error)
     return NextResponse.json({ error: 'Failed to send message' }, { status: 500 })
   }
+
+  // Notify the rest of the club after the response is sent — never blocks the
+  // send, and no-ops until APNs is configured.
+  after(() => notifyNewChatMessage({ clubId, senderId: requester.userId, content }))
 
   return NextResponse.json({
     message: {

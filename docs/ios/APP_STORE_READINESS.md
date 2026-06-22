@@ -76,6 +76,7 @@ start doesn't look like a blank web page (helps Guideline 4.2).
 | 4.2 | Native capabilities beyond a web wrapper | `docs/ios/GUIDELINE_4_2_PLAN.md` |
 | 4.2 | In-app QR scanner for check-in | `components/ScanCheckInButton.tsx` (dashboard) |
 | 4.2 | Haptics on check-in / vote | `lib/haptics.ts`, `app/attend`, `app/elections/[id]` |
+| 4.2 | Push wired into chat / election / new-event / 24h reminders | `lib/notify.ts`, `lib/push-send.ts`, `app/api/cron/event-reminders`, `vercel.json` |
 | HIG | Safe-area insets (notch/Dynamic Island), 44pt touch targets, full mobile nav | `TopBar.tsx`, `MobileTabBar.tsx`, `Navbar.tsx`, `globals.css` |
 
 ### Database migrations
@@ -86,6 +87,9 @@ start doesn't look like a blank web page (helps Guideline 4.2).
   Dormant (push doesn't fire until the APNs key is set), so it can ship with
   the Mac-day push activation. Apply via the dashboard SQL Editor (paste the
   file) or `supabase db push`.
+- `0012_event_reminders.sql` (`events.reminder_sent_at`) — **NOT yet applied.**
+  Backs the hourly event-reminder cron; dormant alongside `0010`. Apply with
+  the same Mac-day push activation.
 
 (0008/0009 were verified live by probing the prod schema on 2026-06-21.)
 

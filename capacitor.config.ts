@@ -12,9 +12,7 @@ const config: CapacitorConfig = {
   // Keep this string in sync with NATIVE_APP_UA_TOKEN in lib/platform.ts.
   appendUserAgent: 'ClubItNativeApp',
   server: {
-    // In CI, APP_SERVER_URL is set to the deployed Vercel URL.
-    // For local dev, run: APP_SERVER_URL=http://localhost:3000 npx cap sync ios
-    ...(serverUrl ? { url: serverUrl } : {}),
+    url: serverUrl ?? 'https://clubit.vercel.app',
     androidScheme: 'https',
   },
   plugins: {

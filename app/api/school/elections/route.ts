@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
+import { notifyElectionOpened } from '@/lib/notify'
 import { Role, SchoolElection } from '@/types'
 import { sanitizeText } from '@/lib/sanitize'
 
@@ -148,6 +149,16 @@ export async function POST(request: NextRequest) {
     console.error('election candidates insert error', candidatesInsertError)
     return NextResponse.json({ error: 'Failed to save candidates' }, { status: 500 })
   }
+
+  // Tell the school a vote is open, after the response is sent.
+  after(() =>
+    notifyElectionOpened({
+      schoolId: requester.schoolId,
+      electionId: id,
+      positionTitle,
+      creatorId: requester.userId,
+    }),
+  )
 
   const election: SchoolElection = {
     id,

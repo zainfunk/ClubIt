@@ -74,23 +74,10 @@ interface SendResult {
   skipped: boolean
 }
 
-/** Send one notification to every registered device token for a user. */
-export async function sendPushToUser(userId: string, payload: PushPayload): Promise<SendResult> {
-  if (!pushConfigured()) {
-    console.warn('[push] APNs not configured — skipping push to', userId)
-    return { sent: 0, failed: 0, skipped: true }
-  }
-
-  const db = createServiceClient()
-  const { data } = await db
-    .from('device_push_tokens')
-    .select('token')
-    .eq('user_id', userId)
-    .eq('platform', 'ios')
-
-  const tokens = (data ?? []).map((r) => r.token as string)
-  if (tokens.length === 0) return { sent: 0, failed: 0, skipped: false }
-
+/** Deliver one payload to a set of raw device tokens over a single APNs HTTP/2
+ * session. Returns counts and the tokens APNs reported as dead (410/400) so the
+ * caller can prune them. Assumes pushConfigured() — callers gate on that. */
+async function deliver(tokens: string[], payload: PushPayload): Promise<{ sent: number; failed: number; stale: string[] }> {
   const nowMs = Date.now()
   const jwt = providerToken(nowMs)
   const apsBody = JSON.stringify({
@@ -140,6 +127,42 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   } finally {
     session.close()
   }
+
+  return { sent, failed, stale }
+}
+
+/** Send one notification to every registered device token for a user. */
+export async function sendPushToUser(userId: string, payload: PushPayload): Promise<SendResult> {
+  return sendPushToUsers([userId], payload)
+}
+
+/**
+ * Send one notification to every registered device of every listed user, over a
+ * single APNs session (one fan-out, not one-session-per-user). Duplicate ids are
+ * collapsed. Safe to call unconditionally: it no-ops when APNs isn't configured.
+ */
+export async function sendPushToUsers(userIds: string[], payload: PushPayload): Promise<SendResult> {
+  if (!pushConfigured()) {
+    console.warn('[push] APNs not configured — skipping push to', userIds.length, 'user(s)')
+    return { sent: 0, failed: 0, skipped: true }
+  }
+
+  const uniqueIds = Array.from(new Set(userIds)).filter(Boolean)
+  if (uniqueIds.length === 0) return { sent: 0, failed: 0, skipped: false }
+
+  const db = createServiceClient()
+  const { data } = await db
+    .from('device_push_tokens')
+    .select('token')
+    .in('user_id', uniqueIds)
+    .eq('platform', 'ios')
+
+  // Dedup tokens too — one physical device can appear under multiple ids only in
+  // edge cases, but a user with several rows for the same token shouldn't double-fire.
+  const tokens = Array.from(new Set((data ?? []).map((r) => r.token as string)))
+  if (tokens.length === 0) return { sent: 0, failed: 0, skipped: false }
+
+  const { sent, failed, stale } = await deliver(tokens, payload)
 
   if (stale.length > 0) {
     await db.from('device_push_tokens').delete().in('token', stale)

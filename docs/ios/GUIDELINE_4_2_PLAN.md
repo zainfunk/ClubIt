@@ -35,25 +35,40 @@ marketing site, and (b) add genuine native capabilities.
   fires success feedback on attendance check-in (`app/attend/page.tsx`)
   and vote cast (`app/elections/[id]/page.tsx`), and on a successful scan.
 
-- **Push notifications** — scaffolding shipped in code (dormant until the
-  APNs key exists). Client registration requests permission + registers the
-  APNs token and POSTs it to the server (`lib/push-client.ts`, wired in
+- **Push notifications — fully wired** (dormant until the APNs key exists).
+  Client registration requests permission + registers the APNs token and POSTs
+  it to the server (`lib/push-client.ts`, wired in
   `components/NativeBootstrap.tsx`); tokens are stored per-user
   (`device_push_tokens`, migration `0010`) via `app/api/push/register`; the
   sender (`lib/push-send.ts`) signs an ES256 provider JWT and delivers over
-  APNs HTTP/2. Notification taps deep-link in-app. `sendPushToUser()` no-ops
-  safely until the `APNS_*` env vars are set, so it's safe in prod today.
+  APNs HTTP/2 (`sendPushToUser` / `sendPushToUsers` fan-out). Notification taps
+  deep-link in-app. The sender no-ops safely until the `APNS_*` env vars are
+  set, so all of the below is safe in prod today:
+    - **New chat message** → other members of the club
+      (`app/api/school/chat` → `notifyNewChatMessage`).
+    - **Election opened** → everyone in the school
+      (`app/api/school/elections` → `notifyElectionOpened`).
+    - **New event posted** → the club's members
+      (`app/api/school/clubs/[id]` `create_event` → `notifyNewEvent`).
+    - **Event reminders (~24h before)** → the club's members, once per event,
+      via the hourly `app/api/cron/event-reminders` job (`vercel.json` cron,
+      migration `0012` `events.reminder_sent_at`, guarded by `CRON_SECRET`).
+  All event-driven sends run in Next's `after()` so they never block the
+  response (`lib/notify.ts`).
 
 ## Pending — do on the Mac (needs the native project + a device to test)
 
 ### 1. Activate push notifications
 
-The code is done. To turn it on: enroll in the Apple Developer Program,
-create an APNs Auth Key (.p8) in the developer portal, add the Push
-Notifications capability in Xcode, set `APNS_TEAM_ID` / `APNS_KEY_ID` /
-`APNS_AUTH_KEY` / `APNS_BUNDLE_ID` / `APNS_PRODUCTION` in the server env,
-apply migration `0010`, then call `sendPushToUser()` from the flows that
-should notify (chat mentions, event reminders, election openings).
+The code is done **and the send sites are now wired** (chat, election,
+new event, and the 24h event-reminder cron — see the list above). To turn
+it on: enroll in the Apple Developer Program, create an APNs Auth Key
+(.p8) in the developer portal, add the Push Notifications capability in
+Xcode, set `APNS_TEAM_ID` / `APNS_KEY_ID` / `APNS_AUTH_KEY` /
+`APNS_BUNDLE_ID` / `APNS_PRODUCTION` in the server env, set `CRON_SECRET`
+(for the reminder cron), and apply migrations `0010` + `0012`. No further
+app code is required — the sender flips from no-op to live automatically
+once the `APNS_*` vars are present.
 
 ## If Apple still pushes back
 

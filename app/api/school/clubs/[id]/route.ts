@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
+import { notifyNewEvent } from '@/lib/notify'
 import {
   Club,
   ClubDuesPayment,
@@ -478,7 +479,10 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
     if (!isEventCreator) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     const { title, description, date, location, isPublic } = body as { title: string; description?: string; date: string; location?: string; isPublic?: boolean }
     const eventId = `event-${Date.now()}`
-    await db.from('events').insert({ id: eventId, club_id: clubId, title: sanitizeText(title), description: sanitizeText(description ?? ''), date, location: location ? sanitizeText(location) : null, is_public: isPublic ?? true, created_by: userId })
+    const safeTitle = sanitizeText(title)
+    await db.from('events').insert({ id: eventId, club_id: clubId, title: safeTitle, description: sanitizeText(description ?? ''), date, location: location ? sanitizeText(location) : null, is_public: isPublic ?? true, created_by: userId })
+    // Tell club members a new event was posted (off the response path).
+    after(() => notifyNewEvent({ clubId, eventId, title: safeTitle, creatorId: userId }))
     return NextResponse.json({ ok: true })
   }
 
