@@ -57,6 +57,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Lock zoom so focusing a sub-16px input (e.g. the chat composer) doesn't
+  // auto-zoom the page and leave it pannable. WKWebView (the Capacitor native
+  // app) honors these; iOS Safari ignores them for accessibility, so web users
+  // can still pinch-zoom.
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
   themeColor: "#6366f1",
 };
