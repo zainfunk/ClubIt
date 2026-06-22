@@ -76,23 +76,26 @@ Per `docs/security/MINORS_PRIVACY.md` — no tracking, no ads. Declare:
 - **Data used to track you:** None.
 - **Third parties:** Clerk (auth), Supabase (data store). Both processors, not trackers.
 
-## Required URLs — ⚠️ NOT YET PUBLISHED (submission blockers)
+## Required URLs — ✅ PUBLISHED
 
 App Store Connect requires a **Privacy Policy URL** and a **Support URL**.
-All three below currently 404 on clubit.app:
+All are now live, public, and reachable without signing in (verified HTTP 200):
 
-| Field | Proposed URL | Status |
+| Field | URL | Status |
 |---|---|---|
-| Privacy Policy URL | `https://clubit.app/privacy` | TODO — page does not exist (404) |
-| Support URL | `https://clubit.app/support` | TODO — page does not exist (404) |
-| Marketing URL (optional) | `https://clubit.app` | OK |
-| Terms / EULA | `https://clubit.app/terms` | TODO — `docs/security/TERMS.md` exists but isn't published |
+| Privacy Policy URL | `https://clubit.app/privacy` | ✅ live |
+| Support URL | `https://clubit.app/support` | ✅ live |
+| Marketing URL (optional) | `https://clubit.app` | ✅ live |
+| Terms / EULA | `https://clubit.app/terms` | ✅ live |
 
-> Source content exists in the repo (`docs/security/TERMS.md`, and the privacy
-> material in `docs/security/MINORS_PRIVACY.md`). These need to be published as
-> real routes (e.g. `app/privacy/page.tsx`, `app/terms/page.tsx`,
-> `app/support/page.tsx`) before submission. A support page can be as simple as
-> a contact email + FAQ.
+> Implemented as public bare routes (`app/privacy`, `app/terms`, `app/support`)
+> added to the `proxy.ts` public matcher + `AppShell` BARE_ROUTES. Content drawn
+> from `docs/security/TERMS.md` and the minors-privacy audit.
+>
+> ⚠️ Business/legal blanks to finalize with counsel before launch: legal entity
+> name, governing law/forum, mailing address (see `docs/security/TERMS.md` TODOs),
+> and the support/security/legal email inboxes must actually receive mail (App
+> Review may email support).
 
 ## Review notes (App Review → App Information → Notes)
 
