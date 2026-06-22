@@ -11,7 +11,7 @@ import MobileShell from '@/components/mobile/MobileShell'
 import { MOBILE_ROLES } from '@/components/mobile/useIsAdminPhone'
 
 // Pages that should render without the sidebar/topbar shell
-const BARE_ROUTES = ['/sign-in', '/sign-up', '/onboard', '/join', '/setup', '/invite', '/school']
+const BARE_ROUTES = ['/sign-in', '/sign-up', '/onboard', '/join', '/setup', '/invite', '/school', '/privacy', '/terms', '/support']
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
