@@ -19,24 +19,27 @@ import type { NextConfig } from "next";
 // - geolocation=(self) is intentionally permitted: the QR check-in flow uses it.
 const cspDirectives = [
   "default-src 'self'",
-  // Scripts: self + Clerk + Stripe + Vercel preview/live. No 'unsafe-inline'.
-  "script-src 'self' https://clerk.com https://*.clerk.com https://*.clerk.accounts.dev https://js.stripe.com https://*.stripe.com https://vercel.live https://*.vercel.live",
+  // Scripts: self + Clerk (incl. clerk.clubit.app custom domain) + Stripe + Vercel preview/live. No 'unsafe-inline'.
+  "script-src 'self' https://clerk.com https://*.clerk.com https://*.clerk.accounts.dev https://clerk.clubit.app https://js.stripe.com https://*.stripe.com https://vercel.live https://*.vercel.live",
+  // Workers: explicit so blob: URLs (Next.js webpack/HMR workers, Clerk web workers) don't fall back to script-src.
+  "worker-src 'self' blob:",
   // Styles: 'unsafe-inline' is currently required by Next.js' style pipeline.
   "style-src 'self' 'unsafe-inline'",
   // Images: self + data: (favicons, inlined SVGs) + Clerk avatars + Supabase storage + Stripe.
-  "img-src 'self' data: blob: https://*.clerk.com https://*.clerk.accounts.dev https://*.supabase.co https://*.stripe.com",
+  "img-src 'self' data: blob: https://*.clerk.com https://*.clerk.accounts.dev https://clerk.clubit.app https://*.supabase.co https://*.stripe.com",
   // Fonts.
   "font-src 'self' data:",
-  // XHR / fetch / websockets: Clerk, Supabase (incl. realtime wss), Stripe.
-  "connect-src 'self' https://clerk.com https://*.clerk.com https://*.clerk.accounts.dev https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.stripe.com https://vercel.live https://*.vercel.live wss://*.vercel.live",
-  // Frames: allow Stripe (3DS / Checkout iframes), Clerk (CAPTCHA / hosted UI), Vercel live preview.
-  "frame-src 'self' https://js.stripe.com https://*.stripe.com https://*.clerk.com https://*.clerk.accounts.dev https://vercel.live https://*.vercel.live",
+  // XHR / fetch / websockets: Clerk (incl. custom domain), Supabase (incl. realtime wss), Stripe.
+  "connect-src 'self' https://clerk.com https://*.clerk.com https://*.clerk.accounts.dev https://clerk.clubit.app https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.stripe.com https://vercel.live https://*.vercel.live wss://*.vercel.live",
+  // Frames: allow Stripe (3DS / Checkout iframes), Clerk (CAPTCHA / hosted UI / custom domain), Vercel live preview.
+  "frame-src 'self' https://js.stripe.com https://*.stripe.com https://*.clerk.com https://*.clerk.accounts.dev https://clerk.clubit.app https://vercel.live https://*.vercel.live",
   // Hard deny clickjacking — supersedes X-Frame-Options on modern browsers.
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
-  "upgrade-insecure-requests",
+  // `upgrade-insecure-requests` is intentionally omitted: browsers ignore it in
+  // a Report-Only policy (and warn). Re-add it when this header flips to enforcing.
   "report-uri /api/csp-report",
 ].join("; ");
 
