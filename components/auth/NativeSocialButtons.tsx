@@ -1,86 +1,47 @@
 'use client'
 
 import { useState } from 'react'
-import { useClerk } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 
-// Clerk native OAuth redirect target: a custom URL scheme registered in
-// ios/App/App/Info.plist (CFBundleURLTypes) and allowlisted under Clerk
-// Dashboard -> Native Applications -> mobile SSO redirect URLs.
+// Native-only social sign-in buttons.
 //
-// IMPORTANT: the entire Clerk handshake (clerk.clubit.app -> Google ->
-// clerk.clubit.app/v1/oauth_callback) MUST happen inside a single cookie
-// context. The naive approach (`window.location.href = providerUrl`) splits
-// the cookies: allowNavigation accepts clubit.app so the webview LOADS the
-// first Clerk redirect itself, dropping session cookies in the WKWebView's
-// cookie jar; only the follow-up hop to accounts.google.com gets ejected to
-// Safari; Google then posts back to Clerk inside Safari, which has none of
-// those cookies -> `authorization_invalid`. Commit c71efe4 hit this exact
-// bug.
+// Web OAuth from inside the Capacitor WKWebView cannot bridge the webview
+// <-> Safari cookie split: any signIn attempt created in the webview leaves
+// session cookies in the webview, but Google forces the OAuth flow to Safari
+// and the callback to clerk.clubit.app finds none of those cookies, failing
+// with `authorization_invalid` (see git log c71efe4 / aafe992 / e1398f5).
 //
-// The fix is `window.open(url, '_system')`. Capacitor's WKWebView UIDelegate
-// hands window.open URLs to UIApplication.shared.open(), which routes them
-// to Safari directly without ever loading them in the webview. Clerk sets
-// session cookies in Safari from the very first request, the entire Google
-// round-trip stays in Safari, and the final com.clubit.app:// redirect is
-// captured by iOS's URL-scheme handler (NativeBootstrap's appUrlOpen
-// listener) and routed to /sso-callback. /sso-callback then claims the
-// session via the rotating_token_nonce in the URL — no cookies required at
-// that final step.
+// The fix is to never run the Clerk OAuth handshake in the webview at all.
+// These buttons just open https://clubit.app/native-sso?strategy=… in Safari
+// via window.open. That page renders IN SAFARI and runs Clerk's
+// authenticateWithRedirect there, so session cookies live in Safari from the
+// first request through the Google round-trip. The final
+// com.clubit.app://sso-callback redirect is caught by iOS's URL-scheme
+// handler (NativeBootstrap's appUrlOpen) and the webview's /sso-callback
+// page claims the session via the rotating_token_nonce in the URL.
 //
-// This avoids @capacitor/browser entirely, so it works regardless of
-// whether the current TestFlight binary was archived with the plugin
-// compiled in (the prior reason c71efe4 dropped Browser.open).
-const REDIRECT_URL = 'com.clubit.app://sso-callback'
+// One sign-in attempt covers returning users and new sign-ups: Clerk marks
+// missing accounts as transferable and /sso-callback transfers them to a
+// sign-up automatically.
+const LAUNCHER_PATH = '/native-sso'
 
 type Strategy = 'oauth_google' | 'oauth_apple'
 
-/**
- * Native-only social sign-in buttons.
- *
- * The hosted Clerk <SignIn>/<SignUp> social buttons do a same-context redirect
- * that Capacitor ejects to Safari mid-flow, splitting the cookie context and
- * breaking the OAuth round-trip. Here we instead create the sign-in attempt
- * server-side (cookieless), then open Clerk's verification URL directly in
- * Safari via window.open('_system') so the entire Clerk <-> Google handshake
- * lives in one cookie jar.
- *
- * A single sign-in attempt covers both returning users and new sign-ups:
- * Clerk marks a missing account as `transferable` and /sso-callback transfers
- * it to a sign-up automatically.
- */
 export default function NativeSocialButtons() {
-  const clerk = useClerk()
   const [busy, setBusy] = useState<Strategy | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
-  const start = async (strategy: Strategy) => {
+  const start = (strategy: Strategy) => {
     if (busy) return
-    setError(null)
     setBusy(strategy)
-    try {
-      const signIn = await clerk.client.signIn.create({
-        strategy,
-        redirectUrl: REDIRECT_URL,
-        actionCompleteRedirectUrl: REDIRECT_URL,
-      })
-      const url = signIn.firstFactorVerification.externalVerificationRedirectURL
-      if (!url) throw new Error('Could not start sign-in. Please try again.')
-      // window.open(_, '_system') -> Capacitor hands the URL to
-      // UIApplication.shared.open(), which opens Safari directly. The whole
-      // Clerk <-> Google handshake then lives in Safari's cookie jar; the
-      // final com.clubit.app://sso-callback redirect is caught by
-      // NativeBootstrap's appUrlOpen and routed to /sso-callback. Keep
-      // `busy` true so buttons stay disabled while the callback takes over.
-      window.open(url.toString(), '_system')
-    } catch (e) {
-      const msg =
-        (e as { errors?: Array<{ message?: string }> })?.errors?.[0]?.message ??
-        (e as Error)?.message ??
-        'Sign-in failed. Please try again.'
-      setError(msg)
-      setBusy(null)
-    }
+    // window.open(_, '_system') -> Capacitor's WKWebView UIDelegate hands the
+    // URL to UIApplication.shared.open(), which opens Safari directly. The
+    // OAuth handshake then lives in Safari and the deep-link return brings
+    // control back to the app via NativeBootstrap's appUrlOpen listener.
+    const url = `${window.location.origin}${LAUNCHER_PATH}?strategy=${strategy}`
+    window.open(url, '_system')
+    // Leave busy set until the deep-link return takes over — if the user
+    // cancels in Safari and comes back, the buttons will reset on next
+    // render of the sign-in page.
   }
 
   return (
@@ -105,7 +66,6 @@ export default function NativeSocialButtons() {
         <AppleIcon />
         {busy === 'oauth_apple' ? 'Opening…' : 'Continue with Apple'}
       </Button>
-      {error && <p className="text-center text-sm text-destructive">{error}</p>}
     </div>
   )
 }
