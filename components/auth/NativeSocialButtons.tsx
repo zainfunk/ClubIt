@@ -4,13 +4,21 @@ import { useState } from 'react'
 import { useSignIn } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 
-// Clerk native OAuth deep-link target: a custom URL scheme registered in
-// ios/App/App/Info.plist (CFBundleURLTypes) and allowlisted in the Clerk
-// dashboard (Native applications -> "Allowlist for mobile SSO redirect", with
-// Native API enabled). Passing this as sso()'s `redirectCallbackUrl` makes
-// Clerk treat the OAuth callback as NATIVE: it completes via a rotating-token
-// nonce in the return URL instead of demanding the WKWebView's __client cookie
-// (which the external browser doesn't have — the cause of `authorization_invalid`).
+// Clerk native OAuth redirect target: a custom URL scheme registered in
+// ios/App/App/Info.plist (CFBundleURLTypes). The provider flow runs in an
+// EXTERNAL browser (Google bans embedded webviews) and returns to this scheme;
+// NativeBootstrap's `appUrlOpen` listener catches it and routes to
+// /sso-callback, where the webview's OWN Clerk client completes the sign-in via
+// the rotating_token_nonce in the URL. This is what makes the session land in
+// the WKWebView's cookie jar instead of stranding in Safari (the cause of the
+// `authorization_invalid` error with the hosted social buttons).
+//
+// NOTE: We use `signIn.create()` + explicit `Browser.open()` here. An earlier
+// attempt to switch to Clerk's Future `signIn.sso()` (commit 2d5d988) broke the
+// in-app flow: sso() drives navigation via `window.location.href`, which
+// Capacitor's `allowNavigation` allowlist refuses for non-clubit.app hosts.
+// The promise never resolved and the button got stuck on "Opening…". Restored
+// to the create() pattern so the app actually opens Google.
 const REDIRECT_URL = 'com.clubit.app://sso-callback'
 
 type Strategy = 'oauth_google' | 'oauth_apple'
@@ -18,18 +26,17 @@ type Strategy = 'oauth_google' | 'oauth_apple'
 /**
  * Native-only social sign-in buttons.
  *
- * Uses Clerk's Future-API `signIn.sso()` custom flow. sso() starts the sign-in
- * on the webview's Clerk client and navigates to the provider; Capacitor ejects
- * that to the system browser (Google bans embedded webviews). After auth, Clerk
- * returns to `redirectCallbackUrl` (our custom scheme) — a deep link that
- * NativeBootstrap routes to /sso-callback, where the webview's same client
- * finalizes the session via the nonce. One sso() attempt covers new users too:
- * Clerk marks a missing account transferable and /sso-callback transfers it.
+ * The hosted Clerk <SignIn>/<SignUp> social buttons do a same-context redirect
+ * that Capacitor ejects to Safari, breaking the OAuth round-trip. Here we
+ * instead create the sign-in attempt inside the webview, then open the
+ * provider's verification URL in the in-app browser. A single sign-in attempt
+ * covers both returning users and new sign-ups: Clerk marks a missing account
+ * as `transferable` and /sso-callback transfers it to a sign-up automatically.
  */
 export default function NativeSocialButtons() {
   // This Clerk version's useSignIn() exposes the Future/signals custom-flow API:
-  // { errors, fetchStatus, signIn: SignInFutureResource }. sso() returns
-  // { error } and drives the navigation itself.
+  // { errors, fetchStatus, signIn: SignInFutureResource }. `signIn.create()`
+  // returns { error } and updates the `signIn` signal in place.
   const { signIn } = useSignIn()
   const [busy, setBusy] = useState<Strategy | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -39,15 +46,20 @@ export default function NativeSocialButtons() {
     setError(null)
     setBusy(strategy)
     try {
-      const { error: ssoError } = await signIn.sso({
+      const { error: createError } = await signIn.create({
         strategy,
-        redirectUrl: '/',                  // final in-app destination after finalize
-        redirectCallbackUrl: REDIRECT_URL, // native deep-link the provider returns to
+        redirectUrl: REDIRECT_URL,
+        actionCompleteRedirectUrl: REDIRECT_URL,
       })
-      if (ssoError) throw ssoError
-      // sso() navigates to the provider (ejected to the system browser by
-      // Capacitor). Control returns via the custom-scheme deep link -> handled
-      // in NativeBootstrap -> /sso-callback. Keep `busy` set; the app leaves.
+      if (createError) throw createError
+      const url = signIn.firstFactorVerification.externalVerificationRedirectURL
+      if (!url) throw new Error('Could not start sign-in. Please try again.')
+      // Dynamic import keeps @capacitor/browser out of the web bundle.
+      const { Browser } = await import('@capacitor/browser')
+      await Browser.open({ url: url.toString() })
+      // Control returns via the custom-scheme deep link, handled in
+      // NativeBootstrap -> router.push('/sso-callback?...'). Keep `busy` set so
+      // the buttons stay disabled while the callback page takes over.
     } catch (e) {
       const msg =
         (e as { errors?: Array<{ message?: string }> })?.errors?.[0]?.message ??
