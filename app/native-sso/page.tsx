@@ -30,6 +30,10 @@ export default function NativeSSOLauncher() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // useClerk() is typed as LoadedClerk but `client` can be undefined on
+    // first render before Clerk's JS finishes bootstrapping. Wait for the
+    // loaded signal before trying to start the OAuth flow.
+    if (!clerk?.loaded || !clerk.client?.signIn) return
     if (started.current) return
     started.current = true
     void (async () => {
@@ -51,7 +55,7 @@ export default function NativeSSOLauncher() {
         )
       }
     })()
-  }, [clerk])
+  }, [clerk, clerk?.loaded])
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-[#f8f9fa] p-6 text-center">
