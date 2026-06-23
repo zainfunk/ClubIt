@@ -13,12 +13,19 @@ import { Button } from '@/components/ui/button'
 // the WKWebView's cookie jar instead of stranding in Safari (the cause of the
 // `authorization_invalid` error with the hosted social buttons).
 //
-// NOTE: We use `signIn.create()` + explicit `Browser.open()` here. An earlier
-// attempt to switch to Clerk's Future `signIn.sso()` (commit 2d5d988) broke the
-// in-app flow: sso() drives navigation via `window.location.href`, which
-// Capacitor's `allowNavigation` allowlist refuses for non-clubit.app hosts.
-// The promise never resolved and the button got stuck on "Opening…". Restored
-// to the create() pattern so the app actually opens Google.
+// NOTE: We use `signIn.create()` + an explicit external-browser open here. An
+// earlier attempt to switch to Clerk's Future `signIn.sso()` (commit 2d5d988)
+// got stuck on "Opening…" because sso() drives navigation via
+// `window.location.href`, which Capacitor's `allowNavigation` allowlist
+// refuses for non-clubit.app hosts.
+//
+// For the external open we used `@capacitor/browser` initially, but TestFlight
+// builds older than the plugin install error with `"Browser" plugin is not
+// implemented on ios`. So we instead set `window.location.href = providerUrl`:
+// the WKNavigationDelegate sees a cross-host navigation, returns .cancel, and
+// Capacitor's default fallback ejects to Safari (same behaviour as Browser.open
+// would have triggered SFSafariViewController for). This works on every iOS
+// build regardless of whether @capacitor/browser is compiled in.
 const REDIRECT_URL = 'com.clubit.app://sso-callback'
 
 type Strategy = 'oauth_google' | 'oauth_apple'
@@ -54,9 +61,9 @@ export default function NativeSocialButtons() {
       if (createError) throw createError
       const url = signIn.firstFactorVerification.externalVerificationRedirectURL
       if (!url) throw new Error('Could not start sign-in. Please try again.')
-      // Dynamic import keeps @capacitor/browser out of the web bundle.
-      const { Browser } = await import('@capacitor/browser')
-      await Browser.open({ url: url.toString() })
+      // Eject to Safari via Capacitor's default cross-host navigation handling.
+      // See the NOTE at the top of this file for why we don't use Browser.open.
+      window.location.href = url.toString()
       // Control returns via the custom-scheme deep link, handled in
       // NativeBootstrap -> router.push('/sso-callback?...'). Keep `busy` set so
       // the buttons stay disabled while the callback page takes over.
