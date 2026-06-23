@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { createAuthedServerClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,10 +8,9 @@ export async function GET() {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // W2.4: notifications scoping is enforced by app-level filter
-  // (eq user_id = caller); switching to authed client so RLS will catch
-  // any future attempt to query other users' notifications.
-  const db = await createAuthedServerClient()
+  // Scoping is enforced by the application-level `eq('user_id', userId)` filter
+  // below, matching every other /api/school/* route in this codebase.
+  const db = createServiceClient()
   const { data, error } = await db
     .from('notifications')
     .select('*')
@@ -44,10 +43,7 @@ export async function PATCH(request: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  // W2.4: notifications scoping is enforced by app-level filter
-  // (eq user_id = caller); switching to authed client so RLS will catch
-  // any future attempt to query other users' notifications.
-  const db = await createAuthedServerClient()
+  const db = createServiceClient()
 
   if (body.markAllRead) {
     const { error } = await db

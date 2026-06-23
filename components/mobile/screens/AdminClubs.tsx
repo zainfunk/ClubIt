@@ -30,11 +30,12 @@ export default function AdminClubs() {
     return c.name.toLowerCase().includes(s) || (c.tags ?? []).some(t => t.toLowerCase().includes(s))
   })
 
-  const addBtn = (
+  const canCreateClub = actualUser.role === 'admin' || actualUser.role === 'superadmin' || actualUser.role === 'advisor'
+  const addBtn = canCreateClub ? (
     <button onClick={() => router.push('/admin/new-club')} style={css('width:38px;height:38px;border-radius:13px;border:none;background:#0f1729;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
     </button>
-  )
+  ) : undefined
 
   return (
     <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;animation:scIn .24s ease;')}>

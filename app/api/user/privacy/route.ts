@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { createAuthedServerClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase'
 import { PrivacyPatchSchema, badRequest } from '@/lib/schemas'
 
 export const dynamic = 'force-dynamic'
@@ -11,13 +11,13 @@ const DEFAULTS = {
   clubs_public: true,
 }
 
-// GET — fetch privacy settings for the current user
+// GET — fetch privacy settings for the current user. Scoping is enforced by the
+// application-level eq('user_id', userId) filter on the service client.
 export async function GET() {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // W2.4: RLS on user_privacy_settings limits access to user_id = current.
-  const db = await createAuthedServerClient()
+  const db = createServiceClient()
   const { data } = await db
     .from('user_privacy_settings')
     .select('achievements_public, attendance_public, clubs_public')
@@ -47,8 +47,7 @@ export async function PATCH(request: NextRequest) {
   if (parsed.data.attendancePublic !== undefined)   patch.attendance_public   = parsed.data.attendancePublic
   if (parsed.data.clubsPublic !== undefined)        patch.clubs_public        = parsed.data.clubsPublic
 
-  // W2.4: RLS on user_privacy_settings limits access to user_id = current.
-  const db = await createAuthedServerClient()
+  const db = createServiceClient()
 
   const { error } = await db
     .from('user_privacy_settings')

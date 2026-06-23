@@ -65,33 +65,16 @@ export async function computeMemberHours(userId: string, clubId: string): Promis
   }
 }
 
-// Aggregate hours across every club the user belongs to.
+// Aggregate hours across every club the user belongs to. Routed through
+// /api/user/hours (service-role) because the browser anon client can't read
+// attendance_records / memberships under RLS.
 export async function computeUserTotalHours(userId: string): Promise<MemberHours> {
-  const [attRes, memRes] = await Promise.all([
-    supabase
-      .from('attendance_records')
-      .select('duration_minutes')
-      .eq('user_id', userId)
-      .eq('present', true),
-    supabase
-      .from('memberships')
-      .select('hours_adjustment_minutes')
-      .eq('user_id', userId),
-  ])
-
-  const autoMinutes = (attRes.data ?? []).reduce(
-    (sum, r) => sum + ((r.duration_minutes as number | null) ?? DEFAULT_MEETING_MINUTES),
-    0,
-  )
-  const adjustmentMinutes = (memRes.data ?? []).reduce(
-    (sum, r) => sum + ((r.hours_adjustment_minutes as number | null) ?? 0),
-    0,
-  )
-
-  return {
-    autoMinutes,
-    adjustmentMinutes,
-    totalMinutes: Math.max(0, autoMinutes + adjustmentMinutes),
+  try {
+    const res = await fetch(`/api/user/hours?userId=${encodeURIComponent(userId)}`, { cache: 'no-store' })
+    if (!res.ok) return { autoMinutes: 0, adjustmentMinutes: 0, totalMinutes: 0 }
+    return (await res.json()) as MemberHours
+  } catch {
+    return { autoMinutes: 0, adjustmentMinutes: 0, totalMinutes: 0 }
   }
 }
 
