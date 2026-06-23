@@ -6,21 +6,31 @@ import { Button } from '@/components/ui/button'
 
 // Clerk native OAuth redirect target: a custom URL scheme registered in
 // ios/App/App/Info.plist (CFBundleURLTypes) and allowlisted under Clerk
-// Dashboard -> Native Applications -> mobile SSO redirect URLs. The provider
-// flow runs in an EXTERNAL browser (Google bans embedded webviews) and returns
-// to this scheme; NativeBootstrap's `appUrlOpen` listener catches it and routes
-// to /sso-callback, where the webview's Clerk client completes the sign-in via
-// the rotating_token_nonce in the URL. This is what keeps the session in the
-// WKWebView's cookie jar instead of stranding in Safari.
+// Dashboard -> Native Applications -> mobile SSO redirect URLs.
 //
-// We use the CLASSIC `client.signIn.authenticateWithRedirect()` here, not the
-// Future `signIn.create({ strategy: 'oauth_google' })` or `signIn.sso()` path.
-// Why: create() sets up an OAuth attempt that expects same-context (cookied)
-// completion -- when Safari posts back to clerk.clubit.app/v1/oauth_callback,
-// Clerk has no matching cookie and rejects with `authorization_invalid`.
-// authenticateWithRedirect() initiates the proven cross-context flow that
-// completes via the URL nonce alone, no cookie required. sso() was tried and
-// reverted (2d5d988 -> 2cfe40a) because it hung on "Opening…".
+// IMPORTANT: the entire Clerk handshake (clerk.clubit.app -> Google ->
+// clerk.clubit.app/v1/oauth_callback) MUST happen inside a single cookie
+// context. The naive approach (`window.location.href = providerUrl`) splits
+// the cookies: allowNavigation accepts clubit.app so the webview LOADS the
+// first Clerk redirect itself, dropping session cookies in the WKWebView's
+// cookie jar; only the follow-up hop to accounts.google.com gets ejected to
+// Safari; Google then posts back to Clerk inside Safari, which has none of
+// those cookies -> `authorization_invalid`. Commit c71efe4 hit this exact
+// bug.
+//
+// The fix is `window.open(url, '_system')`. Capacitor's WKWebView UIDelegate
+// hands window.open URLs to UIApplication.shared.open(), which routes them
+// to Safari directly without ever loading them in the webview. Clerk sets
+// session cookies in Safari from the very first request, the entire Google
+// round-trip stays in Safari, and the final com.clubit.app:// redirect is
+// captured by iOS's URL-scheme handler (NativeBootstrap's appUrlOpen
+// listener) and routed to /sso-callback. /sso-callback then claims the
+// session via the rotating_token_nonce in the URL — no cookies required at
+// that final step.
+//
+// This avoids @capacitor/browser entirely, so it works regardless of
+// whether the current TestFlight binary was archived with the plugin
+// compiled in (the prior reason c71efe4 dropped Browser.open).
 const REDIRECT_URL = 'com.clubit.app://sso-callback'
 
 type Strategy = 'oauth_google' | 'oauth_apple'
@@ -29,16 +39,15 @@ type Strategy = 'oauth_google' | 'oauth_apple'
  * Native-only social sign-in buttons.
  *
  * The hosted Clerk <SignIn>/<SignUp> social buttons do a same-context redirect
- * that Capacitor ejects to Safari, breaking the OAuth round-trip. Here we
- * instead drive the classic authenticateWithRedirect flow, which sets up a
- * cross-context-safe OAuth attempt and navigates to the provider. Capacitor's
- * WKNavigationDelegate sees the cross-host hop and ejects to Safari; Google
- * returns to Clerk's /v1/oauth_callback; Clerk then redirects to our custom
- * scheme, which iOS hands to the app via appUrlOpen.
+ * that Capacitor ejects to Safari mid-flow, splitting the cookie context and
+ * breaking the OAuth round-trip. Here we instead create the sign-in attempt
+ * server-side (cookieless), then open Clerk's verification URL directly in
+ * Safari via window.open('_system') so the entire Clerk <-> Google handshake
+ * lives in one cookie jar.
  *
- * One sign-in attempt covers both returning users and new sign-ups: Clerk
- * marks a missing account as `transferable` and /sso-callback transfers it
- * into a sign-up automatically.
+ * A single sign-in attempt covers both returning users and new sign-ups:
+ * Clerk marks a missing account as `transferable` and /sso-callback transfers
+ * it to a sign-up automatically.
  */
 export default function NativeSocialButtons() {
   const clerk = useClerk()
@@ -50,17 +59,20 @@ export default function NativeSocialButtons() {
     setError(null)
     setBusy(strategy)
     try {
-      // Classic SignIn resource (via clerk.client.signIn) — the Future
-      // useSignIn() hook only exposes SignInFutureResource, which lacks
-      // authenticateWithRedirect.
-      await clerk.client.signIn.authenticateWithRedirect({
+      const signIn = await clerk.client.signIn.create({
         strategy,
         redirectUrl: REDIRECT_URL,
-        redirectUrlComplete: REDIRECT_URL,
+        actionCompleteRedirectUrl: REDIRECT_URL,
       })
-      // authenticateWithRedirect navigates away; this line is only reached if
-      // the navigation was preempted. Keep `busy` true so buttons stay disabled
-      // while the deep-link callback takes over.
+      const url = signIn.firstFactorVerification.externalVerificationRedirectURL
+      if (!url) throw new Error('Could not start sign-in. Please try again.')
+      // window.open(_, '_system') -> Capacitor hands the URL to
+      // UIApplication.shared.open(), which opens Safari directly. The whole
+      // Clerk <-> Google handshake then lives in Safari's cookie jar; the
+      // final com.clubit.app://sso-callback redirect is caught by
+      // NativeBootstrap's appUrlOpen and routed to /sso-callback. Keep
+      // `busy` true so buttons stay disabled while the callback takes over.
+      window.open(url.toString(), '_system')
     } catch (e) {
       const msg =
         (e as { errors?: Array<{ message?: string }> })?.errors?.[0]?.message ??
