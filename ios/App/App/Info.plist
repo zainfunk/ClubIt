@@ -55,5 +55,16 @@
 	<string>ClubIt lets you choose a photo from your library to set your profile picture.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.clubit.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.clubit.app</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

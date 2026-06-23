@@ -24,7 +24,7 @@ export default function NativeBootstrap() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return
 
-    let cleanups: Array<() => void> = []
+    const cleanups: Array<() => void> = []
 
     ;(async () => {
       const [{ StatusBar, Style }, { SplashScreen }, { Keyboard, KeyboardResize }, { App }] =
@@ -59,9 +59,23 @@ export default function NativeBootstrap() {
 
       // Deep links (custom scheme / universal links): strip the origin and do
       // an in-app client navigation so a scanned QR opens without a reload.
-      const urlHandle = await App.addListener('appUrlOpen', ({ url }) => {
+      const urlHandle = await App.addListener('appUrlOpen', async ({ url }) => {
         try {
           const parsed = new URL(url)
+          // Clerk native OAuth return:
+          //   com.clubit.app://sso-callback?rotating_token_nonce=...
+          // For a custom scheme the route lands in `host`, not `pathname`. Close
+          // the in-app browser sheet, then hand the query (which carries the
+          // nonce) to /sso-callback so the webview's Clerk client finishes
+          // sign-in. Must come BEFORE the generic deep-link handling below.
+          if (parsed.host === 'sso-callback' || url.includes('sso-callback')) {
+            try {
+              const { Browser } = await import('@capacitor/browser')
+              await Browser.close()
+            } catch { /* sheet may already be dismissed */ }
+            router.push(`/sso-callback${parsed.search}`)
+            return
+          }
           const path = `${parsed.pathname}${parsed.search}`
           if (path && path !== '/') router.push(path)
         } catch { /* ignore malformed deep links */ }
