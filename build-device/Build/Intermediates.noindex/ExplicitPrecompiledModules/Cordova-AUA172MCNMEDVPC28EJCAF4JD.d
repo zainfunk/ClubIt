@@ -1,0 +1,23 @@
+moduledependenciestarget: \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Modules/module.modulemap \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CapacitorCordova.h \
+  /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk/System/Library/Frameworks/UIKit.framework/Modules/module.modulemap \
+  /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk/System/Library/Frameworks/Foundation.framework/Modules/module.modulemap \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/AppDelegate.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVViewController.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDV.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVAvailability.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVPlugin.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVPluginResult.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVCommandDelegate.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVInvokedUrlCommand.h \
+  /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk/System/Library/Frameworks/WebKit.framework/Modules/module.modulemap \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVURLProtocol.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVScreenOrientationDelegate.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVWebViewProcessPoolFactory.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVAvailabilityDeprecated.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVCommandDelegateImpl.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVPluginManager.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVConfigParser.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/CDVPlugin+Resources.h \
+  /Users/zainirfan/ClubIt/build-device/Build/Products/Debug-iphoneos/Cordova.framework/Headers/NSDictionary+CordovaPreferences.h
