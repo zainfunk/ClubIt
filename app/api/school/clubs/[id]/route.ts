@@ -482,6 +482,24 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
     return NextResponse.json({ ok: true })
   }
 
+  if (action === 'edit_event') {
+    const { eventId, title, description, date, location, isPublic } = body as { eventId: string; title?: string; description?: string; date?: string; location?: string; isPublic?: boolean }
+    const { data: ev } = await db.from('events').select('created_by, club_id').eq('id', eventId).maybeSingle()
+    if (!ev) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    if (ev.club_id !== clubId) return NextResponse.json({ error: 'Event does not belong to this club' }, { status: 400 })
+    if (!isManager && ev.created_by !== userId) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    if (!title?.trim()) return NextResponse.json({ error: 'Event title is required' }, { status: 400 })
+    if (!date) return NextResponse.json({ error: 'Event date is required' }, { status: 400 })
+    await db.from('events').update({
+      title: sanitizeText(title.trim()),
+      description: sanitizeText(description ?? ''),
+      date,
+      location: location?.trim() ? sanitizeText(location.trim()) : null,
+      is_public: isPublic ?? true,
+    }).eq('id', eventId)
+    return NextResponse.json({ ok: true })
+  }
+
   if (action === 'delete_event') {
     const { eventId } = body as { eventId: string }
     const { data: ev } = await db.from('events').select('created_by').eq('id', eventId).maybeSingle()

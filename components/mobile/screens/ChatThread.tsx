@@ -9,7 +9,7 @@ import { useMockAuth } from '@/lib/mock-auth'
 import { useChatStore } from '@/lib/chat-store'
 import { apiSchoolClubs, apiSchoolUsers } from '@/lib/school-api'
 import type { Club, User } from '@/types'
-import { css, TOP, BOTTOM, clubIcon, tintFor } from '../css'
+import { css, TOP, BOTTOM, clubGlyph, tintFor } from '../css'
 import { useToast } from '../toast'
 
 export default function ChatThread() {
@@ -100,7 +100,7 @@ export default function ChatThread() {
     <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;background:#f2f2f7;animation:scIn .24s ease;')}>
       <div style={{ ...css('padding:0 14px 11px;background:rgba(242,242,247,.86);backdrop-filter:blur(14px);border-bottom:1px solid #e6e6ec;display:flex;align-items:center;gap:11px;flex:none;z-index:5;'), paddingTop: TOP(12) }}>
         <button onClick={() => router.push('/chat')} style={css('border:none;background:none;cursor:pointer;padding:2px;')}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg></button>
-        <span style={css(`width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex:none;background:${club ? tintFor(club.id) : '#eef0ff'};`)}>{club ? clubIcon(club.tags, club.name) : '💬'}</span>
+        <span style={css(`width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex:none;background:${club ? tintFor(club.id) : '#eef0ff'};`)}>{club ? clubGlyph(club) : '💬'}</span>
         <div style={css('flex:1;min-width:0;')}><div style={css("font-family:var(--font-manrope);font-weight:700;font-size:15px;color:#0f1729;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;")}>{club?.name ?? 'Club chat'}</div><div style={css('font-size:11px;color:#9aa0ac;font-weight:500;')}>{club ? `${club.memberIds.length} members` : ''}</div></div>
       </div>
 

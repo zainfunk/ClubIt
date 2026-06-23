@@ -1,6 +1,6 @@
 'use client'
 
-import { MapPin, Plus, Trash2 } from 'lucide-react'
+import { MapPin, Plus, Pencil, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import type { ClubEvent, MeetingTime } from '@/types'
 
@@ -21,13 +21,16 @@ interface ClubEventsProps {
   currentUserId: string
   // Event form
   showEventForm: boolean
-  setShowEventForm: (v: boolean | ((prev: boolean) => boolean)) => void
+  editingEventId: string | null
+  onToggleForm: () => void
+  onCancelForm: () => void
   newEventTitle: string; setNewEventTitle: (v: string) => void
   newEventDesc: string; setNewEventDesc: (v: string) => void
   newEventDate: string; setNewEventDate: (v: string) => void
   newEventLocation: string; setNewEventLocation: (v: string) => void
   newEventPublic: boolean; setNewEventPublic: (v: boolean) => void
-  onCreateEvent: () => void
+  onSubmitEvent: () => void
+  onStartEditEvent: (event: ClubEvent) => void
   onDeleteEvent: (id: string) => void
   // Meeting time form
   newMeetingDay: number; setNewMeetingDay: (v: number) => void
@@ -40,10 +43,10 @@ interface ClubEventsProps {
 
 export default function ClubEvents({
   events, meetingTimes, canCreateContent, isAdvisor, currentUserId,
-  showEventForm, setShowEventForm,
+  showEventForm, editingEventId, onToggleForm, onCancelForm,
   newEventTitle, setNewEventTitle, newEventDesc, setNewEventDesc,
   newEventDate, setNewEventDate, newEventLocation, setNewEventLocation,
-  newEventPublic, setNewEventPublic, onCreateEvent, onDeleteEvent,
+  newEventPublic, setNewEventPublic, onSubmitEvent, onStartEditEvent, onDeleteEvent,
   newMeetingDay, setNewMeetingDay, newMeetingStart, setNewMeetingStart,
   newMeetingEnd, setNewMeetingEnd, newMeetingLocation, setNewMeetingLocation,
   onAddMeetingTime, onRemoveMeetingTime,
@@ -60,7 +63,7 @@ export default function ClubEvents({
             Upcoming Events
           </h3>
           {canCreateContent && (
-            <button onClick={() => setShowEventForm((v) => !v)}
+            <button onClick={onToggleForm}
               className="text-[#0058be] font-bold text-xs hover:underline flex items-center gap-1">
               <Plus className="w-3.5 h-3.5" />Add
             </button>
@@ -69,7 +72,7 @@ export default function ClubEvents({
 
         {canCreateContent && showEventForm && (
           <div className="mb-6 p-5 bg-white rounded-2xl border border-slate-100 shadow-sm space-y-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">New Event</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{editingEventId ? 'Edit Event' : 'New Event'}</p>
             <Input value={newEventTitle} onChange={(e) => setNewEventTitle(e.target.value)} placeholder="Event title…" className="h-8 text-sm" />
             <textarea value={newEventDesc} onChange={(e) => setNewEventDesc(e.target.value)} placeholder="Description…" rows={2}
               className="w-full bg-gray-50 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none border border-gray-100" />
@@ -88,11 +91,11 @@ export default function ClubEvents({
               Public event
             </label>
             <div className="flex gap-2">
-              <button onClick={onCreateEvent} disabled={!newEventTitle.trim() || !newEventDate}
+              <button onClick={onSubmitEvent} disabled={!newEventTitle.trim() || !newEventDate}
                 className="text-xs font-bold bg-[#0058be] text-white rounded-lg px-4 py-1.5 hover:bg-blue-700 disabled:opacity-40 transition-colors">
-                Create
+                {editingEventId ? 'Save changes' : 'Create'}
               </button>
-              <button onClick={() => setShowEventForm(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+              <button onClick={onCancelForm} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
             </div>
           </div>
         )}
@@ -121,10 +124,16 @@ export default function ClubEvents({
                       {event.title}
                     </h4>
                     {canDelete && (
-                      <button onClick={() => onDeleteEvent(event.id)}
-                        className="text-gray-200 hover:text-red-400 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
+                        <button onClick={() => onStartEditEvent(event)}
+                          className="text-gray-300 hover:text-[#0058be]" aria-label="Edit event">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => onDeleteEvent(event.id)}
+                          className="text-gray-300 hover:text-red-400" aria-label="Delete event">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
                   </div>
                   {event.location && (

@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { apiDashboard } from '@/lib/school-api'
 import type { Club, ClubEvent, JoinRequest } from '@/types'
-import { css, TOP, BOTTOM, avBg, initials, clubIcon, tintFor } from '../css'
+import { css, TOP, BOTTOM, avBg, initials, clubGlyph, tintFor } from '../css'
 import { Loader } from '../primitives'
 import { monthDay } from '../format'
 
@@ -89,7 +89,7 @@ export default function StudentHome() {
               const ev = data.nextEvents[c.id]
               return (
                 <button key={c.id} onClick={() => router.push(`/clubs/${c.id}`)} style={css('width:100%;display:flex;align-items:center;gap:13px;background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:13px;margin-bottom:10px;cursor:pointer;text-align:left;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
-                  <span style={css(`width:50px;height:50px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:25px;flex:none;background:${tintFor(c.id)};`)}>{clubIcon(c.tags, c.name)}</span>
+                  <span style={css(`width:50px;height:50px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:25px;flex:none;background:${tintFor(c.id)};`)}>{clubGlyph(c)}</span>
                   <div style={css('flex:1;min-width:0;')}>
                     <div style={css("font-family:var(--font-manrope);font-weight:700;font-size:15px;color:#0f1729;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;")}>{c.name}</div>
                     <div style={css('font-size:12px;color:#9aa0ac;font-weight:500;margin-top:2px;')}>{data.advisorNames[c.advisorId] ? `Advised by ${data.advisorNames[c.advisorId]}` : `${c.memberIds.length} members`}</div>

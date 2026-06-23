@@ -164,8 +164,9 @@ function AdminPageDesktop() {
     }
   }, [actualUser.schoolId])
 
-  // Election form state
+  // Election form state (editingElectionId !== null => editing title/description)
   const [showElectionForm, setShowElectionForm] = useState(false)
+  const [editingElectionId, setEditingElectionId] = useState<string | null>(null)
   const [electionTitle, setElectionTitle] = useState('')
   const [electionDescription, setElectionDescription] = useState('')
   const [electionCandidateIds, setElectionCandidateIds] = useState<string[]>([])
@@ -265,6 +266,55 @@ function AdminPageDesktop() {
     })
     if (!res.ok) return
     setElections((prev) => prev.map((e) => (e.id === id ? { ...e, isOpen: false } : e)))
+  }
+
+  function cancelElectionForm() {
+    setShowElectionForm(false)
+    setEditingElectionId(null)
+    setElectionTitle('')
+    setElectionDescription('')
+    setElectionCandidateIds([])
+  }
+
+  function toggleNewElection() {
+    if (showElectionForm) { cancelElectionForm(); return }
+    setEditingElectionId(null)
+    setElectionTitle('')
+    setElectionDescription('')
+    setElectionCandidateIds([])
+    setShowElectionForm(true)
+  }
+
+  function startEditElection(election: SchoolElection) {
+    setEditingElectionId(election.id)
+    setElectionTitle(election.positionTitle)
+    setElectionDescription(election.description)
+    setElectionCandidateIds([])
+    setShowElectionForm(true)
+  }
+
+  async function saveElectionEdit() {
+    if (!editingElectionId || !electionTitle.trim()) return
+    const res = await fetch(`/api/school/elections/${editingElectionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ positionTitle: electionTitle.trim(), description: electionDescription.trim() }),
+    })
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}))
+      console.error('edit election error', payload.error)
+      return
+    }
+    const id = editingElectionId
+    setElections((prev) => prev.map((e) => (e.id === id ? { ...e, positionTitle: electionTitle.trim(), description: electionDescription.trim() } : e)))
+    cancelElectionForm()
+  }
+
+  async function deleteElection(id: string) {
+    if (!window.confirm('Delete this election? Its candidates and any votes cast will be permanently removed.')) return
+    const res = await fetch(`/api/school/elections/${id}`, { method: 'DELETE' })
+    if (!res.ok) return
+    setElections((prev) => prev.filter((e) => e.id !== id))
   }
 
   function getUserById(id: string) {
@@ -526,14 +576,14 @@ function AdminPageDesktop() {
                 <p className="text-xs text-slate-500">All students and staff can vote</p>
               </div>
             </div>
-            <button onClick={() => setShowElectionForm((v) => !v)} className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 shadow-sm transition shrink-0">
+            <button onClick={toggleNewElection} className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 shadow-sm transition shrink-0">
               <Plus className="w-3.5 h-3.5" />New Election
             </button>
           </div>
 
           {showElectionForm && (
             <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">New Election</p>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">{editingElectionId ? 'Edit Election' : 'New Election'}</p>
               <div>
                 <label className="text-xs font-medium text-slate-600 block mb-1">Position Title *</label>
                 <Input value={electionTitle} onChange={(e) => setElectionTitle(e.target.value)} placeholder="e.g. Student Body President" />
@@ -543,23 +593,34 @@ function AdminPageDesktop() {
                 <textarea value={electionDescription} onChange={(e) => setElectionDescription(e.target.value)} placeholder="Brief description…" rows={2}
                   className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300" />
               </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600 block mb-1">Candidates * (select 2+)</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                  {students.map((s) => (
-                    <label key={s.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer py-0.5">
-                      <input type="checkbox" checked={electionCandidateIds.includes(s.id)} onChange={() => toggleElectionCandidate(s.id)} className="accent-indigo-600" />
-                      {s.name}
-                    </label>
-                  ))}
+              {editingElectionId ? (
+                <p className="text-xs text-slate-400">Candidates can’t be changed after launch — delete the election and create a new one to change who’s running.</p>
+              ) : (
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-1">Candidates * (select 2+)</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                    {students.map((s) => (
+                      <label key={s.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer py-0.5">
+                        <input type="checkbox" checked={electionCandidateIds.includes(s.id)} onChange={() => toggleElectionCandidate(s.id)} className="accent-indigo-600" />
+                        {s.name}
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="flex gap-2">
-                <button onClick={createElection} disabled={!electionTitle.trim() || electionCandidateIds.length < 2}
-                  className="h-8 px-4 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
-                  Launch Election
-                </button>
-                <button onClick={() => setShowElectionForm(false)} className="h-8 px-4 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 transition">Cancel</button>
+                {editingElectionId ? (
+                  <button onClick={saveElectionEdit} disabled={!electionTitle.trim()}
+                    className="h-8 px-4 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                    Save changes
+                  </button>
+                ) : (
+                  <button onClick={createElection} disabled={!electionTitle.trim() || electionCandidateIds.length < 2}
+                    className="h-8 px-4 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                    Launch Election
+                  </button>
+                )}
+                <button onClick={cancelElectionForm} className="h-8 px-4 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 transition">Cancel</button>
               </div>
             </div>
           )}
@@ -581,9 +642,11 @@ function AdminPageDesktop() {
                       <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${election.isOpen ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
                         {election.isOpen ? 'Open' : 'Closed'}
                       </span>
+                      <button onClick={() => startEditElection(election)} className="text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 px-2 py-1 rounded-lg transition">Edit</button>
                       {election.isOpen && (
                         <button onClick={() => closeElection(election.id)} className="text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 px-2 py-1 rounded-lg transition">Close</button>
                       )}
+                      <button onClick={() => deleteElection(election.id)} className="text-xs font-medium text-red-500 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded-lg transition">Delete</button>
                     </div>
                   </div>
                   {winner && (

@@ -8,8 +8,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { apiClubDetail, clubAction, type ClubDetailPayload } from '@/lib/school-api'
-import type { User } from '@/types'
-import { css, TOP, avBg, clubIcon, gradientFor } from '../css'
+import type { ClubEvent, User } from '@/types'
+import { css, TOP, avBg, clubGlyph, gradientFor } from '../css'
 import { BackButton, Avatar, Loader } from '../primitives'
 import { dayShort, timeRange, monthDay, relTime } from '../format'
 import { useToast } from '../toast'
@@ -29,6 +29,7 @@ export default function ClubDetail() {
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
   const [showEventSheet, setShowEventSheet] = useState(false)
+  const [editEvent, setEditEvent] = useState<ClubEvent | null>(null)
   const [showNewsSheet, setShowNewsSheet] = useState(false)
   const [showPollSheet, setShowPollSheet] = useState(false)
 
@@ -152,7 +153,7 @@ export default function ClubDetail() {
             <button disabled={busy} onClick={() => membershipAction('join')} style={css('height:38px;padding:0 18px;border-radius:19px;border:none;background:#fff;color:#0f1729;font-size:13px;font-weight:800;cursor:pointer;')}>Join</button>
           )}
         </div>
-        <div style={css('position:absolute;bottom:-30px;left:20px;width:72px;height:72px;border-radius:22px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:38px;box-shadow:0 8px 20px rgba(15,23,42,.18);')}>{clubIcon(club.tags, club.name)}</div>
+        <div style={css('position:absolute;bottom:-30px;left:20px;width:72px;height:72px;border-radius:22px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:38px;box-shadow:0 8px 20px rgba(15,23,42,.18);')}>{clubGlyph(club)}</div>
       </div>
       <div className="m-noscroll" style={css('flex:1;overflow-y:auto;padding:42px 20px 40px;')}>
         <div style={css('display:flex;align-items:flex-start;justify-content:space-between;gap:10px;')}>
@@ -252,7 +253,12 @@ export default function ClubDetail() {
                 <div key={ev.id} style={css('display:flex;gap:13px;align-items:center;background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:13px;margin-bottom:10px;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
                   <div style={css('width:48px;flex:none;text-align:center;background:#eef0ff;border-radius:13px;padding:8px 0;')}><div style={css('font-size:10px;font-weight:800;color:#6366f1;letter-spacing:.05em;')}>{md.month}</div><div style={css("font-family:var(--font-manrope);font-weight:800;font-size:19px;color:#0f1729;line-height:1;margin-top:2px;")}>{md.day}</div></div>
                   <div style={css('flex:1;min-width:0;')}><div style={css('font-size:14px;font-weight:700;color:#0f1729;font-family:var(--font-manrope);')}>{ev.title}</div><div style={css('font-size:11.5px;color:#9aa0ac;font-weight:500;margin-top:2px;')}>{ev.location || (ev.isPublic ? 'Public' : 'Members only')}</div></div>
-                  {canDelete && <button onClick={() => contentAction({ action: 'delete_event', eventId: ev.id }, 'Event deleted')} style={css('width:30px;height:30px;border-radius:9px;border:1px solid #eceef1;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd0d8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg></button>}
+                  {canDelete && (
+                    <div style={css('display:flex;gap:7px;flex:none;')}>
+                      <button onClick={() => setEditEvent(ev)} style={css('width:30px;height:30px;border-radius:9px;border:1px solid #eceef1;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;')}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd0d8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg></button>
+                      <button onClick={() => contentAction({ action: 'delete_event', eventId: ev.id }, 'Event deleted')} style={css('width:30px;height:30px;border-radius:9px;border:1px solid #eceef1;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;')}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd0d8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg></button>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -352,6 +358,7 @@ export default function ClubDetail() {
         </div>
       </div>
       {showEventSheet && clubId && <CreateEventSheet clubId={clubId} onClose={() => setShowEventSheet(false)} onCreated={reload} />}
+      {editEvent && clubId && <CreateEventSheet clubId={clubId} event={editEvent} onClose={() => setEditEvent(null)} onCreated={reload} />}
       {showNewsSheet && clubId && <CreateNewsSheet clubId={clubId} onClose={() => setShowNewsSheet(false)} onCreated={reload} />}
       {showPollSheet && clubId && <CreatePollSheet clubId={clubId} members={members} onClose={() => setShowPollSheet(false)} onCreated={reload} />}
     </div>

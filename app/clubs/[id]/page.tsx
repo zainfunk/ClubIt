@@ -171,8 +171,9 @@ function ClubDetailDesktop({ params }: PageProps) {
   const [newMeetingEnd, setNewMeetingEnd] = useState('16:00')
   const [newMeetingLocation, setNewMeetingLocation] = useState('')
 
-  // Event creation
+  // Event creation / editing (editingEventId !== null => editing existing)
   const [showEventForm, setShowEventForm] = useState(false)
+  const [editingEventId, setEditingEventId] = useState<string | null>(null)
   const [newEventTitle, setNewEventTitle] = useState('')
   const [newEventDesc, setNewEventDesc] = useState('')
   const [newEventDate, setNewEventDate] = useState('')
@@ -444,13 +445,45 @@ function ClubDetailDesktop({ params }: PageProps) {
   }
 
   // --- Events ---
-  async function createEvent() {
+  function resetEventForm() {
+    setEditingEventId(null)
+    setNewEventTitle(''); setNewEventDesc(''); setNewEventDate(''); setNewEventLocation(''); setNewEventPublic(true)
+  }
+
+  function toggleEventForm() {
+    if (showEventForm) { setShowEventForm(false); resetEventForm() }
+    else { resetEventForm(); setShowEventForm(true) }
+  }
+
+  function cancelEventForm() {
+    setShowEventForm(false)
+    resetEventForm()
+  }
+
+  function startEditEvent(event: ClubEvent) {
+    setEditingEventId(event.id)
+    setNewEventTitle(event.title)
+    setNewEventDesc(event.description)
+    setNewEventDate(event.date)
+    setNewEventLocation(event.location ?? '')
+    setNewEventPublic(event.isPublic)
+    setShowEventForm(true)
+  }
+
+  async function submitEvent() {
     if (!newEventTitle.trim()) { toast.error('Event title is required'); return }
     if (!newEventDate) { toast.error('Event date is required'); return }
+    if (editingEventId) {
+      const ok = await patch({ action: 'edit_event', eventId: editingEventId, title: newEventTitle.trim(), description: newEventDesc.trim(), date: newEventDate, location: newEventLocation.trim() || undefined, isPublic: newEventPublic })
+      if (ok) {
+        cancelEventForm()
+        toast.success('Event updated!')
+      }
+      return
+    }
     const ok = await patch({ action: 'create_event', title: newEventTitle.trim(), description: newEventDesc.trim(), date: newEventDate, location: newEventLocation.trim() || undefined, isPublic: newEventPublic })
     if (ok) {
-      setNewEventTitle(''); setNewEventDesc(''); setNewEventDate(''); setNewEventLocation(''); setNewEventPublic(true)
-      setShowEventForm(false)
+      cancelEventForm()
       toast.success('Event created!')
     }
   }
@@ -1057,7 +1090,9 @@ function ClubDetailDesktop({ params }: PageProps) {
           isAdvisor={isAdvisor}
           currentUserId={currentUser.id}
           showEventForm={showEventForm}
-          setShowEventForm={setShowEventForm}
+          editingEventId={editingEventId}
+          onToggleForm={toggleEventForm}
+          onCancelForm={cancelEventForm}
           newEventTitle={newEventTitle}
           setNewEventTitle={setNewEventTitle}
           newEventDesc={newEventDesc}
@@ -1068,7 +1103,8 @@ function ClubDetailDesktop({ params }: PageProps) {
           setNewEventLocation={setNewEventLocation}
           newEventPublic={newEventPublic}
           setNewEventPublic={setNewEventPublic}
-          onCreateEvent={createEvent}
+          onSubmitEvent={submitEvent}
+          onStartEditEvent={startEditEvent}
           onDeleteEvent={deleteEvent}
           newMeetingDay={newMeetingDay}
           setNewMeetingDay={setNewMeetingDay}

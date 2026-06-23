@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { Role, SchoolElection } from '@/types'
+import { sanitizeText } from '@/lib/sanitize'
 
 export const dynamic = 'force-dynamic'
 
@@ -160,7 +161,10 @@ export async function POST(
   return NextResponse.json({ ok: true, myVoteCandidateId: candidateUserId })
 }
 
-// PATCH — toggle is_open (close/reopen). Admin only, same-school only.
+// PATCH — update an election. Admin only, same-school only. Accepts any of:
+//   isOpen (close/reopen), positionTitle, description.
+// Candidate editing is intentionally not supported here (votes already cast
+// would be orphaned) — delete and recreate instead.
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -173,10 +177,21 @@ export async function PATCH(
   }
 
   const { id } = await params
-  const body = await request.json() as { isOpen?: boolean }
+  const body = await request.json() as { isOpen?: boolean; positionTitle?: string; description?: string }
 
-  if (typeof body.isOpen !== 'boolean') {
-    return NextResponse.json({ error: 'isOpen (boolean) is required' }, { status: 400 })
+  const updates: Record<string, unknown> = {}
+  if (typeof body.isOpen === 'boolean') updates.is_open = body.isOpen
+  if (typeof body.positionTitle === 'string') {
+    const title = sanitizeText(body.positionTitle.trim())
+    if (!title) return NextResponse.json({ error: 'Position title cannot be empty' }, { status: 400 })
+    updates.position_title = title
+  }
+  if (typeof body.description === 'string') {
+    updates.description = sanitizeText(body.description.trim())
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
   }
 
   const db = createServiceClient()
@@ -197,7 +212,7 @@ export async function PATCH(
 
   const { error } = await db
     .from('school_elections')
-    .update({ is_open: body.isOpen })
+    .update(updates)
     .eq('id', id)
 
   if (error) {
@@ -205,5 +220,49 @@ export async function PATCH(
     return NextResponse.json({ error: 'Failed to update election' }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, id, isOpen: body.isOpen })
+  return NextResponse.json({ ok: true, id })
+}
+
+// DELETE — permanently remove an election and its candidates/votes. Admin only,
+// same-school only. Children are deleted explicitly so this works whether or not
+// the FKs cascade.
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const requester = await getRequester()
+  if (!requester) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  if (requester.role !== 'admin' && requester.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const { id } = await params
+  const db = createServiceClient()
+
+  const { data: existing } = await db
+    .from('school_elections')
+    .select('school_id')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (!existing) {
+    return NextResponse.json({ error: 'Election not found' }, { status: 404 })
+  }
+
+  if (requester.role !== 'superadmin' && existing.school_id !== requester.schoolId) {
+    return NextResponse.json({ error: 'You can only manage elections in your own school' }, { status: 403 })
+  }
+
+  await db.from('election_votes').delete().eq('election_id', id)
+  await db.from('election_candidates').delete().eq('election_id', id)
+
+  const { error } = await db.from('school_elections').delete().eq('id', id)
+
+  if (error) {
+    console.error('election delete error', error)
+    return NextResponse.json({ error: 'Failed to delete election' }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true })
 }

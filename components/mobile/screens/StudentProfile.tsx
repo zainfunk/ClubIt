@@ -8,7 +8,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { apiSchoolUser } from '@/lib/school-api'
 import type { Club, User } from '@/types'
-import { css, TOP, avBg, clubIcon } from '../css'
+import { css, TOP, avBg, clubGlyph } from '../css'
 import { BackButton, Loader } from '../primitives'
 
 export default function StudentProfile() {
@@ -38,7 +38,7 @@ export default function StudentProfile() {
     .filter(c => studentId && c.memberIds.includes(studentId))
     .map(c => {
       const pos = c.leadershipPositions.find(p => p.userId === studentId)
-      return { id: c.id, name: c.name, icon: clubIcon(c.tags, c.name), role: pos?.title || 'Member' }
+      return { id: c.id, name: c.name, icon: clubGlyph(c), role: pos?.title || 'Member' }
     }), [clubs, studentId])
 
   if (!loaded) {

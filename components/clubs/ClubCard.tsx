@@ -3,6 +3,7 @@ import { Club, User } from '@/types'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Users } from 'lucide-react'
+import { clubGlyph } from '@/lib/club-icon'
 
 interface ClubCardProps {
   club: Club
@@ -20,7 +21,7 @@ export default function ClubCard({ club, advisor, isMember }: ClubCardProps) {
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-3">
-              <span className="text-3xl">{club.iconUrl ?? '📌'}</span>
+              <span className="text-3xl">{clubGlyph(club)}</span>
               <div>
                 <h3 className="font-semibold text-gray-900 leading-tight">{club.name}</h3>
                 {advisor && (

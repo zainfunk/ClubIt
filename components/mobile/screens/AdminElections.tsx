@@ -21,8 +21,48 @@ export default function AdminElections() {
   const [elections, setElections] = useState<SchoolElection[] | null>(null)
   const [usersById, setUsersById] = useState<Record<string, User>>({})
   const [tab, setTab] = useState<'open' | 'closed'>('open')
+  const [editing, setEditing] = useState<SchoolElection | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDesc, setEditDesc] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const canManage = currentUser.role === 'admin' || currentUser.role === 'superadmin'
+
+  function openEdit(e: SchoolElection) {
+    setEditing(e)
+    setEditTitle(e.positionTitle)
+    setEditDesc(e.description)
+  }
+
+  async function saveEdit() {
+    if (!editing || !editTitle.trim() || savingEdit) return
+    setSavingEdit(true)
+    const id = editing.id
+    try {
+      const res = await fetch(`/api/school/elections/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ positionTitle: editTitle.trim(), description: editDesc.trim() }),
+      })
+      if (!res.ok) throw new Error()
+      setElections(prev => prev ? prev.map(e => e.id === id ? { ...e, positionTitle: editTitle.trim(), description: editDesc.trim() } : e) : prev)
+      toast('Election updated')
+      setEditing(null)
+    } catch {
+      toast('Could not update election')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function deleteElection(id: string) {
+    if (!window.confirm('Delete this election? Candidates and votes will be permanently removed.')) return
+    setElections(prev => prev ? prev.filter(e => e.id !== id) : prev)
+    toast('Election deleted')
+    try {
+      await fetch(`/api/school/elections/${id}`, { method: 'DELETE' })
+    } catch { /* optimistic */ }
+  }
 
   useEffect(() => {
     if (!actualUser.id) return
@@ -119,13 +159,34 @@ export default function AdminElections() {
                       : <div key={c.userId}>{row}</div>
                   })}
                 </div>
-                <div style={css('display:flex;align-items:center;justify-content:space-between;margin-top:13px;')}>
-                  <span style={css('font-size:11.5px;color:#9aa0ac;font-weight:500;')}>{e.myVoteCandidateId ? 'You voted · ' : ''}{total} total {total === 1 ? 'vote' : 'votes'}</span>
-                  {canManage && e.isOpen && <button onClick={() => closeElection(e.id)} style={css('font-size:12px;font-weight:700;color:#64748b;background:#f1f2f4;border:none;padding:6px 12px;border-radius:9px;cursor:pointer;')}>Close election</button>}
+                <div style={css('display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:13px;')}>
+                  <span style={css('font-size:11.5px;color:#9aa0ac;font-weight:500;flex:1;min-width:0;')}>{e.myVoteCandidateId ? 'You voted · ' : ''}{total} total {total === 1 ? 'vote' : 'votes'}</span>
+                  {canManage && (
+                    <div style={css('display:flex;gap:7px;flex:none;')}>
+                      <button onClick={() => openEdit(e)} style={css('font-size:12px;font-weight:700;color:#64748b;background:#f1f2f4;border:none;padding:6px 11px;border-radius:9px;cursor:pointer;')}>Edit</button>
+                      {e.isOpen && <button onClick={() => closeElection(e.id)} style={css('font-size:12px;font-weight:700;color:#64748b;background:#f1f2f4;border:none;padding:6px 11px;border-radius:9px;cursor:pointer;')}>Close</button>}
+                      <button onClick={() => deleteElection(e.id)} style={css('font-size:12px;font-weight:700;color:#e11d48;background:#ffe4e6;border:none;padding:6px 11px;border-radius:9px;cursor:pointer;')}>Delete</button>
+                    </div>
+                  )}
                 </div>
               </div>
             )
           })}
+        </div>
+      )}
+      {editing && (
+        <div style={css('position:fixed;inset:0;z-index:130;')}>
+          <div onClick={() => setEditing(null)} style={css('position:absolute;inset:0;background:rgba(15,23,41,.35);animation:fadeIn .2s ease;')} />
+          <div style={{ ...css('position:absolute;left:0;right:0;bottom:0;background:#f2f2f7;border-radius:26px 26px 0 0;padding:10px 20px 0;animation:sheetUp .28s cubic-bezier(.32,.72,0,1);box-shadow:0 -8px 30px rgba(15,23,41,.18);'), paddingBottom: BOTTOM(24) }}>
+            <div style={css('width:38px;height:5px;border-radius:3px;background:#d4d5db;margin:4px auto 16px;')} />
+            <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:20px;letter-spacing:-.02em;color:#0f1729;margin-bottom:16px;")}>Edit election</div>
+            <label style={css('display:block;font-size:11.5px;font-weight:700;color:#8a8f9a;margin:0 2px 6px;')}>Position title</label>
+            <input value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder="Student Body President" style={css('width:100%;background:#f4f5f7;border:1px solid #e7e8ec;border-radius:12px;padding:11px 13px;font-size:14px;color:#1f2734;font-weight:500;outline:none;font-family:inherit;box-sizing:border-box;')} />
+            <label style={css('display:block;font-size:11.5px;font-weight:700;color:#8a8f9a;margin:14px 2px 6px;')}>Description</label>
+            <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={3} placeholder="Optional" style={css('width:100%;background:#f4f5f7;border:1px solid #e7e8ec;border-radius:12px;padding:11px 13px;font-size:14px;color:#1f2734;font-weight:500;outline:none;font-family:inherit;resize:none;box-sizing:border-box;')} />
+            <div style={css('font-size:11.5px;color:#9aa0ac;font-weight:500;margin-top:10px;')}>Candidates can’t be changed after launch — delete and recreate to change them.</div>
+            <button disabled={!editTitle.trim() || savingEdit} onClick={saveEdit} style={css(`width:100%;height:48px;border-radius:14px;border:none;font-size:15px;font-weight:700;cursor:${editTitle.trim() && !savingEdit ? 'pointer' : 'default'};margin-top:18px;background:${editTitle.trim() && !savingEdit ? '#0f1729' : '#c5cad3'};color:#fff;`)}>{savingEdit ? 'Saving…' : 'Save changes'}</button>
+          </div>
         </div>
       )}
     </div>

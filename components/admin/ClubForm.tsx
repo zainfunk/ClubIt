@@ -11,6 +11,9 @@ interface ClubFormProps {
   onSubmit: (data: Omit<Club, 'id' | 'memberIds' | 'leadershipPositions' | 'socialLinks' | 'meetingTimes' | 'createdAt'>) => Promise<void>
 }
 
+// Same starter set the mobile create screen offers, so both surfaces feel alike.
+const ICON_CHOICES = ['🎯', '🎸', '📚', '⚽', '🔬', '🎮', '🍳', '🧗', '🎤', '🌍', '🩺', '🎬']
+
 export default function ClubForm({ advisors, onSubmit }: ClubFormProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -69,26 +72,45 @@ export default function ClubForm({ advisors, onSubmit }: ClubFormProps) {
               {submitError}
             </p>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 sm:col-span-1">
-              <label className="text-xs font-medium text-gray-700 block mb-1">Club Name *</label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={isSubmitting}
-                placeholder="e.g. Photography Club"
-                required
-              />
+          <div>
+            <label className="text-xs font-medium text-gray-700 block mb-1">Club Name *</label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="e.g. Photography Club"
+              required
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-700 block mb-1">Icon</label>
+            <div className="flex items-center gap-3">
+              <span className="w-11 h-11 shrink-0 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-2xl">
+                {iconUrl.trim() || '⭐'}
+              </span>
+              <div className="grid grid-cols-6 gap-1.5 flex-1">
+                {ICON_CHOICES.map((ic) => (
+                  <button
+                    type="button"
+                    key={ic}
+                    onClick={() => setIconUrl(ic)}
+                    disabled={isSubmitting}
+                    className={`aspect-square rounded-lg text-lg flex items-center justify-center transition ${
+                      iconUrl === ic ? 'bg-slate-900 ring-2 ring-slate-900' : 'bg-gray-100 hover:bg-gray-200'
+                    }`}
+                  >
+                    {ic}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-medium text-gray-700 block mb-1">Icon (emoji)</label>
-              <Input
-                value={iconUrl}
-                onChange={(e) => setIconUrl(e.target.value)}
-                disabled={isSubmitting}
-                placeholder="e.g. 📷"
-              />
-            </div>
+            <Input
+              value={iconUrl}
+              onChange={(e) => setIconUrl(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="Or type any emoji…"
+              className="mt-2"
+            />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-700 block mb-1">Description *</label>

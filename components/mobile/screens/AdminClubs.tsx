@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { apiSchoolClubs } from '@/lib/school-api'
 import type { Club } from '@/types'
-import { css, BOTTOM, clubIcon, tintFor } from '../css'
+import { css, BOTTOM, clubGlyph, tintFor } from '../css'
 import { ScreenHeader, SearchBar, Loader, EmptyState } from '../primitives'
 
 export default function AdminClubs() {
@@ -49,7 +49,7 @@ export default function AdminClubs() {
             const barW = c.capacity ? Math.min(Math.round((count / c.capacity) * 100), 100) : Math.min(Math.round((count / 40) * 100), 100)
             return (
               <button key={c.id} onClick={() => router.push(`/clubs/${c.id}`)} style={css('width:100%;display:flex;align-items:center;gap:13px;background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:13px;margin-bottom:10px;cursor:pointer;text-align:left;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
-                <span style={css(`width:50px;height:50px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:25px;flex:none;background:${tintFor(c.id)};`)}>{clubIcon(c.tags, c.name)}</span>
+                <span style={css(`width:50px;height:50px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:25px;flex:none;background:${tintFor(c.id)};`)}>{clubGlyph(c)}</span>
                 <div style={css('flex:1;min-width:0;')}>
                   <div style={css('display:flex;align-items:center;gap:7px;')}>
                     <span style={css("font-family:var(--font-manrope);font-weight:700;font-size:15px;color:#0f1729;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;")}>{c.name}</span>

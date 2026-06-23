@@ -39,24 +39,9 @@ export function initials(name: string): string {
   return ((p[0]?.[0] || '') + (p[1]?.[0] || '')).toUpperCase() || '?'
 }
 
-// Club emoji/tint inference (real clubs have no emoji field; derive from tags).
-export function clubIcon(tags: string[] | undefined, name: string): string {
-  const t = (tags ?? []).map(x => x.toLowerCase())
-  const n = name.toLowerCase()
-  if (t.some(x => ['stem', 'robotics', 'engineering'].includes(x)) || /robot/.test(n)) return '🤖'
-  if (t.some(x => ['software', 'coding', 'computer'].includes(x)) || /cod|comp/.test(n)) return '💻'
-  if (/chess/.test(n)) return '♟️'
-  if (t.some(x => ['environment', 'community'].includes(x)) || /environ|green|eco/.test(n)) return '🌱'
-  if (t.some(x => ['theatre', 'performance', 'drama'].includes(x)) || /drama|theat/.test(n)) return '🎭'
-  if (t.some(x => ['art', 'arts', 'creative'].includes(x)) || /art/.test(n)) return '🎨'
-  if (t.some(x => ['debate', 'speaking'].includes(x)) || /debate|speech/.test(n)) return '🗣️'
-  if (t.some(x => ['photography'].includes(x)) || /photo/.test(n)) return '📷'
-  if (/music|band/.test(n)) return '🎵'
-  if (/sport|athlet|soccer|basket/.test(n)) return '⚽'
-  if (/science|bio|chem|physics/.test(n)) return '🔬'
-  if (/book|read|liter/.test(n)) return '📚'
-  return '⭐'
-}
+// Club emoji resolution lives in lib/club-icon so the desktop surface can share
+// it. Re-exported here so existing `import { clubIcon } from '../css'` keep working.
+export { clubIcon, clubGlyph } from '@/lib/club-icon'
 
 const TINTS = ['#eef0ff', '#fdecf2', '#e8faf2', '#fff7e6', '#eef0f3', '#f3edff']
 const GRADIENTS = [

@@ -9,7 +9,7 @@ import { useMockAuth } from '@/lib/mock-auth'
 import { apiSchoolClubs } from '@/lib/school-api'
 import { computeUserTotalHours, formatHours } from '@/lib/rewards/hours'
 import type { Club } from '@/types'
-import { css, TOP, BOTTOM, avBg, initials, clubIcon } from '../css'
+import { css, TOP, BOTTOM, avBg, initials, clubGlyph } from '../css'
 import { Loader } from '../primitives'
 
 const ROLE_BADGE: Record<string, { label: string; bg: string; color: string }> = {
@@ -44,7 +44,7 @@ export default function SelfProfile() {
     .map(c => {
       const pos = c.leadershipPositions.find(p => p.userId === currentUser.id)
       const role = c.advisorId === currentUser.id ? 'Advisor' : pos?.title || 'Member'
-      return { id: c.id, name: c.name, icon: clubIcon(c.tags, c.name), role }
+      return { id: c.id, name: c.name, icon: clubGlyph(c), role }
     }), [clubs, currentUser.id])
 
   const badge = ROLE_BADGE[currentUser.role] ?? ROLE_BADGE.student

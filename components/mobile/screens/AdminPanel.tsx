@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { apiSchoolClubs } from '@/lib/school-api'
 import type { Club } from '@/types'
-import { css, TOP, BOTTOM, clubIcon, tintFor } from '../css'
+import { css, TOP, BOTTOM, clubGlyph, tintFor } from '../css'
 import { Loader } from '../primitives'
 
 const MANAGE = [
@@ -71,7 +71,7 @@ export default function AdminPanel() {
           <div style={css('background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:4px 16px;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
             {clubs.map((c, i) => (
               <button key={c.id} onClick={() => router.push(`/clubs/${c.id}`)} style={css(`width:100%;display:flex;align-items:center;gap:12px;padding:12px 0;border:none;background:none;cursor:pointer;text-align:left;${i < clubs.length - 1 ? 'border-bottom:1px solid #f4f5f7;' : ''}`)}>
-                <span style={css(`width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:21px;flex:none;background:${tintFor(c.id)};`)}>{clubIcon(c.tags, c.name)}</span>
+                <span style={css(`width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:21px;flex:none;background:${tintFor(c.id)};`)}>{clubGlyph(c)}</span>
                 <div style={css('flex:1;min-width:0;')}><div style={css("font-size:14px;font-weight:700;color:#0f1729;font-family:var(--font-manrope);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;")}>{c.name}</div><div style={css('font-size:11.5px;color:#9aa0ac;font-weight:500;')}>{advisorNames[c.advisorId] ?? 'No advisor'} · {c.memberIds.length} members</div></div>
                 <span style={css('font-size:11.5px;font-weight:700;color:#6366f1;background:#eef0ff;padding:5px 10px;border-radius:9px;flex:none;')}>Manage</span>
               </button>

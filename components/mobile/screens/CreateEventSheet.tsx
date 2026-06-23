@@ -1,18 +1,21 @@
 'use client'
 
-// Bottom-sheet form to create a club event (advisor / event creator). Posts
-// PATCH /api/school/clubs/[clubId] { action: 'create_event', ... }.
+// Bottom-sheet form to create OR edit a club event (advisor / event creator).
+// Posts PATCH /api/school/clubs/[clubId] { action: 'create_event' | 'edit_event', ... }.
 
 import { useState } from 'react'
 import { css, BOTTOM } from '../css'
 import { useToast } from '../toast'
 
-export default function CreateEventSheet({ clubId, onClose, onCreated }: { clubId: string; onClose: () => void; onCreated: () => void }) {
+interface EditableEvent { id: string; title: string; description: string; date: string; location?: string; isPublic: boolean }
+
+export default function CreateEventSheet({ clubId, event, onClose, onCreated }: { clubId: string; event?: EditableEvent; onClose: () => void; onCreated: () => void }) {
   const toast = useToast()
-  const [title, setTitle] = useState('')
-  const [date, setDate] = useState('')
-  const [location, setLocation] = useState('')
-  const [isPublic, setIsPublic] = useState(true)
+  const editing = !!event
+  const [title, setTitle] = useState(event?.title ?? '')
+  const [date, setDate] = useState(event?.date ?? '')
+  const [location, setLocation] = useState(event?.location ?? '')
+  const [isPublic, setIsPublic] = useState(event?.isPublic ?? true)
   const [busy, setBusy] = useState(false)
 
   const valid = title.trim().length > 0 && !!date
@@ -21,17 +24,20 @@ export default function CreateEventSheet({ clubId, onClose, onCreated }: { clubI
     if (!valid || busy) return
     setBusy(true)
     try {
+      const body = editing
+        ? { action: 'edit_event', eventId: event!.id, title: title.trim(), description: event!.description, date, location: location.trim() || undefined, isPublic }
+        : { action: 'create_event', title: title.trim(), date, location: location.trim() || undefined, isPublic }
       const res = await fetch(`/api/school/clubs/${clubId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create_event', title: title.trim(), date, location: location.trim() || undefined, isPublic }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error()
-      toast('Event created')
+      toast(editing ? 'Event updated' : 'Event created')
       onCreated()
       onClose()
     } catch {
-      toast('Could not create event')
+      toast(editing ? 'Could not update event' : 'Could not create event')
       setBusy(false)
     }
   }
@@ -43,7 +49,7 @@ export default function CreateEventSheet({ clubId, onClose, onCreated }: { clubI
       <div onClick={onClose} style={css('position:absolute;inset:0;background:rgba(15,23,41,.35);animation:fadeIn .2s ease;')} />
       <div style={{ ...css('position:absolute;left:0;right:0;bottom:0;background:#f2f2f7;border-radius:26px 26px 0 0;padding:10px 20px 0;animation:sheetUp .28s cubic-bezier(.32,.72,0,1);box-shadow:0 -8px 30px rgba(15,23,41,.18);'), paddingBottom: BOTTOM(24) }}>
         <div style={css('width:38px;height:5px;border-radius:3px;background:#d4d5db;margin:4px auto 16px;')} />
-        <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:20px;letter-spacing:-.02em;color:#0f1729;margin-bottom:16px;")}>New event</div>
+        <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:20px;letter-spacing:-.02em;color:#0f1729;margin-bottom:16px;")}>{editing ? 'Edit event' : 'New event'}</div>
 
         <label style={css('display:block;font-size:11.5px;font-weight:700;color:#8a8f9a;margin:0 2px 6px;')}>Title</label>
         <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Spring Showcase" style={css(field)} />
@@ -59,7 +65,7 @@ export default function CreateEventSheet({ clubId, onClose, onCreated }: { clubI
           <button onClick={() => setIsPublic(v => !v)} style={css(`width:46px;height:28px;border-radius:15px;border:none;cursor:pointer;position:relative;flex:none;background:${isPublic ? '#10b981' : '#d4d5db'};transition:background .2s;`)}><span style={css(`position:absolute;top:3px;left:${isPublic ? '21px' : '3px'};width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .2s;`)} /></button>
         </div>
 
-        <button disabled={!valid || busy} onClick={submit} style={css(`width:100%;height:48px;border-radius:14px;border:none;font-size:15px;font-weight:700;cursor:${valid && !busy ? 'pointer' : 'default'};margin-top:20px;background:${valid && !busy ? '#0f1729' : '#c5cad3'};color:#fff;`)}>{busy ? 'Creating…' : 'Create event'}</button>
+        <button disabled={!valid || busy} onClick={submit} style={css(`width:100%;height:48px;border-radius:14px;border:none;font-size:15px;font-weight:700;cursor:${valid && !busy ? 'pointer' : 'default'};margin-top:20px;background:${valid && !busy ? '#0f1729' : '#c5cad3'};color:#fff;`)}>{busy ? 'Saving…' : editing ? 'Save changes' : 'Create event'}</button>
       </div>
     </div>
   )

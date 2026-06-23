@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { ClubEvent } from '@/types'
 import { Search, Clock, MapPin, AlertCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { clubGlyph } from '@/lib/club-icon'
 
 const CLUB_COLORS: Record<string, { spine: string; spineText: string; badge: string; badgeText: string; panel: string }> = {
   'club-robotics':    { spine: 'bg-blue-50',   spineText: 'text-blue-800',   badge: 'bg-blue-100',   badgeText: 'text-blue-700',   panel: 'bg-blue-50/60' },
@@ -216,7 +217,7 @@ function EventsDesktop() {
                     {/* Club badge */}
                     <div className="flex items-center gap-2 mb-4">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm leading-none ${colors.badge}`}>
-                        {club?.iconUrl ?? '📌' as string}
+                        {club ? clubGlyph(club) : '📌'}
                       </div>
                       {club && (
                         <Link

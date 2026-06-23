@@ -53,6 +53,7 @@ export default function CreateClub() {
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim(),
+          iconUrl: icon,
           capacity: unlimited ? null : cap,
           advisorId,
           tags: [tag],

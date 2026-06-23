@@ -9,7 +9,7 @@ import { useMockAuth } from '@/lib/mock-auth'
 import { useChatStore } from '@/lib/chat-store'
 import { apiSchoolClubs } from '@/lib/school-api'
 import type { Club } from '@/types'
-import { css, BOTTOM, clubIcon, tintFor } from '../css'
+import { css, BOTTOM, clubGlyph, tintFor } from '../css'
 import { ScreenHeader, SearchBar, Loader, EmptyState } from '../primitives'
 import { relTime } from '../format'
 
@@ -55,7 +55,7 @@ export default function ChatList() {
         <div className="m-noscroll" style={{ ...css('flex:1;overflow-y:auto;padding:6px 14px 0;'), paddingBottom: `calc(${BOTTOM(0)} + 96px)` }}>
           {threads.length === 0 ? <EmptyState title="No conversations" sub="Club chats appear here once clubs exist." /> : threads.map(({ club, last }) => (
             <button key={club.id} onClick={() => router.push(`/chat/${club.id}`)} style={css('width:100%;display:flex;align-items:center;gap:13px;padding:12px 8px;border:none;background:none;cursor:pointer;text-align:left;border-bottom:1px solid #ebebf0;')}>
-              <span style={css(`width:52px;height:52px;border-radius:17px;display:flex;align-items:center;justify-content:center;font-size:25px;flex:none;background:${tintFor(club.id)};`)}>{clubIcon(club.tags, club.name)}</span>
+              <span style={css(`width:52px;height:52px;border-radius:17px;display:flex;align-items:center;justify-content:center;font-size:25px;flex:none;background:${tintFor(club.id)};`)}>{clubGlyph(club)}</span>
               <div style={css('flex:1;min-width:0;')}>
                 <div style={css('display:flex;align-items:center;justify-content:space-between;gap:8px;')}><span style={css("font-family:var(--font-manrope);font-weight:700;font-size:14.5px;color:#0f1729;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;")}>{club.name}</span><span style={css('font-size:11px;color:#9aa0ac;font-weight:500;flex:none;')}>{last ? relTime(last.sentAt) : ''}</span></div>
                 <div style={css('display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px;')}><span style={css('font-size:12.5px;color:#8a8f9a;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;')}>{last ? last.content : 'No messages yet'}</span></div>
