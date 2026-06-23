@@ -34,6 +34,22 @@ const config: CapacitorConfig = {
       backgroundColor: '#4f46e5',
       showSpinner: false,
     },
+    // Native social sign-in (iOS). Clerk's web OAuth callback can't redirect
+    // to custom URL schemes (only HTTPS), so any pure-JS approach using
+    // signIn.authenticateWithRedirect fails with `authorization_invalid` when
+    // the redirect target is com.clubit.app://. We instead get a provider ID
+    // token from a native SDK and hand it to Clerk via
+    // signIn.create({ strategy: 'google_one_tap' | 'oauth_token_apple', token }).
+    // Runtime client IDs come from NEXT_PUBLIC env vars; see
+    // components/auth/NativeSocialButtons.tsx.
+    SocialLogin: {
+      providers: {
+        google: true,
+        apple: true,
+        facebook: false,
+        twitter: false,
+      },
+    },
   },
 };
 
