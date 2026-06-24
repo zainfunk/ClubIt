@@ -79,8 +79,10 @@ export default function NativeSocialButtons() {
           provider: 'apple',
           options: { scopes: ['email', 'name'] },
         })
-        const result = (res as { result?: { identityToken?: string } }).result
-        token = result?.identityToken
+        // @capgo/capacitor-social-login returns the Apple JWT under `idToken`
+        // (AppleProvider.swift), NOT `identityToken`.
+        const result = (res as { result?: { idToken?: string } }).result
+        token = result?.idToken
         clerkStrategy = 'oauth_token_apple'
       }
 
