@@ -66,6 +66,18 @@ export default function NativeSocialButtons() {
       let token: string | undefined
       let clerkStrategy: 'google_one_tap' | 'oauth_token_apple'
 
+      // Clear any cached native provider session BEFORE signing in. Clerk's
+      // signOut() only clears the Clerk session, not Google/Apple's native SDK
+      // session — so on a second sign-in the SDK returns the same already-spent
+      // ID token, which Clerk rejects with `authorization_invalid`. Forcing a
+      // logout here guarantees every attempt gets a fresh, single-use token.
+      try {
+        await SocialLogin.logout({ provider: strategy === 'oauth_google' ? 'google' : 'apple' })
+      } catch {
+        // Not currently signed in (or logout unsupported for this provider) —
+        // harmless; we just proceed to a fresh login.
+      }
+
       if (strategy === 'oauth_google') {
         const res = await SocialLogin.login({
           provider: 'google',
