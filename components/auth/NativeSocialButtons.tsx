@@ -107,10 +107,15 @@ export default function NativeSocialButtons() {
       }
       router.push('/sign-up')
     } catch (e) {
-      const msg =
-        (e as { errors?: Array<{ message?: string }> })?.errors?.[0]?.message ??
-        (e as Error)?.message ??
-        'Sign-in failed. Please try again.'
+      // TEMP DEBUG: surface Clerk's full error (code + long message) so we can
+      // see why the OAuth-token sign-in is rejected. Revert to the short
+      // message once the Clerk connection is fixed.
+      const err = (e as {
+        errors?: Array<{ code?: string; message?: string; longMessage?: string }>
+      })?.errors?.[0]
+      const msg = err
+        ? `[${err.code ?? 'no-code'}] ${err.longMessage ?? err.message ?? ''}`
+        : (e as Error)?.message ?? JSON.stringify(e)
       setError(msg)
       setBusy(null)
     }
