@@ -65,6 +65,18 @@
 				<string>com.clubit.app</string>
 			</array>
 		</dict>
+		<dict>
+			<!-- Google Sign-In iOS reversed-client-ID URL scheme. Required by the
+			     native Google SDK (via @capgo/capacitor-social-login) to receive
+			     the OAuth callback. Must match the iOS Client ID set in Google
+			     Cloud Console (project: ClubIt) and NEXT_PUBLIC_GOOGLE_IOS_CLIENT_ID. -->
+			<key>CFBundleURLName</key>
+			<string>com.googleusercontent.apps.153303416435-i73fn8eb61ohkeomfsn6mcj3v2lrrn1e</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.153303416435-i73fn8eb61ohkeomfsn6mcj3v2lrrn1e</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>
