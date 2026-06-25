@@ -43,7 +43,51 @@ export async function GET() {
     .maybeSingle()
 
   const dbRole = userData?.role ?? clerkRole ?? 'student'
-  const schoolId = userData?.school_id ?? null
+  let schoolId = userData?.school_id ?? null
+
+  // ── Self-heal: reconcile school membership across same-email accounts. ────
+  // `users.id` is the Clerk id, so a person who signs in on a *second* Clerk
+  // account (e.g. a different OAuth/login) gets a fresh row with
+  // school_id=null and would see no school and an empty clubs list — even
+  // though another of their accounts is already enrolled. If a sibling row
+  // under the SAME, VERIFIED email is attached to exactly one school, inherit
+  // that school_id here so the second login is never stranded.
+  //
+  // Safety: we copy ONLY the school_id (membership), never an elevated role.
+  // School membership is grantable to anyone holding the multi-use student
+  // code, so sharing "which school" between a human's own verified-email
+  // accounts is no escalation; inheriting admin/advisor across accounts would
+  // be, and is deliberately not done. We require the current caller's primary
+  // email to be verified (so it's provably the same human), and we refuse to
+  // guess when siblings point at more than one distinct school.
+  if (!schoolId && email && clerkUser.primaryEmailAddress?.verification?.status === 'verified') {
+    // ilike = case-insensitive match; escape LIKE metacharacters (notably `_`,
+    // which is common in generated emails like pw_adm_…@) so they're literal.
+    const emailPattern = email.replace(/[\\%_]/g, '\\$&')
+    const { data: siblings } = await db
+      .from('users')
+      .select('school_id')
+      .ilike('email', emailPattern)
+      .not('school_id', 'is', null)
+      .neq('id', userId)
+
+    const distinctSchoolIds = [...new Set((siblings ?? []).map((s) => s.school_id))]
+    if (distinctSchoolIds.length === 1) {
+      const inherited = distinctSchoolIds[0] as string
+      const { data: healed } = await db
+        .from('users')
+        .update({ school_id: inherited })
+        .eq('id', userId)
+        .select('school_id')
+        .maybeSingle()
+      if (healed?.school_id) {
+        schoolId = healed.school_id
+        console.info(`sync: reconciled school_id for ${userId} from same-email sibling`)
+      }
+    } else if (distinctSchoolIds.length > 1) {
+      console.warn(`sync: ambiguous school reconcile for ${email} (${distinctSchoolIds.length} schools) — skipping`)
+    }
+  }
 
   // If Clerk metadata is stale, fix it
   if (clerkRole !== dbRole) {
