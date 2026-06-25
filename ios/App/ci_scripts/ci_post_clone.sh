@@ -22,8 +22,8 @@ cd "$CI_PRIMARY_REPOSITORY_PATH"
 
 # Install Node via Homebrew if it's not already on PATH.
 if ! command -v node >/dev/null 2>&1; then
-  brew install node@20
-  brew link node@20 --force --overwrite
+  brew install node@22
+  brew link node@22 --force --overwrite
 fi
 
 node --version
