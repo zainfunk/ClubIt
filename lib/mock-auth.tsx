@@ -265,6 +265,14 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
         })
       } finally {
         if (!cancelled) {
+          // Re-allow ONE redirect evaluation against the authoritative DB state.
+          // The first pass may have redirected using the stale localStorage cache
+          // (e.g. a just-approved school still cached as 'pending', or a freshly
+          // promoted role), and the guard would otherwise pin the user there until
+          // a hard reload. Resetting here lets the redirect effect correct course
+          // once fresh data lands; it's loop-safe because the data only changes
+          // this once per sync.
+          hasRedirected.current = false
           setIsResolved(true)
         }
       }

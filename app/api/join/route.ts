@@ -151,17 +151,21 @@ export async function POST(request: NextRequest) {
   // unapproved requests doesn't burn the legitimate invitee's code. We FAIL
   // CLOSED: if the request can't be recorded, no elevation and no role change.
   if (isElevated) {
-    if (!existingUser) {
-      const { error: enrollErr } = await db
-        .from('users')
-        .upsert(
+    // Attach the redeemer to the school NOW so school_id is persisted in the
+    // DB — not just the client localStorage cache. Otherwise a return visit on
+    // a fresh device (or after sign-out) reads school_id=null and re-prompts for
+    // a code. Role stays as-is; elevation happens only on admin approval. We've
+    // already 409'd above if they belong to a *different* school, so writing
+    // school.id here can never clobber another enrollment.
+    const { error: enrollErr } = existingUser
+      ? await db.from('users').update({ school_id: school.id }).eq('id', userId)
+      : await db.from('users').upsert(
           { id: userId, name, email: callerEmail, school_id: school.id, role: 'student' },
           { onConflict: 'id' },
         )
-      if (enrollErr) {
-        console.error('join: student enroll before staff request failed', enrollErr)
-        return NextResponse.json({ error: 'Failed to join the school. Please try again.' }, { status: 500 })
-      }
+    if (enrollErr) {
+      console.error('join: school attach before staff request failed', enrollErr)
+      return NextResponse.json({ error: 'Failed to join the school. Please try again.' }, { status: 500 })
     }
 
     const { error: reqErr } = await db.from('staff_access_requests').insert({

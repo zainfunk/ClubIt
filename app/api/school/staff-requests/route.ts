@@ -118,16 +118,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, decision: 'denied' })
   }
 
-  // Approve: grant the role (pinned to this school) and sync Clerk metadata.
+  // Approve: grant the role AND pin the school in one write, scoped by id only.
+  // The claimed request was already verified to belong to this school (the claim
+  // UPDATE above filtered on school_id = requester.schoolId), so writing
+  // school_id here is safe — and it self-heals redeemers whose school_id was
+  // never persisted at join time. We assert a row actually changed: a 0-row
+  // UPDATE must NOT pass as success and then burn the single-use code below.
   const grantedRole = claimed.requested_role as 'admin' | 'advisor'
-  const { error: roleErr } = await db
+  const { data: granted, error: roleErr } = await db
     .from('users')
-    .update({ role: grantedRole })
+    .update({ role: grantedRole, school_id: requester.schoolId })
     .eq('id', claimed.user_id)
-    .eq('school_id', requester.schoolId)
+    .select('id')
+    .maybeSingle()
 
-  if (roleErr) {
-    console.error('staff-requests role grant error', roleErr)
+  if (roleErr || !granted) {
+    console.error('staff-requests role grant error', roleErr ?? 'no row updated')
     return NextResponse.json({ error: 'Failed to grant the role' }, { status: 500 })
   }
 

@@ -11,17 +11,19 @@ interface SetupData {
   district?: string
   contactName: string
   contactEmail: string
-  studentInviteCode: string
-  adminInviteCode: string
-  advisorInviteCode: string
+  studentInviteCode: string | null
+  adminInviteCode: string | null
+  advisorInviteCode: string | null
+  codesRedacted?: boolean
   expiresAt: string
   completedAt?: string
 }
 
-function CopyButton({ value }: { value: string }) {
+function CopyButton({ value }: { value: string | null }) {
   const [copied, setCopied] = useState(false)
 
   async function copy() {
+    if (!value) return
     await navigator.clipboard.writeText(value)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -100,6 +102,29 @@ export default function SetupPage({ params }: { params: Promise<{ token: string 
   const expiryDate = new Date(data.expiresAt).toLocaleDateString('en-US', {
     month: 'long', day: 'numeric', year: 'numeric'
   })
+
+  // Once setup is complete (or an admin has joined), the API stops serving the
+  // codes. Show a closed state instead of empty code boxes so a forwarded link
+  // can't be used to fish for the invite codes.
+  if (data.codesRedacted) {
+    return (
+      <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-6">
+        <div className="text-center max-w-sm">
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-green-100 rounded-2xl mb-4">
+            <CheckCircle className="w-7 h-7 text-green-600" />
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">{data.name} is set up</h1>
+          <p className="text-gray-500 text-sm">
+            This setup link is now closed and no longer shows invite codes. An
+            administrator can find and rotate codes from the admin panel.
+          </p>
+          <p className="text-xs text-gray-400 mt-4">
+            Need help? Contact <a href="mailto:support@clubit.app" className="underline">support@clubit.app</a>.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-6">

@@ -22,7 +22,7 @@ export async function GET(
 
   const { data: school } = await db
     .from('schools')
-    .select('id, name, district, contact_name, contact_email, status, student_invite_code, admin_invite_code, advisor_invite_code, setup_token_expires_at, setup_completed_at')
+    .select('id, name, district, contact_name, contact_email, status, student_invite_code, admin_invite_code, advisor_invite_code, admin_code_used_at, setup_token_expires_at, setup_completed_at')
     .eq('setup_token', token)
     .maybeSingle()
 
@@ -38,14 +38,21 @@ export async function GET(
     return NextResponse.json({ error: 'Setup link has expired' }, { status: 410 })
   }
 
+  // Once setup is marked complete OR an admin has already redeemed the admin code
+  // (i.e. the school is bootstrapped), stop serving the invite codes. A leaked or
+  // forwarded setup URL must not stay an open door to all three codes — including
+  // the admin code — for the rest of the token window.
+  const setupClosed = !!school.setup_completed_at || !!school.admin_code_used_at
+
   return NextResponse.json({
     name: school.name,
     district: school.district,
     contactName: school.contact_name,
     contactEmail: school.contact_email,
-    studentInviteCode: school.student_invite_code,
-    adminInviteCode: school.admin_invite_code,
-    advisorInviteCode: school.advisor_invite_code,
+    studentInviteCode: setupClosed ? null : school.student_invite_code,
+    adminInviteCode: setupClosed ? null : school.admin_invite_code,
+    advisorInviteCode: setupClosed ? null : school.advisor_invite_code,
+    codesRedacted: setupClosed,
     expiresAt: school.setup_token_expires_at,
     completedAt: school.setup_completed_at,
   })

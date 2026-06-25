@@ -1,29 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth, clerkClient } from '@clerk/nextjs/server'
+import { clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { generateInviteCode, generateSetupToken, setupTokenExpiresAt } from '@/lib/schools-store'
+import { requireSuperAdmin } from '@/lib/auth/require-superadmin'
 import { audit } from '@/lib/audit'
-
-async function requireSuperAdmin() {
-  const { userId } = await auth()
-  if (!userId) return null
-
-  // Source of truth: users.role in the DB. Fall back to Clerk metadata if
-  // the row hasn't been created yet (shouldn't happen post-/api/user/sync).
-  const db = createServiceClient()
-  const { data: userRow } = await db
-    .from('users')
-    .select('role')
-    .eq('id', userId)
-    .maybeSingle()
-  if (userRow?.role === 'superadmin') return userId
-
-  const client = await clerkClient()
-  const user = await client.users.getUser(userId)
-  if (user.publicMetadata?.role === 'superadmin') return userId
-
-  return null
-}
 
 /**
  * POST /api/superadmin/schools/[id]/approve
@@ -72,6 +52,10 @@ export async function POST(
       student_invite_code: studentCode,
       admin_invite_code: adminCode,
       advisor_invite_code: advisorCode,
+      // Mint fresh single-use markers as null so the new admin/advisor codes are
+      // redeemable (defensive — a re-approved/seeded row could carry stale ones).
+      admin_code_used_at: null,
+      advisor_code_used_at: null,
       setup_token: token,
       setup_token_expires_at: tokenExpiry,
     })
@@ -90,14 +74,19 @@ export async function POST(
   if (school.requested_admin_user_id) {
     const requestedAdminId: string = school.requested_admin_user_id
     promotedAdminId = requestedAdminId
-    const { error: roleErr } = await db
+    // Grant admin AND pin the school in one id-scoped write, asserting a row
+    // actually changed. (Same hardening as the staff-request approval: a
+    // school_id-scoped UPDATE silently no-ops if the requester's school_id was
+    // never persisted — see the sign-in remediation.)
+    const { data: granted, error: roleErr } = await db
       .from('users')
-      .update({ role: 'admin' })
+      .update({ role: 'admin', school_id: id })
       .eq('id', requestedAdminId)
-      .eq('school_id', id) // pinned to this school
+      .select('id')
+      .maybeSingle()
 
-    if (roleErr) {
-      console.error('approve: role flip failed', roleErr)
+    if (roleErr || !granted) {
+      console.error('approve: role flip failed', roleErr ?? 'no row updated')
       // Don't 500 the whole flow; the school is already active. Return
       // a partial success so the operator can retry the role flip.
       return NextResponse.json({
@@ -116,6 +105,23 @@ export async function POST(
       })
     } catch (metaErr) {
       console.warn('approve: clerk metadata sync warning', metaErr)
+    }
+  } else {
+    // No requested admin captured (older / edge pending rows). Warn if the
+    // school would go live with nobody able to manage it, so the operator
+    // promotes someone manually instead of silently activating an admin-less
+    // school.
+    const { count } = await db
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('school_id', id)
+      .eq('role', 'admin')
+    if (!count) {
+      return NextResponse.json({
+        school: data,
+        setupLink: `/setup/${token}`,
+        warning: 'School approved but no admin was assigned. Promote a user to admin or share the admin invite code.',
+      })
     }
   }
 

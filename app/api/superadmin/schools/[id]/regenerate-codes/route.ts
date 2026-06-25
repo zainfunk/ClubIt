@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { generateInviteCode } from '@/lib/schools-store'
-
-async function requireSuperAdmin() {
-  const { userId } = await auth()
-  if (!userId) return null
-  const client = await clerkClient()
-  const user = await client.users.getUser(userId)
-  if (user.publicMetadata?.role !== 'superadmin') return null
-  return userId
-}
+import { requireSuperAdmin } from '@/lib/auth/require-superadmin'
 
 export async function POST(
   _request: NextRequest,
