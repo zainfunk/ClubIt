@@ -88,6 +88,9 @@ export default async function RootLayout({
         <NativeBootstrap />
         <Toaster
           position="top-right"
+          // Push toasts below the Dynamic Island / notch on iPhone. Desktop
+          // keeps the standard 16px offset.
+          mobileOffset={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)', left: '12px', right: '12px' }}
           toastOptions={{
             style: { fontFamily: 'var(--font-inter, sans-serif)', fontSize: '0.875rem' },
           }}

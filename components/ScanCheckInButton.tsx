@@ -40,50 +40,65 @@ export default function ScanCheckInButton({ className }: { className?: string })
     return path.startsWith('/attend') ? path : null
   }
 
-  async function scanNative() {
+  /** Returns true if MLKit handled the scan (success or hard-stop error).
+   *  Returns false to signal "fall back to the web scanner modal" — used
+   *  when the native plugin isn't compiled into the iOS binary (SPM project
+   *  without CocoaPods can't link MLKit). */
+  async function scanNative(): Promise<boolean> {
+    let BarcodeScanner: typeof import('@capacitor-mlkit/barcode-scanning').BarcodeScanner
     try {
-      const { BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning')
+      ;({ BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning'))
+    } catch {
+      return false
+    }
 
+    try {
       const supported = await BarcodeScanner.isSupported()
-      if (!supported.supported) {
-        toast.error('Scanning is not supported on this device')
-        return
-      }
+      if (!supported.supported) return false
 
       const perm = await BarcodeScanner.requestPermissions()
       if (perm.camera !== 'granted' && perm.camera !== 'limited') {
         toast.error('Camera access is needed to scan a check-in code')
-        return
+        return true
       }
 
       const { barcodes } = await BarcodeScanner.scan()
       const raw = barcodes[0]?.rawValue
-      if (!raw) return
+      if (!raw) return true
 
       const path = resolveAttendPath(raw)
       if (!path) {
         toast.error("That QR code isn't a ClubIt check-in code")
-        return
+        return true
       }
 
       void haptic('success')
       router.push(path)
+      return true
     } catch (err) {
-      console.error('QR scan failed', err)
+      // "Plugin not implemented" / "UNIMPLEMENTED" → fall through to web.
+      const msg = err instanceof Error ? err.message : String(err)
+      if (/not.?implemented|UNIMPLEMENTED|unavailable/i.test(msg)) return false
+      console.warn('QR scan failed', err)
       toast.error('Could not scan the code. Try again.')
+      return true
     }
   }
 
-  function handleClick() {
-    if (isNative) void scanNative()
-    else setWebOpen(true)
+  async function handleClick() {
+    if (isNative) {
+      const handled = await scanNative()
+      if (!handled) setWebOpen(true)
+    } else {
+      setWebOpen(true)
+    }
   }
 
   return (
     <>
       <button
         type="button"
-        onClick={handleClick}
+        onClick={() => void handleClick()}
         className={
           className ??
           'inline-flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl bg-[#0058be] text-white text-sm font-bold px-4 py-3 shadow-lg shadow-blue-500/20 active:translate-y-px transition-transform touch-manipulation'
