@@ -35,18 +35,25 @@ npm ci --no-audit --no-fund
 #    when automatic dependency resolution is disabled"
 # Running -resolvePackageDependencies rewrites Package.resolved in place so
 # the subsequent build step sees an up-to-date file.
-cd "$CI_PRIMARY_REPOSITORY_PATH/ios/App"
+REPO="$CI_PRIMARY_REPOSITORY_PATH"
+SPM_DIR="$REPO/ios/App/CapApp-SPM"
+RESOLVED_DST="$REPO/ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 
-# Xcode Cloud's workflow has "automatic dependency resolution disabled,"
-# which makes even `xcodebuild -resolvePackageDependencies` refuse to
-# rewrite an existing Package.resolved that has missing entries. But a
-# missing file isn't "out of date" — it's just absent — so xcodebuild
-# will happily create a fresh one from Package.swift. Delete first,
-# then resolve.
-rm -f App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+# Xcode Cloud's workflow has "Resolve packages automatically" OFF, which
+# makes BOTH of these fail under xcodebuild:
+#   - resolving a missing Package.resolved -> "a resolved file is required"
+#   - resolving a stale Package.resolved   -> "out-of-date resolved file"
+# xcodebuild -resolvePackageDependencies respects the same gate, so it
+# can't fix either case on the runner.
+#
+# Workaround: generate Package.resolved with the Swift Package Manager
+# CLI (which doesn't honor that Xcode setting) against the same
+# Package.swift Xcode reads, then copy it into the path xcodebuild
+# expects. By the time the build action runs, the file is present and
+# matches Package.swift exactly, so the gate is satisfied.
+swift package --package-path "$SPM_DIR" resolve
 
-# No -scheme: this project has no shared .xcscheme committed, and the
-# resolver doesn't need one — -project is sufficient to walk Package.swift.
-xcodebuild \
-  -resolvePackageDependencies \
-  -project App.xcodeproj
+mkdir -p "$(dirname "$RESOLVED_DST")"
+cp "$SPM_DIR/Package.resolved" "$RESOLVED_DST"
+
+ls -la "$RESOLVED_DST"
