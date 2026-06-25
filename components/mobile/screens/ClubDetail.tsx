@@ -16,6 +16,7 @@ import { useToast } from '../toast'
 import CreateEventSheet from './CreateEventSheet'
 import CreateNewsSheet from './CreateNewsSheet'
 import CreatePollSheet from './CreatePollSheet'
+import ScanCheckInButton from '@/components/ScanCheckInButton'
 
 type Detail = ClubDetailPayload
 
@@ -204,6 +205,12 @@ export default function ClubDetail() {
           <div style={css('background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:14px 16px;margin-top:18px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
             <div><div style={css('font-size:13.5px;font-weight:700;color:#1f2734;')}>Membership dues</div><div style={css('font-size:11.5px;color:#9aa0ac;')}>${(duesCents / 100).toFixed(2)} per member</div></div>
             <span style={css(`font-size:11px;font-weight:800;padding:5px 11px;border-radius:9px;background:${myDuesPaid ? '#e8faf2' : '#fff7e6'};color:${myDuesPaid ? '#10b981' : '#b45309'};`)}>{myDuesPaid ? 'Paid' : 'Unpaid'}</span>
+          </div>
+        )}
+
+        {isMember && currentUser.role === 'student' && (
+          <div style={css('margin-top:18px;')}>
+            <ScanCheckInButton className="inline-flex items-center justify-center gap-2 w-full min-h-[48px] rounded-2xl bg-[#0058be] text-white text-sm font-bold px-5 py-3 shadow-lg shadow-blue-500/20 active:translate-y-px transition-transform touch-manipulation" />
           </div>
         )}
 

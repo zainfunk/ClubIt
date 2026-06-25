@@ -240,7 +240,7 @@ function DesktopDashboard() {
           )}
         </div>
 
-        {/* Native-only: scan a meeting QR to check in (renders nothing on web) */}
+        {/* Scan a meeting QR to check in — MLKit on native, html5-qrcode on web */}
         <ScanCheckInButton className="mt-4 inline-flex items-center justify-center gap-2 min-h-[48px] rounded-xl bg-[#0058be] text-white text-sm font-bold px-5 py-3 shadow-lg shadow-blue-500/20 active:translate-y-px transition-transform touch-manipulation" />
 
         {showPending && pendingRequests.length > 0 && (

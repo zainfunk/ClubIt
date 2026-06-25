@@ -24,6 +24,8 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import ClubNews from '@/components/clubs/ClubNews'
 import ClubEvents from '@/components/clubs/ClubEvents'
 import MemberHoursTable from '@/components/clubs/MemberHoursTable'
+import ScanCheckInButton from '@/components/ScanCheckInButton'
+import QRCode from 'react-qr-code'
 import { toast } from 'sonner'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -1281,6 +1283,7 @@ function ClubDetailDesktop({ params }: PageProps) {
             <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2 mb-5" style={{ fontFamily: 'var(--font-manrope)' }}>
               <CheckCircle className="w-5 h-5" />My Attendance
             </h3>
+            <ScanCheckInButton className="mb-5 inline-flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl bg-[#0058be] text-white text-sm font-bold px-4 py-3 shadow-lg shadow-blue-500/20 active:translate-y-px transition-transform touch-manipulation" />
             {myAttendance.length === 0 ? (
               <p className="text-sm text-gray-400">No records yet.</p>
             ) : (
@@ -1370,8 +1373,13 @@ function ClubDetailDesktop({ params }: PageProps) {
                   </button>
                 </div>
                 <div className="flex justify-center">
-                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getAttendUrl(activeSession))}`}
-                    alt="Attendance QR code" className="rounded-xl border-4 border-white shadow-sm" width={180} height={180} />
+                  <div className="rounded-xl border-4 border-white shadow-sm bg-white p-2">
+                    <QRCode
+                      value={getAttendUrl(activeSession)}
+                      size={180}
+                      level="M"
+                    />
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <input readOnly value={getAttendUrl(activeSession)}
