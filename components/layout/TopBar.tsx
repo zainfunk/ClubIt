@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Settings, Database, ArrowLeftRight } from 'lucide-react'
+import { Settings, Database } from 'lucide-react'
 import { UserButton } from '@clerk/nextjs'
 import { useMockAuth } from '@/lib/mock-auth'
 import NotificationBell from '@/components/NotificationBell'
 import GlobalSearch from '@/components/layout/GlobalSearch'
+import LeaveSchoolButton from '@/components/layout/LeaveSchoolButton'
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':      'My Clubs',
@@ -31,7 +32,7 @@ function usePageTitle(pathname: string) {
 }
 
 export default function TopBar() {
-  const { currentUser, switchSchool, schoolName } = useMockAuth()
+  const { currentUser, schoolName } = useMockAuth()
   const pathname = usePathname()
   const title = usePageTitle(pathname)
   const showDevTools = process.env.NODE_ENV === 'development'
@@ -68,16 +69,7 @@ export default function TopBar() {
           </Link>
         )}
         {currentUser.role !== 'superadmin' && <GlobalSearch />}
-        {schoolName && currentUser.role !== 'superadmin' && (
-          <button
-            onClick={switchSchool}
-            className="hidden md:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-            title="Switch schools"
-          >
-            <ArrowLeftRight className="w-3 h-3" />
-            Switch School
-          </button>
-        )}
+        {schoolName && currentUser.role !== 'superadmin' && <LeaveSchoolButton />}
         <div className="flex items-center gap-1.5 md:gap-2 text-slate-400">
           <NotificationBell />
           <Link href="/settings" data-tour-id="tour-settings" className="flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:p-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors">

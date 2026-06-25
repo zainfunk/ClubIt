@@ -7,6 +7,7 @@
 
 import { useState } from 'react'
 import { useClerk } from '@clerk/nextjs'
+import { useMockAuth } from '@/lib/mock-auth'
 import { css, BOTTOM } from './css'
 import { useToast } from './toast'
 
@@ -25,15 +26,33 @@ function Row({ onClick, bg, stroke, icon, title, danger }: { onClick: () => void
 export default function AccountActions() {
   const toast = useToast()
   const { signOut } = useClerk()
+  const { currentUser, schoolName, leaveSchool } = useMockAuth()
+  const canLeave = !!currentUser.schoolId && currentUser.role !== 'superadmin'
 
   const [reportOpen, setReportOpen] = useState(false)
   const [issue, setIssue] = useState('')
   const [sending, setSending] = useState(false)
 
+  const [leaveOpen, setLeaveOpen] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const [leaveError, setLeaveError] = useState<string | null>(null)
+
   const [delOpen, setDelOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [delError, setDelError] = useState<string | null>(null)
+
+  async function leave() {
+    setLeaving(true)
+    setLeaveError(null)
+    const result = await leaveSchool()
+    if (!result.ok) {
+      setLeaveError(result.message ?? 'Could not leave the school.')
+      setLeaving(false)
+      return
+    }
+    // success → provider redirects to /join
+  }
 
   async function submitIssue() {
     if (!issue.trim() || sending) return
@@ -84,6 +103,10 @@ export default function AccountActions() {
     <>
       <Row onClick={() => setReportOpen(true)} bg="#fff7e6" stroke="#f59e0b" title="Report an issue"
         icon={<><path d="M10.3 3.3 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.3a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></>} />
+      {canLeave && (
+        <Row onClick={() => { setLeaveOpen(true); setLeaveError(null) }} bg="#eef2ff" stroke="#6366f1" title="Leave school"
+          icon={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></>} />
+      )}
       <Row onClick={() => { setDelOpen(true); setConfirmText(''); setDelError(null) }} danger bg="#fff1f2" stroke="#ef4444" title="Delete account"
         icon={<><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></>} />
 
@@ -97,6 +120,23 @@ export default function AccountActions() {
             <div style={css('font-size:12.5px;color:#9aa0ac;font-weight:500;margin-bottom:14px;')}>Tell us what went wrong — this goes to your school’s admins.</div>
             <textarea value={issue} onChange={e => setIssue(e.target.value)} rows={4} placeholder="Describe the problem…" style={css(field + 'resize:none;line-height:1.5;')} />
             <button disabled={!issue.trim() || sending} onClick={submitIssue} style={css(`width:100%;height:48px;border-radius:14px;border:none;font-size:15px;font-weight:700;cursor:${issue.trim() && !sending ? 'pointer' : 'default'};margin-top:16px;background:${issue.trim() && !sending ? '#0f1729' : '#c5cad3'};color:#fff;`)}>{sending ? 'Sending…' : 'Send report'}</button>
+          </div>
+        </div>
+      )}
+
+      {/* Leave school modal */}
+      {leaveOpen && (
+        <div style={css('position:fixed;inset:0;z-index:140;display:flex;align-items:center;justify-content:center;padding:24px;')}>
+          <div onClick={() => !leaving && setLeaveOpen(false)} style={css('position:absolute;inset:0;background:rgba(15,23,41,.4);animation:fadeIn .2s ease;')} />
+          <div style={css('position:relative;width:100%;max-width:360px;background:#fff;border-radius:22px;padding:22px;animation:popIn .22s ease;box-shadow:0 20px 50px rgba(15,23,41,.3);')}>
+            <div style={css('width:46px;height:46px;border-radius:14px;background:#eef2ff;display:flex;align-items:center;justify-content:center;margin-bottom:14px;')}><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></svg></div>
+            <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:18px;color:#0f1729;")}>Leave {schoolName ?? 'this school'}?</div>
+            <div style={css('font-size:13px;color:#5b6270;font-weight:500;line-height:1.5;margin-top:6px;')}>You’ll be removed from your clubs here and returned to the join screen. You can rejoin later with an invite code.</div>
+            {leaveError && <div style={css('font-size:12.5px;color:#e11d48;background:#fff1f2;border:1px solid #ffd9df;border-radius:10px;padding:9px 11px;margin-top:10px;line-height:1.4;')}>{leaveError}</div>}
+            <div style={css('display:flex;gap:10px;margin-top:16px;')}>
+              <button disabled={leaving} onClick={() => setLeaveOpen(false)} style={css('flex:1;height:46px;border-radius:13px;border:1px solid #e7e8ec;background:#fff;color:#1f2734;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;')}>Cancel</button>
+              <button disabled={leaving} onClick={leave} style={css(`flex:1;height:46px;border-radius:13px;border:none;background:${leaving ? '#a5b4fc' : '#6366f1'};color:#fff;font-size:14px;font-weight:800;font-family:inherit;cursor:${leaving ? 'default' : 'pointer'};`)}>{leaving ? 'Leaving…' : 'Leave'}</button>
+            </div>
           </div>
         </div>
       )}

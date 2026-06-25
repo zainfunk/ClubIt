@@ -25,7 +25,7 @@ interface AuthContextValue {
   devRole: Role | null
   setDevRole: (role: Role | null) => void
   refreshSchoolContext: () => void
-  switchSchool: () => Promise<void>
+  leaveSchool: () => Promise<{ ok: boolean; status?: string; message?: string }>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -301,16 +301,23 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('storage', onStorage)
   }, [clerkUser?.id])
 
-  async function switchSchool() {
+  async function leaveSchool(): Promise<{ ok: boolean; status?: string; message?: string }> {
     try {
-      await fetch('/api/school/switch', { method: 'POST' })
+      const res = await fetch('/api/school/leave', { method: 'POST' })
+      const data = await res.json().catch(() => ({})) as { status?: string; message?: string; error?: string }
+      if (!res.ok) {
+        // Blocked (e.g. sole admin) — keep the user where they are and surface why.
+        return { ok: false, status: data.status, message: data.message ?? data.error ?? 'Could not leave the school.' }
+      }
     } catch {
-      // proceed with local clear even if API fails
+      return { ok: false, message: 'Something went wrong. Please try again.' }
     }
+
+    // Success: clear cached context and route back to onboarding.
     if (clerkUser?.id) {
       clearSchoolSession(clerkUser.id)
     }
-    setBaseUser((u) => ({ ...u, schoolId: undefined }))
+    setBaseUser((u) => ({ ...u, schoolId: undefined, role: 'student' }))
     setSchoolName(null)
     setSchoolStatus(null)
     setSchoolPrincipal(null)
@@ -318,6 +325,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     setSchoolSetupCompletedAt(null)
     hasRedirected.current = false
     router.replace('/join')
+    return { ok: true }
   }
 
   const currentUser: User = devRole
@@ -345,7 +353,7 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
         devRole,
         setDevRole,
         refreshSchoolContext: () => setRefreshTick((tick) => tick + 1),
-        switchSchool,
+        leaveSchool,
       }}
     >
       {showChildren ? children : null}
