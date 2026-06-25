@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { apiClubDetail, clubAction, type ClubDetailPayload } from '@/lib/school-api'
-import type { ClubEvent, User } from '@/types'
+import type { ClubEvent, Poll, User } from '@/types'
 import { css, TOP, avBg, clubGlyph, gradientFor } from '../css'
 import { BackButton, Avatar, Loader } from '../primitives'
 import { dayShort, timeRange, monthDay, relTime } from '../format'
@@ -32,6 +32,7 @@ export default function ClubDetail() {
   const [editEvent, setEditEvent] = useState<ClubEvent | null>(null)
   const [showNewsSheet, setShowNewsSheet] = useState(false)
   const [showPollSheet, setShowPollSheet] = useState(false)
+  const [editPoll, setEditPoll] = useState<Poll | null>(null)
 
   useEffect(() => {
     if (!actualUser.id || !clubId) return
@@ -303,12 +304,14 @@ export default function ClubDetail() {
                         : <div key={c.userId}>{row}</div>
                     })}
                   </div>
-                  <div style={css('display:flex;align-items:center;justify-content:space-between;margin-top:13px;')}>
+                  <div style={css('display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:13px;flex-wrap:wrap;')}>
                     <span style={css('font-size:11.5px;color:#9aa0ac;font-weight:500;')}>{total} total {total === 1 ? 'vote' : 'votes'}</span>
-                    {isManager && p.isOpen && (
-                      <div style={css('display:flex;gap:8px;')}>
-                        <button onClick={() => contentAction({ action: 'close_poll', pollId: p.id }, 'Election closed')} style={css('font-size:12px;font-weight:700;color:#64748b;background:#f1f2f4;border:none;padding:6px 11px;border-radius:9px;cursor:pointer;')}>Close</button>
-                        <button onClick={() => contentAction({ action: 'appoint_poll_winner', pollId: p.id }, 'Winner appointed')} style={css('font-size:12px;font-weight:700;color:#fff;background:#10b981;border:none;padding:6px 11px;border-radius:9px;cursor:pointer;')}>Close &amp; appoint</button>
+                    {isManager && (
+                      <div style={css('display:flex;gap:8px;flex-wrap:wrap;')}>
+                        {p.isOpen && <button onClick={() => contentAction({ action: 'close_poll', pollId: p.id }, 'Election closed')} style={css('font-size:12px;font-weight:700;color:#64748b;background:#f1f2f4;border:none;padding:6px 11px;border-radius:9px;cursor:pointer;')}>Close</button>}
+                        {p.isOpen && <button onClick={() => contentAction({ action: 'appoint_poll_winner', pollId: p.id }, 'Winner appointed')} style={css('font-size:12px;font-weight:700;color:#fff;background:#10b981;border:none;padding:6px 11px;border-radius:9px;cursor:pointer;')}>Close &amp; appoint</button>}
+                        <button onClick={() => setEditPoll(p)} style={css('font-size:12px;font-weight:700;color:#6366f1;background:#eef0ff;border:none;padding:6px 11px;border-radius:9px;cursor:pointer;')}>Edit</button>
+                        <button onClick={() => contentAction({ action: 'delete_poll', pollId: p.id }, 'Election deleted')} style={css('font-size:12px;font-weight:700;color:#dc2626;background:#fee2e2;border:none;padding:6px 11px;border-radius:9px;cursor:pointer;')}>Delete</button>
                       </div>
                     )}
                   </div>
@@ -361,6 +364,7 @@ export default function ClubDetail() {
       {editEvent && clubId && <CreateEventSheet clubId={clubId} event={editEvent} onClose={() => setEditEvent(null)} onCreated={reload} />}
       {showNewsSheet && clubId && <CreateNewsSheet clubId={clubId} onClose={() => setShowNewsSheet(false)} onCreated={reload} />}
       {showPollSheet && clubId && <CreatePollSheet clubId={clubId} members={members} onClose={() => setShowPollSheet(false)} onCreated={reload} />}
+      {editPoll && clubId && <CreatePollSheet clubId={clubId} members={members} poll={editPoll} onClose={() => setEditPoll(null)} onCreated={reload} />}
     </div>
   )
 }

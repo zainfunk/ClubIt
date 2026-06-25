@@ -61,10 +61,13 @@ export interface SchoolEvent {
   id: string
   clubId: string
   clubName: string
+  clubIconUrl: string | null
   title: string
+  description: string
   date: string
   location: string | null
   isPublic: boolean
+  createdBy: string
 }
 
 /** All events across the caller's school clubs (soonest first). */

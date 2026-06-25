@@ -6,21 +6,32 @@ import AdminEvents from '@/components/mobile/screens/AdminEvents'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
-import { supabase } from '@/lib/supabase'
+import { apiSchoolEvents } from '@/lib/school-api'
 import { ClubEvent } from '@/types'
 import { Search, Clock, MapPin, AlertCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { clubGlyph } from '@/lib/club-icon'
 
-const CLUB_COLORS: Record<string, { spine: string; spineText: string; badge: string; badgeText: string; panel: string }> = {
-  'club-robotics':    { spine: 'bg-blue-50',   spineText: 'text-blue-800',   badge: 'bg-blue-100',   badgeText: 'text-blue-700',   panel: 'bg-blue-50/60' },
-  'club-drama':       { spine: 'bg-purple-50',  spineText: 'text-purple-800', badge: 'bg-purple-100', badgeText: 'text-purple-700', panel: 'bg-purple-50/60' },
-  'club-chess':       { spine: 'bg-amber-50',   spineText: 'text-amber-800',  badge: 'bg-amber-100',  badgeText: 'text-amber-700',  panel: 'bg-amber-50/60' },
-  'club-environment': { spine: 'bg-emerald-50', spineText: 'text-emerald-800',badge: 'bg-emerald-100',badgeText: 'text-emerald-700',panel: 'bg-emerald-50/60' },
-}
+// Each club gets a stable color from this palette via a hash of its id, so real
+// clubs are visually distinguished instead of all falling back to one default.
+const PALETTES = [
+  { spine: 'bg-blue-50',    spineText: 'text-blue-800',    badge: 'bg-blue-100',    badgeText: 'text-blue-700',    panel: 'bg-blue-50/60' },
+  { spine: 'bg-purple-50',  spineText: 'text-purple-800',  badge: 'bg-purple-100',  badgeText: 'text-purple-700',  panel: 'bg-purple-50/60' },
+  { spine: 'bg-amber-50',   spineText: 'text-amber-800',   badge: 'bg-amber-100',   badgeText: 'text-amber-700',   panel: 'bg-amber-50/60' },
+  { spine: 'bg-emerald-50', spineText: 'text-emerald-800', badge: 'bg-emerald-100', badgeText: 'text-emerald-700', panel: 'bg-emerald-50/60' },
+  { spine: 'bg-rose-50',    spineText: 'text-rose-800',    badge: 'bg-rose-100',    badgeText: 'text-rose-700',    panel: 'bg-rose-50/60' },
+  { spine: 'bg-cyan-50',    spineText: 'text-cyan-800',    badge: 'bg-cyan-100',    badgeText: 'text-cyan-700',    panel: 'bg-cyan-50/60' },
+  { spine: 'bg-indigo-50',  spineText: 'text-indigo-800',  badge: 'bg-indigo-100',  badgeText: 'text-indigo-700',  panel: 'bg-indigo-50/60' },
+  { spine: 'bg-orange-50',  spineText: 'text-orange-800',  badge: 'bg-orange-100',  badgeText: 'text-orange-700',  panel: 'bg-orange-50/60' },
+]
 
 const PAST_COLORS = { spine: 'bg-gray-100', spineText: 'text-gray-500', badge: 'bg-gray-100', badgeText: 'text-gray-500', panel: 'bg-gray-50' }
-const DEFAULT_COLORS = { spine: 'bg-blue-50', spineText: 'text-blue-800', badge: 'bg-blue-100', badgeText: 'text-blue-700', panel: 'bg-blue-50/60' }
+
+function colorsFor(clubId: string) {
+  let h = 0
+  for (let i = 0; i < clubId.length; i++) h = (h * 31 + clubId.charCodeAt(i)) >>> 0
+  return PALETTES[h % PALETTES.length]
+}
 
 export default function EventsPage() {
   const mobile = useIsMobilePhone()
@@ -48,23 +59,19 @@ function EventsDesktop() {
 
     async function load() {
       try {
-        const { data: clubData } = await supabase.from('clubs').select('id, name, icon_url').eq('school_id', currentUser.schoolId)
+        // Service-role route (RLS-safe, consistent with the rest of the app)
+        // rather than a direct client supabase read.
+        const rows = await apiSchoolEvents()
         if (cancelled) return
-        if (!clubData?.length) return
 
         const nameMap: Record<string, { name: string; iconUrl?: string }> = {}
-        for (const c of clubData) nameMap[c.id] = { name: c.name, iconUrl: c.icon_url ?? undefined }
+        for (const r of rows) nameMap[r.clubId] = { name: r.clubName, iconUrl: r.clubIconUrl ?? undefined }
         setClubNames(nameMap)
 
-        const clubIds = clubData.map((c) => c.id)
-        const { data } = await supabase.from('events').select('*').in('club_id', clubIds)
-        if (cancelled) return
-        if (data) {
-          setEvents(data.map((e) => ({
-            id: e.id, clubId: e.club_id, title: e.title, description: e.description ?? '',
-            date: e.date, location: e.location ?? undefined, isPublic: e.is_public, createdBy: e.created_by,
-          })))
-        }
+        setEvents(rows.map((r) => ({
+          id: r.id, clubId: r.clubId, title: r.title, description: r.description,
+          date: r.date, location: r.location ?? undefined, isPublic: r.isPublic, createdBy: r.createdBy,
+        })))
       } catch (err) {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load events')
       } finally {
@@ -190,7 +197,7 @@ function EventsDesktop() {
             const date = new Date(event.date + 'T00:00:00')
             const month = date.toLocaleString('en', { month: 'short' }).toUpperCase()
             const day = date.getDate()
-            const colors = isPast ? PAST_COLORS : (CLUB_COLORS[event.clubId] ?? DEFAULT_COLORS)
+            const colors = isPast ? PAST_COLORS : colorsFor(event.clubId)
 
             return (
               <div key={event.id} className="flex flex-col lg:flex-row gap-6 items-start group">

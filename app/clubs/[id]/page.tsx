@@ -186,8 +186,9 @@ function ClubDetailDesktop({ params }: PageProps) {
   const [newNewsContent, setNewNewsContent] = useState('')
   const [newNewsPinned, setNewNewsPinned] = useState(false)
 
-  // Poll creation
+  // Poll creation / editing
   const [showPollForm, setShowPollForm] = useState(false)
+  const [editingPollId, setEditingPollId] = useState<string | null>(null)
   const [pollPositionTitle, setPollPositionTitle] = useState('')
   const [pollCandidateIds, setPollCandidateIds] = useState<string[]>([])
 
@@ -531,14 +532,49 @@ function ClubDetailDesktop({ params }: PageProps) {
     setPollCandidateIds((prev) => prev.includes(userId) ? prev.filter((uid) => uid !== userId) : [...prev, userId])
   }
 
+  // The poll being edited (null when creating) and whether its candidates are
+  // locked because voting has already started.
+  const editingPoll = editingPollId ? clubPolls.find((p) => p.id === editingPollId) ?? null : null
+  const editLockCandidates = !!editingPoll && editingPoll.candidates.reduce((s, c) => s + c.voteCount, 0) > 0
+
+  function resetPollForm() {
+    setPollPositionTitle(''); setPollCandidateIds([]); setEditingPollId(null); setShowPollForm(false)
+  }
+
+  function startEditPoll(poll: Poll) {
+    setEditingPollId(poll.id)
+    setPollPositionTitle(poll.positionTitle)
+    setPollCandidateIds(poll.candidates.map((c) => c.userId))
+    setShowPollForm(true)
+  }
+
   async function createPoll() {
     if (!pollPositionTitle.trim()) { toast.error('Position title is required'); return }
+    if (editingPollId) {
+      if (!editLockCandidates && pollCandidateIds.length < 2) { toast.error('Select at least 2 candidates'); return }
+      const ok = await patch({ action: 'edit_poll', pollId: editingPollId, positionTitle: pollPositionTitle.trim(), ...(editLockCandidates ? {} : { candidateIds: pollCandidateIds }) })
+      if (ok) { resetPollForm(); toast.success('Election updated') }
+      return
+    }
     if (pollCandidateIds.length < 2) { toast.error('Select at least 2 candidates'); return }
     const ok = await patch({ action: 'create_poll', positionTitle: pollPositionTitle.trim(), candidateIds: pollCandidateIds })
     if (ok) {
-      setPollPositionTitle(''); setPollCandidateIds([]); setShowPollForm(false)
+      resetPollForm()
       toast.success('Poll created!')
     }
+  }
+
+  function deletePoll(pollId: string) {
+    confirm({
+      title: 'Delete this election?',
+      description: 'The poll and all of its votes will be permanently removed. This cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        const ok = await patch({ action: 'delete_poll', pollId })
+        if (ok) toast.success('Election deleted')
+      },
+    })
   }
 
   async function castVote(pollId: string, candidateUserId: string) {
@@ -1565,7 +1601,7 @@ function ClubDetailDesktop({ params }: PageProps) {
                 <Vote className="w-5 h-5" />Elections
               </h3>
               {isAdvisor && (
-                <button onClick={() => setShowPollForm((v) => !v)}
+                <button onClick={() => { if (showPollForm) { resetPollForm() } else { setEditingPollId(null); setPollPositionTitle(''); setPollCandidateIds([]); setShowPollForm(true) } }}
                   className="text-xs font-bold text-[#0058be] hover:underline flex items-center gap-1">
                   <Plus className="w-3.5 h-3.5" />New election
                 </button>
@@ -1573,23 +1609,25 @@ function ClubDetailDesktop({ params }: PageProps) {
             </div>
             {isAdvisor && showPollForm && (
               <div className="mb-5 p-5 bg-gray-50 rounded-2xl space-y-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">New Election Poll</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{editingPollId ? 'Edit Election Poll' : 'New Election Poll'}</p>
                 <Input value={pollPositionTitle} onChange={(e) => setPollPositionTitle(e.target.value)} placeholder="Position title…" className="h-8 text-sm" />
                 <div>
-                  <p className="text-xs text-gray-500 mb-2">Candidates (select 2+)</p>
+                  <p className="text-xs text-gray-500 mb-2">
+                    {editLockCandidates ? 'Candidates (locked — voting has started)' : 'Candidates (select 2+)'}
+                  </p>
                   {members.map((m) => m && (
-                    <label key={m.id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer mb-1.5">
-                      <input type="checkbox" checked={pollCandidateIds.includes(m.id)} onChange={() => togglePollCandidate(m.id)} />
+                    <label key={m.id} className={`flex items-center gap-2 text-sm text-gray-700 mb-1.5 ${editLockCandidates ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                      <input type="checkbox" disabled={editLockCandidates} checked={pollCandidateIds.includes(m.id)} onChange={() => togglePollCandidate(m.id)} />
                       {m.name}
                     </label>
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={createPoll} disabled={!pollPositionTitle.trim() || pollCandidateIds.length < 2}
+                  <button onClick={createPoll} disabled={!pollPositionTitle.trim() || (!editLockCandidates && pollCandidateIds.length < 2)}
                     className="text-xs font-bold bg-[#0058be] text-white rounded-lg px-4 py-1.5 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                    Start Election
+                    {editingPollId ? 'Save changes' : 'Start Election'}
                   </button>
-                  <button onClick={() => setShowPollForm(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                  <button onClick={resetPollForm} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
                 </div>
               </div>
             )}
@@ -1611,10 +1649,12 @@ function ClubDetailDesktop({ params }: PageProps) {
                           <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${poll.isOpen ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
                             {poll.isOpen ? 'Open' : 'Closed'}
                           </span>
-                          {isAdvisor && poll.isOpen && (
+                          {isAdvisor && (
                             <>
-                              <button onClick={() => appointPollWinner(poll.id)} className="text-xs font-medium text-[#0058be] hover:underline">Close & appoint</button>
-                              <button onClick={() => closePoll(poll.id)} className="text-xs text-gray-400 hover:text-gray-600">Close</button>
+                              {poll.isOpen && <button onClick={() => appointPollWinner(poll.id)} className="text-xs font-medium text-[#0058be] hover:underline">Close & appoint</button>}
+                              {poll.isOpen && <button onClick={() => closePoll(poll.id)} className="text-xs text-gray-400 hover:text-gray-600">Close</button>}
+                              <button onClick={() => startEditPoll(poll)} className="text-xs font-medium text-[#0058be] hover:underline">Edit</button>
+                              <button onClick={() => deletePoll(poll.id)} className="text-xs font-medium text-red-500 hover:underline">Delete</button>
                             </>
                           )}
                         </div>

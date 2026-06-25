@@ -23,7 +23,7 @@ export default function CreateClub() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [advisorId, setAdvisorId] = useState('')
-  const [tag, setTag] = useState('STEM')
+  const [tags, setTags] = useState<string[]>(['STEM'])
   const [cap, setCap] = useState(20)
   const [unlimited, setUnlimited] = useState(false)
   const [advisors, setAdvisors] = useState<User[]>([])
@@ -56,7 +56,7 @@ export default function CreateClub() {
           iconUrl: icon,
           capacity: unlimited ? null : cap,
           advisorId,
-          tags: [tag],
+          tags,
           eventCreatorIds: [],
           autoAccept: false,
           duesAmountCents: 0,
@@ -107,11 +107,12 @@ export default function CreateClub() {
           })}
         </div>
 
-        {label('Category')}
+        {label('Categories')}
         <div style={css('display:flex;flex-wrap:wrap;gap:8px;')}>
           {CATEGORIES.map(t => {
-            const on = tag === t
-            return <button key={t} onClick={() => setTag(t)} style={css(`padding:9px 14px;border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;background:${on ? '#0f1729' : '#fff'};color:${on ? '#fff' : '#5b6270'};border:1px solid ${on ? '#0f1729' : '#e7e8ec'};`)}>{t}</button>
+            const on = tags.includes(t)
+            const toggle = () => setTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
+            return <button key={t} onClick={toggle} style={css(`padding:9px 14px;border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;background:${on ? '#0f1729' : '#fff'};color:${on ? '#fff' : '#5b6270'};border:1px solid ${on ? '#0f1729' : '#e7e8ec'};`)}>{t}</button>
           })}
         </div>
 

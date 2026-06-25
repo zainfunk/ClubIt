@@ -552,6 +552,52 @@ export async function PATCH(request: NextRequest, { params }: PageProps) {
     return NextResponse.json({ ok: true })
   }
 
+  if (action === 'edit_poll') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { pollId, positionTitle, candidateIds } = body as { pollId: string; positionTitle?: string; candidateIds?: string[] }
+    if (!pollId) return NextResponse.json({ error: 'pollId required' }, { status: 400 })
+
+    const { data: pollRow } = await db.from('polls').select('id, club_id').eq('id', pollId).maybeSingle()
+    if (!pollRow) return NextResponse.json({ error: 'Poll not found' }, { status: 404 })
+    if (pollRow.club_id !== clubId) return NextResponse.json({ error: 'Poll does not belong to this club' }, { status: 400 })
+
+    if (typeof positionTitle === 'string') {
+      const title = sanitizeText(positionTitle.trim())
+      if (!title) return NextResponse.json({ error: 'Position title cannot be empty' }, { status: 400 })
+      await db.from('polls').update({ position_title: title }).eq('id', pollId)
+    }
+
+    // Candidates may only be replaced before any vote is cast — otherwise the
+    // already-recorded poll_votes would orphan. Mirrors school_elections.
+    if (Array.isArray(candidateIds)) {
+      const { count } = await db.from('poll_votes').select('*', { count: 'exact', head: true }).eq('poll_id', pollId)
+      if ((count ?? 0) > 0) {
+        return NextResponse.json({ error: 'Candidates cannot be changed after voting has started' }, { status: 409 })
+      }
+      if (candidateIds.length < 2) return NextResponse.json({ error: 'Select at least 2 candidates' }, { status: 400 })
+      await db.from('poll_candidates').delete().eq('poll_id', pollId)
+      await db.from('poll_candidates').insert(candidateIds.map((uid) => ({ poll_id: pollId, user_id: uid })))
+    }
+
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === 'delete_poll') {
+    if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    const { pollId } = body as { pollId: string }
+    if (!pollId) return NextResponse.json({ error: 'pollId required' }, { status: 400 })
+
+    const { data: pollRow } = await db.from('polls').select('id, club_id').eq('id', pollId).maybeSingle()
+    if (!pollRow) return NextResponse.json({ error: 'Poll not found' }, { status: 404 })
+    if (pollRow.club_id !== clubId) return NextResponse.json({ error: 'Poll does not belong to this club' }, { status: 400 })
+
+    // Children deleted explicitly so this works whether or not the FKs cascade.
+    await db.from('poll_votes').delete().eq('poll_id', pollId)
+    await db.from('poll_candidates').delete().eq('poll_id', pollId)
+    await db.from('polls').delete().eq('id', pollId)
+    return NextResponse.json({ ok: true })
+  }
+
   if (action === 'appoint_poll_winner') {
     if (!isManager) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     const { pollId } = body as { pollId: string }

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { MapPin, Plus, Pencil, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import type { ClubEvent, MeetingTime } from '@/types'
@@ -53,6 +54,8 @@ export default function ClubEvents({
 }: ClubEventsProps) {
   const today = new Date().toISOString().split('T')[0]
   const upcoming = events.filter((e) => e.date >= today)
+  const past = events.filter((e) => e.date < today).sort((a, b) => b.date.localeCompare(a.date))
+  const [showPast, setShowPast] = useState(false)
 
   return (
     <section className="md:col-span-3 space-y-5 min-w-0" data-tour-id="tour-events-section">
@@ -152,6 +155,70 @@ export default function ClubEvents({
           })}
         </div>
       </div>
+
+      {/* Past Events (managers only — lets advisors fix or remove old events) */}
+      {canCreateContent && past.length > 0 && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <button onClick={() => setShowPast((v) => !v)} className="w-full flex items-center justify-between">
+            <h3 className="text-xl font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>
+              Past Events
+            </h3>
+            <span className="text-[#0058be] font-bold text-xs hover:underline">
+              {showPast ? 'Hide' : `Show (${past.length})`}
+            </span>
+          </button>
+
+          {showPast && (
+            <div className="space-y-5 mt-6">
+              {past.map((event) => {
+                const date = new Date(event.date + 'T00:00:00')
+                const canDelete = isAdvisor || event.createdBy === currentUserId
+                return (
+                  <div key={event.id} className="flex gap-4 group opacity-70">
+                    <div className="w-14 h-16 flex-shrink-0 bg-gray-100 rounded-2xl flex flex-col items-center justify-center">
+                      <span className="text-xs font-bold text-gray-500 uppercase leading-none">
+                        {date.toLocaleString('en', { month: 'short' })}
+                      </span>
+                      <span className="text-xl font-black text-gray-500 leading-none mt-1">
+                        {date.getDate()}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-1">
+                        <h4 className="font-bold text-slate-700 leading-snug text-sm">
+                          {event.title}
+                        </h4>
+                        {canDelete && (
+                          <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
+                            <button onClick={() => onStartEditEvent(event)}
+                              className="text-gray-300 hover:text-[#0058be]" aria-label="Edit event">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => onDeleteEvent(event.id)}
+                              className="text-gray-300 hover:text-red-400" aria-label="Delete event">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {event.location && (
+                        <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />{event.location}
+                        </p>
+                      )}
+                      {!event.isPublic && (
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full mt-1 inline-block">
+                          Members only
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Schedule */}
       {(meetingTimes.length > 0 || isAdvisor) && (

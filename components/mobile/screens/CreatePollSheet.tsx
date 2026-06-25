@@ -1,23 +1,28 @@
 'use client'
 
-// Bottom-sheet to create a club election/poll (advisor / admin). Pick a position
-// title and 2+ candidate members. PATCH { action: 'create_poll', ... }.
+// Bottom-sheet to create or edit a club election/poll (advisor / admin). Pick a
+// position title and 2+ candidate members. PATCH { action: 'create_poll'|'edit_poll', ... }.
+// Editing candidates is locked once any vote is cast (votes would orphan).
 
 import { useState } from 'react'
 import { css, BOTTOM, avBg, initials } from '../css'
 import { clubAction } from '@/lib/school-api'
 import { useToast } from '../toast'
-import type { User } from '@/types'
+import type { Poll, User } from '@/types'
 
-export default function CreatePollSheet({ clubId, members, onClose, onCreated }: { clubId: string; members: User[]; onClose: () => void; onCreated: () => void }) {
+export default function CreatePollSheet({ clubId, members, poll, onClose, onCreated }: { clubId: string; members: User[]; poll?: Poll; onClose: () => void; onCreated: () => void }) {
   const toast = useToast()
-  const [title, setTitle] = useState('')
-  const [candidateIds, setCandidateIds] = useState<string[]>([])
+  const editing = !!poll
+  const votesCast = poll ? poll.candidates.reduce((a, c) => a + c.voteCount, 0) : 0
+  const lockCandidates = editing && votesCast > 0
+  const [title, setTitle] = useState(poll?.positionTitle ?? '')
+  const [candidateIds, setCandidateIds] = useState<string[]>(poll?.candidates.map(c => c.userId) ?? [])
   const [busy, setBusy] = useState(false)
 
-  const valid = title.trim().length > 0 && candidateIds.length >= 2
+  const valid = title.trim().length > 0 && (lockCandidates || candidateIds.length >= 2)
 
   function toggle(id: string) {
+    if (lockCandidates) return
     setCandidateIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
@@ -25,12 +30,17 @@ export default function CreatePollSheet({ clubId, members, onClose, onCreated }:
     if (!valid || busy) return
     setBusy(true)
     try {
-      await clubAction(clubId, { action: 'create_poll', positionTitle: title.trim(), candidateIds })
-      toast('Poll created')
+      if (editing) {
+        await clubAction(clubId, { action: 'edit_poll', pollId: poll!.id, positionTitle: title.trim(), ...(lockCandidates ? {} : { candidateIds }) })
+        toast('Election updated')
+      } else {
+        await clubAction(clubId, { action: 'create_poll', positionTitle: title.trim(), candidateIds })
+        toast('Poll created')
+      }
       onCreated()
       onClose()
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not create poll')
+      toast(e instanceof Error ? e.message : editing ? 'Could not update poll' : 'Could not create poll')
       setBusy(false)
     }
   }
@@ -42,13 +52,13 @@ export default function CreatePollSheet({ clubId, members, onClose, onCreated }:
       <div onClick={onClose} style={css('position:absolute;inset:0;background:rgba(15,23,41,.35);animation:fadeIn .2s ease;')} />
       <div style={{ ...css('position:absolute;left:0;right:0;bottom:0;background:#f2f2f7;border-radius:26px 26px 0 0;padding:10px 20px 0;animation:sheetUp .28s cubic-bezier(.32,.72,0,1);box-shadow:0 -8px 30px rgba(15,23,41,.18);max-height:86vh;display:flex;flex-direction:column;'), paddingBottom: BOTTOM(24) }}>
         <div style={css('width:38px;height:5px;border-radius:3px;background:#d4d5db;margin:4px auto 16px;flex:none;')} />
-        <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:20px;letter-spacing:-.02em;color:#0f1729;margin-bottom:16px;flex:none;")}>New election</div>
+        <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:20px;letter-spacing:-.02em;color:#0f1729;margin-bottom:16px;flex:none;")}>{editing ? 'Edit election' : 'New election'}</div>
 
         <label style={css('display:block;font-size:11.5px;font-weight:700;color:#8a8f9a;margin:0 2px 6px;flex:none;')}>Position</label>
         <input value={title} onChange={e => setTitle(e.target.value)} placeholder="President" style={{ ...css(field), flex: 'none' }} />
 
-        <label style={css('display:block;font-size:11.5px;font-weight:700;color:#8a8f9a;margin:14px 2px 6px;flex:none;')}>Candidates ({candidateIds.length} selected · pick 2+)</label>
-        <div className="m-noscroll" style={css('flex:1;overflow-y:auto;background:#fff;border:1px solid #e7e8ec;border-radius:12px;padding:4px 14px;margin-bottom:4px;')}>
+        <label style={css('display:block;font-size:11.5px;font-weight:700;color:#8a8f9a;margin:14px 2px 6px;flex:none;')}>{lockCandidates ? 'Candidates (locked — voting has started)' : `Candidates (${candidateIds.length} selected · pick 2+)`}</label>
+        <div className="m-noscroll" style={css(`flex:1;overflow-y:auto;background:#fff;border:1px solid #e7e8ec;border-radius:12px;padding:4px 14px;margin-bottom:4px;${lockCandidates ? 'opacity:.55;pointer-events:none;' : ''}`)}>
           {members.length === 0 ? (
             <div style={css('padding:18px 0;text-align:center;font-size:13px;color:#9aa0ac;')}>No members to nominate yet.</div>
           ) : members.map((m, i) => {
@@ -63,7 +73,7 @@ export default function CreatePollSheet({ clubId, members, onClose, onCreated }:
           })}
         </div>
 
-        <button disabled={!valid || busy} onClick={submit} style={css(`width:100%;height:48px;border-radius:14px;border:none;font-size:15px;font-weight:700;cursor:${valid && !busy ? 'pointer' : 'default'};margin-top:14px;background:${valid && !busy ? '#0f1729' : '#c5cad3'};color:#fff;flex:none;`)}>{busy ? 'Creating…' : 'Create election'}</button>
+        <button disabled={!valid || busy} onClick={submit} style={css(`width:100%;height:48px;border-radius:14px;border:none;font-size:15px;font-weight:700;cursor:${valid && !busy ? 'pointer' : 'default'};margin-top:14px;background:${valid && !busy ? '#0f1729' : '#c5cad3'};color:#fff;flex:none;`)}>{busy ? (editing ? 'Saving…' : 'Creating…') : (editing ? 'Save changes' : 'Create election')}</button>
       </div>
     </div>
   )
