@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Capacitor } from '@capacitor/core'
-import { QrCode, X } from 'lucide-react'
-import { toast } from 'sonner'
+import { QrCode, X, XCircle } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { haptic } from '@/lib/haptics'
 
 /**
@@ -21,12 +21,31 @@ export default function ScanCheckInButton({ className }: { className?: string })
   const router = useRouter()
   const [isNative, setIsNative] = useState<boolean | null>(null)
   const [webOpen, setWebOpen] = useState(false)
+  const [errorOverlay, setErrorOverlay] = useState<string | null>(null)
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     setIsNative(Capacitor.isNativePlatform())
   }, [])
 
+  useEffect(() => () => {
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+  }, [])
+
+  function showError(message: string) {
+    void haptic('error')
+    setErrorOverlay(message)
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+    errorTimerRef.current = setTimeout(() => setErrorOverlay(null), 2200)
+  }
+
   if (isNative === null) return null
+
+  /** Add ?auto=1 so /attend auto-fires checkIn() instead of waiting for a tap. */
+  function withAuto(path: string): string {
+    const sep = path.includes('?') ? '&' : '?'
+    return `${path}${sep}auto=1`
+  }
 
   /** Accept either a full URL or a bare path; only allow our check-in route. */
   function resolveAttendPath(raw: string): string | null {
@@ -58,29 +77,30 @@ export default function ScanCheckInButton({ className }: { className?: string })
 
       const perm = await BarcodeScanner.requestPermissions()
       if (perm.camera !== 'granted' && perm.camera !== 'limited') {
-        toast.error('Camera access is needed to scan a check-in code')
+        showError('Camera access is needed to scan a check-in code')
         return true
       }
 
       const { barcodes } = await BarcodeScanner.scan()
       const raw = barcodes[0]?.rawValue
+      // User dismissed the scanner without capturing a code — stay quiet.
       if (!raw) return true
 
       const path = resolveAttendPath(raw)
       if (!path) {
-        toast.error("That QR code isn't a ClubIt check-in code")
+        showError("That QR code isn't a ClubIt check-in code")
         return true
       }
 
       void haptic('success')
-      router.push(path)
+      router.push(withAuto(path))
       return true
     } catch (err) {
       // "Plugin not implemented" / "UNIMPLEMENTED" → fall through to web.
       const msg = err instanceof Error ? err.message : String(err)
       if (/not.?implemented|UNIMPLEMENTED|unavailable/i.test(msg)) return false
       console.warn('QR scan failed', err)
-      toast.error('Could not scan the code. Try again.')
+      showError('Could not scan the code. Try again.')
       return true
     }
   }
@@ -113,20 +133,84 @@ export default function ScanCheckInButton({ className }: { className?: string })
           onScan={(raw) => {
             const path = resolveAttendPath(raw)
             if (!path) {
-              toast.error("That QR code isn't a ClubIt check-in code")
+              // The modal itself flashes "Invalid QR" inside the camera view —
+              // no extra overlay needed here.
               return false
             }
-            // Tell /attend to auto-fire check-in instead of waiting for a tap.
-            const sep = path.includes('?') ? '&' : '?'
-            const target = `${path}${sep}auto=1`
             void haptic('success')
             setWebOpen(false)
-            router.push(target)
+            router.push(withAuto(path))
             return true
           }}
         />
       )}
+      <ScanErrorOverlay message={errorOverlay} onDismiss={() => setErrorOverlay(null)} />
     </>
+  )
+}
+
+/**
+ * Full-screen animated overlay shown after a failed scan. Auto-dismisses on a
+ * timer set by the caller, but tapping anywhere also dismisses it so a student
+ * who realized the issue mid-animation isn't stuck waiting.
+ */
+function ScanErrorOverlay({
+  message,
+  onDismiss,
+}: {
+  message: string | null
+  onDismiss: () => void
+}) {
+  return (
+    <AnimatePresence>
+      {message && (
+        <motion.div
+          key="scan-error-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={onDismiss}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-gradient-to-br from-red-500/95 to-red-700/95 backdrop-blur-sm px-6"
+        >
+          <div className="text-center">
+            <motion.div
+              initial={{ scale: 0, rotate: 30 }}
+              animate={{
+                scale: 1,
+                rotate: 0,
+                x: [0, -10, 10, -8, 8, -4, 4, 0],
+              }}
+              transition={{
+                scale: { type: 'spring', stiffness: 260, damping: 14, delay: 0.05 },
+                rotate: { type: 'spring', stiffness: 260, damping: 14, delay: 0.05 },
+                x: { duration: 0.5, delay: 0.25, ease: 'easeInOut' },
+              }}
+              className="mx-auto mb-6 inline-flex h-32 w-32 items-center justify-center rounded-full bg-white shadow-2xl"
+            >
+              <XCircle className="w-20 h-20 text-red-500" strokeWidth={2.5} />
+            </motion.div>
+            <motion.h2
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="text-2xl font-extrabold text-white tracking-tight"
+              style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}
+            >
+              Scan failed
+            </motion.h2>
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="mt-2 text-base text-white/90 font-medium max-w-xs mx-auto"
+            >
+              {message}
+            </motion.p>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 

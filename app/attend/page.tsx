@@ -287,6 +287,63 @@ function AttendContent() {
           </div>
         )}
 
+        {/* Full-screen overlay when a student re-scans after already checking in.
+            Enforces the "once per student" rule visibly — the backing data check
+            lives in lib/attendance-store.ts (recordedUserIds includes guard). */}
+        <AnimatePresence>
+          {status === 'already' && (
+            <motion.div
+              key="attend-already-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-sky-500/95 to-blue-700/95 backdrop-blur-sm px-6"
+            >
+              <div className="text-center">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 240, damping: 14, delay: 0.05 }}
+                  className="mx-auto mb-6 inline-flex h-32 w-32 items-center justify-center rounded-full bg-white shadow-2xl"
+                >
+                  <CheckCircle className="w-20 h-20 text-blue-500" strokeWidth={2.5} />
+                </motion.div>
+                <motion.h2
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-3xl font-extrabold text-white tracking-tight"
+                  style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}
+                >
+                  Already checked in
+                </motion.h2>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="mt-2 text-base text-white/90 font-medium"
+                >
+                  You scanned in earlier for {session.meetingDate}.
+                </motion.p>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.45 }}
+                  className="mt-8"
+                >
+                  <Link
+                    href="/"
+                    className="inline-block bg-white text-blue-700 font-bold text-sm rounded-full px-6 py-3 shadow-lg active:translate-y-px"
+                  >
+                    Done
+                  </Link>
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {(status === 'expired' || isExpired) && status !== 'success' && status !== 'already' && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
             <XCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
