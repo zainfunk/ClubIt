@@ -26,6 +26,16 @@ npm --version
 # Use `npm ci` for a clean, lockfile-deterministic install.
 npm ci --no-audit --no-fund
 
+# Generate the Capacitor-managed files that ios/.gitignore excludes
+# from version control:
+#   - ios/App/App/capacitor.config.json
+#   - ios/App/App/config.xml
+#   - ios/App/App/public/ (the web bundle from webDir)
+# Without these, xcodebuild fails with "couldn't be opened because there
+# is no such file." Use `copy` (not `sync`) so we don't regenerate
+# Package.swift on the runner.
+npx --no-install cap copy ios
+
 # Refresh Package.resolved on the runner. Xcode Cloud has "automatic
 # dependency resolution disabled" by default, so if any transitive SPM
 # dependency was added (e.g. GoogleSignIn-iOS pulls in Alamofire via the
