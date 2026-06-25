@@ -36,9 +36,17 @@ npm ci --no-audit --no-fund
 # Running -resolvePackageDependencies rewrites Package.resolved in place so
 # the subsequent build step sees an up-to-date file.
 cd "$CI_PRIMARY_REPOSITORY_PATH/ios/App"
+
+# Xcode Cloud's workflow has "automatic dependency resolution disabled,"
+# which makes even `xcodebuild -resolvePackageDependencies` refuse to
+# rewrite an existing Package.resolved that has missing entries. But a
+# missing file isn't "out of date" — it's just absent — so xcodebuild
+# will happily create a fresh one from Package.swift. Delete first,
+# then resolve.
+rm -f App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
 # No -scheme: this project has no shared .xcscheme committed, and the
-# resolver doesn't need a scheme — only -project is required for it to
-# walk Package.swift and rewrite Package.resolved.
+# resolver doesn't need one — -project is sufficient to walk Package.swift.
 xcodebuild \
   -resolvePackageDependencies \
   -project App.xcodeproj
