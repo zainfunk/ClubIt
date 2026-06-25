@@ -152,12 +152,35 @@ function WebScannerModal({
         const mod = await import('html5-qrcode')
         if (cancelled) return
         const Html5Qrcode = mod.Html5Qrcode
-        const instance = new Html5Qrcode(containerId, { verbose: false })
+        const QR_CODE = mod.Html5QrcodeSupportedFormats.QR_CODE
+        // Restrict to QR-only + opt into the native BarcodeDetector API
+        // (Safari iOS 17+, Chrome) — orders of magnitude faster than the JS
+        // jsQR fallback, which is why scanning was sluggish/no-op before.
+        const instance = new Html5Qrcode(containerId, {
+          verbose: false,
+          formatsToSupport: [QR_CODE],
+          useBarCodeDetectorIfSupported: true,
+        })
         scannerRef.current = instance
 
         await instance.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 240, height: 240 } },
+          {
+            fps: 25,
+            // Scale the scan box with the viewfinder so the QR doesn't need
+            // to be aimed at a tiny fixed 240px square.
+            qrbox: (vw: number, vh: number) => {
+              const side = Math.floor(Math.min(vw, vh) * 0.75)
+              return { width: side, height: side }
+            },
+            aspectRatio: 1,
+            videoConstraints: {
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 1280 },
+            },
+            disableFlip: false,
+          },
           (decoded) => {
             const accepted = onScan(decoded)
             if (accepted) void instance.stop().catch(() => {})
