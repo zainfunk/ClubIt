@@ -1,0 +1,66 @@
+name: Refresh SPM Package.resolved
+
+# Xcode Cloud's workflow has "Resolve packages automatically" disabled and
+# the toggle is missing from the current App Store Connect / Xcode UI, so
+# we can't flip it. Workaround: every time something changes that affects
+# the SPM graph, regenerate Package.resolved on a free GitHub Actions
+# macOS runner and commit it back to main. Xcode Cloud then always sees
+# an up-to-date resolved file and its dependency gate is satisfied.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/App/CapApp-SPM/Package.swift'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/refresh-spm-resolved.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-spm-resolved
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: macos-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install JS deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Resolve SPM packages
+        working-directory: ios/App
+        run: |
+          set -eux
+          # Delete the stale resolved file so xcodebuild creates a fresh
+          # one (the "out-of-date" gate only fires when a stale file exists,
+          # not when none is present).
+          rm -f App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          xcodebuild -resolvePackageDependencies -project App.xcodeproj
+
+      - name: Commit refreshed Package.resolved
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eux
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          if git diff --staged --quiet; then
+            echo "Package.resolved unchanged - nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore(ci): refresh Package.resolved [skip ci]"
+          git push
