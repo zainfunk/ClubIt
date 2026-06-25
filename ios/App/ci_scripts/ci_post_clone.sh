@@ -25,3 +25,20 @@ npm --version
 # Install JS deps so node_modules/@capacitor/* exist for SPM to resolve.
 # Use `npm ci` for a clean, lockfile-deterministic install.
 npm ci --no-audit --no-fund
+
+# Refresh Package.resolved on the runner. Xcode Cloud has "automatic
+# dependency resolution disabled" by default, so if any transitive SPM
+# dependency was added (e.g. GoogleSignIn-iOS pulls in Alamofire via the
+# Capgo social login plugin), the committed Package.resolved is stale and
+# the build is rejected with:
+#   "an out-of-date resolved file was detected ... which is not allowed
+#    when automatic dependency resolution is disabled"
+# Running -resolvePackageDependencies rewrites Package.resolved in place so
+# the subsequent build step sees an up-to-date file.
+cd "$CI_PRIMARY_REPOSITORY_PATH/ios/App"
+# No -scheme: this project has no shared .xcscheme committed, and the
+# resolver doesn't need a scheme — only -project is required for it to
+# walk Package.swift and rewrite Package.resolved.
+xcodebuild \
+  -resolvePackageDependencies \
+  -project App.xcodeproj
