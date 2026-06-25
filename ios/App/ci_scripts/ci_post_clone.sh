@@ -41,4 +41,8 @@ npm ci --no-audit --no-fund
 # Without these, xcodebuild fails with "couldn't be opened because there
 # is no such file." Use `copy` (not `sync`) so we don't regenerate
 # Package.swift on the runner.
-npx --no-install cap copy ios
+#
+# Invoke via the local binary (not `npx`) to avoid surprises — `npx` can
+# decide to fetch the package over the network when it can't see it,
+# which is slow and can fail in CI environments with restricted egress.
+./node_modules/.bin/cap copy ios
