@@ -116,8 +116,12 @@ export default function ScanCheckInButton({ className }: { className?: string })
               toast.error("That QR code isn't a ClubIt check-in code")
               return false
             }
+            // Tell /attend to auto-fire check-in instead of waiting for a tap.
+            const sep = path.includes('?') ? '&' : '?'
+            const target = `${path}${sep}auto=1`
+            void haptic('success')
             setWebOpen(false)
-            router.push(path)
+            router.push(target)
             return true
           }}
         />
@@ -126,10 +130,18 @@ export default function ScanCheckInButton({ className }: { className?: string })
   )
 }
 
+type ScanState = 'starting' | 'scanning' | 'invalid' | 'error'
+
 /**
- * Modal camera scanner backed by html5-qrcode. Web-only; native uses MLKit.
- * onScan returns true if the scan was accepted (modal closes); false keeps
- * scanning so the user can try another code without re-opening the camera.
+ * Modal camera scanner with three layered strategies, in order of preference:
+ *   1. Native BarcodeDetector API — Safari iOS 17+, Chrome. Fastest, most
+ *      reliable. Decodes 60+ frames/sec straight off the <video> element.
+ *   2. html5-qrcode library — JS-only decoder fallback for older browsers.
+ *   3. Manual paste fallback — always available, so a student can still
+ *      check in by pasting the link if the camera flow fails.
+ *
+ * onScan returns true if the modal should close (valid + routed), false to
+ * keep scanning (invalid QR — show "Invalid QR" then resume scanning).
  */
 function WebScannerModal({
   onClose,
@@ -138,37 +150,109 @@ function WebScannerModal({
   onClose: () => void
   onScan: (raw: string) => boolean
 }) {
-  const containerId = 'scan-checkin-html5qr'
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const scannerRef = useRef<{ stop: () => Promise<void>; clear: () => void } | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const html5ContainerId = 'scan-checkin-html5qr'
+  const [state, setState] = useState<ScanState>('starting')
+  const [errorMsg, setErrorMsg] = useState<string>('')
+  const [invalidPreview, setInvalidPreview] = useState<string>('')
+  const [manual, setManual] = useState<string>('')
 
   useEffect(() => {
     let cancelled = false
-    let cleanup: (() => void) | null = null
+    let stream: MediaStream | null = null
+    let rafId = 0
+    let html5Instance: { stop: () => Promise<unknown>; clear: () => void } | null = null
+    let invalidResetId: ReturnType<typeof setTimeout> | null = null
+
+    function flashInvalid(raw: string) {
+      setInvalidPreview(raw.length > 60 ? raw.slice(0, 60) + '…' : raw)
+      setState('invalid')
+      if (invalidResetId) clearTimeout(invalidResetId)
+      invalidResetId = setTimeout(() => {
+        if (!cancelled) setState('scanning')
+      }, 2200)
+    }
+
+    function handleDecoded(raw: string): boolean {
+      const accepted = onScan(raw)
+      if (!accepted) flashInvalid(raw)
+      return accepted
+    }
 
     void (async () => {
+      // --- Path 1: native BarcodeDetector ---
+      const BD = (globalThis as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (src: CanvasImageSource) => Promise<{ rawValue: string }[]> } }).BarcodeDetector
+      const BDStatic = BD as unknown as { getSupportedFormats?: () => Promise<string[]> } | undefined
+      let supportsQR = false
+      try {
+        if (BD) {
+          const formats = (await BDStatic?.getSupportedFormats?.()) ?? []
+          supportsQR = formats.includes('qr_code')
+        }
+      } catch {
+        supportsQR = false
+      }
+
+      if (BD && supportsQR) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: 'environment',
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            },
+          })
+          if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
+
+          const video = videoRef.current
+          if (!video) return
+          video.srcObject = stream
+          video.setAttribute('playsinline', 'true')
+          video.muted = true
+          await video.play()
+
+          const detector = new BD({ formats: ['qr_code'] })
+          setState('scanning')
+
+          const loop = async () => {
+            if (cancelled) return
+            try {
+              const codes = await detector.detect(video)
+              if (codes.length > 0) {
+                const raw = codes[0].rawValue
+                const accepted = handleDecoded(raw)
+                if (accepted) return
+              }
+            } catch {
+              /* per-frame decode errors are expected — ignore */
+            }
+            rafId = requestAnimationFrame(loop)
+          }
+          loop()
+          return
+        } catch (err) {
+          handleStartError(err)
+          return
+        }
+      }
+
+      // --- Path 2: html5-qrcode fallback ---
       try {
         const mod = await import('html5-qrcode')
         if (cancelled) return
         const Html5Qrcode = mod.Html5Qrcode
         const QR_CODE = mod.Html5QrcodeSupportedFormats.QR_CODE
-        // Restrict to QR-only + opt into the native BarcodeDetector API
-        // (Safari iOS 17+, Chrome) — orders of magnitude faster than the JS
-        // jsQR fallback, which is why scanning was sluggish/no-op before.
-        const instance = new Html5Qrcode(containerId, {
+        const instance = new Html5Qrcode(html5ContainerId, {
           verbose: false,
           formatsToSupport: [QR_CODE],
           useBarCodeDetectorIfSupported: true,
         })
-        scannerRef.current = instance
+        html5Instance = instance
 
         await instance.start(
           { facingMode: 'environment' },
           {
             fps: 25,
-            // Scale the scan box with the viewfinder so the QR doesn't need
-            // to be aimed at a tiny fixed 240px square.
             qrbox: (vw: number, vh: number) => {
               const side = Math.floor(Math.min(vw, vh) * 0.75)
               return { width: side, height: side }
@@ -182,45 +266,58 @@ function WebScannerModal({
             disableFlip: false,
           },
           (decoded) => {
-            const accepted = onScan(decoded)
+            const accepted = handleDecoded(decoded)
             if (accepted) void instance.stop().catch(() => {})
           },
           () => { /* per-frame decode errors are noisy; ignore */ },
         )
-
-        cleanup = () => {
-          instance.stop()
-            .then(() => instance.clear())
-            .catch(() => {})
-        }
+        setState('scanning')
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        const name = err instanceof Error ? err.name : ''
-        const isPermissionDenied = /permission|denied|NotAllowed/i.test(msg) || name === 'NotAllowedError'
-        const isNoCamera =
-          /NotFound|no.*camera|no.*device|device.*not.*found/i.test(msg) ||
-          name === 'NotFoundError' ||
-          name === 'OverconstrainedError'
-        // Use warn for expected/handled cases — console.error triggers the
-        // Next.js dev overlay even when the UI shows the error gracefully.
-        console.warn('web scanner failed to start', err)
-        if (!cancelled) {
-          setError(
-            isPermissionDenied
-              ? "Camera blocked. Click the camera icon in your browser's address bar to allow access, then reopen the scanner."
-              : isNoCamera
-                ? "No camera detected on this device. Connect a webcam or open ClubIt on a phone to scan."
-                : 'Could not start the camera on this device',
-          )
-        }
+        handleStartError(err)
       }
     })()
 
+    function handleStartError(err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const name = err instanceof Error ? err.name : ''
+      const isPermissionDenied = /permission|denied|NotAllowed/i.test(msg) || name === 'NotAllowedError'
+      const isNoCamera =
+        /NotFound|no.*camera|no.*device|device.*not.*found/i.test(msg) ||
+        name === 'NotFoundError' ||
+        name === 'OverconstrainedError'
+      console.warn('web scanner failed to start', err)
+      if (!cancelled) {
+        setErrorMsg(
+          isPermissionDenied
+            ? "Camera blocked. Allow camera access in your browser settings, then reopen the scanner."
+            : isNoCamera
+              ? "No camera detected on this device. Use the manual entry below or open ClubIt on a phone."
+              : 'Could not start the camera. Use the manual entry below.',
+        )
+        setState('error')
+      }
+    }
+
     return () => {
       cancelled = true
-      cleanup?.()
+      if (invalidResetId) clearTimeout(invalidResetId)
+      if (rafId) cancelAnimationFrame(rafId)
+      if (stream) stream.getTracks().forEach((t) => t.stop())
+      if (html5Instance) {
+        html5Instance.stop().then(() => html5Instance!.clear()).catch(() => {})
+      }
     }
   }, [onScan])
+
+  function submitManual() {
+    const v = manual.trim()
+    if (!v) return
+    const accepted = onScan(v)
+    if (!accepted) {
+      setInvalidPreview(v.length > 60 ? v.slice(0, 60) + '…' : v)
+      setState('invalid')
+    }
+  }
 
   return (
     <div
@@ -243,17 +340,93 @@ function WebScannerModal({
         <p className="text-xs text-gray-500 mb-4">
           Point your camera at the advisor's QR code.
         </p>
-        {error ? (
-          <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700">
-            {error}
+
+        {state === 'error' ? (
+          <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 mb-3">
+            {errorMsg}
           </div>
         ) : (
-          <div
-            id={containerId}
-            ref={containerRef}
-            className="overflow-hidden rounded-xl bg-black aspect-square"
-          />
+          <div className="relative overflow-hidden rounded-xl bg-black aspect-square">
+            {/* Native-path video */}
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            {/* html5-qrcode container (only used as fallback; harmless if unused) */}
+            <div id={html5ContainerId} className="absolute inset-0" />
+
+            {/* Scan box overlay */}
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div
+                className={`relative w-3/4 aspect-square rounded-2xl border-4 transition-colors ${
+                  state === 'invalid' ? 'border-red-400' : 'border-white/80'
+                }`}
+              >
+                {/* corner accents */}
+                <span className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-white rounded-tl-2xl" />
+                <span className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-white rounded-tr-2xl" />
+                <span className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-white rounded-bl-2xl" />
+                <span className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-white rounded-br-2xl" />
+              </div>
+            </div>
+
+            {/* Status pill */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+              {state === 'starting' && (
+                <span className="px-3 py-1.5 rounded-full bg-black/60 text-white text-xs font-semibold backdrop-blur">
+                  Starting camera…
+                </span>
+              )}
+              {state === 'scanning' && (
+                <span className="px-3 py-1.5 rounded-full bg-black/60 text-white text-xs font-semibold backdrop-blur flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  Scanning…
+                </span>
+              )}
+              {state === 'invalid' && (
+                <span className="px-3 py-1.5 rounded-full bg-red-600 text-white text-xs font-bold backdrop-blur">
+                  Invalid QR
+                </span>
+              )}
+            </div>
+          </div>
         )}
+
+        {state === 'invalid' && invalidPreview && (
+          <div className="mt-3 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700">
+            <p className="font-bold mb-1">That QR isn't a ClubIt check-in code.</p>
+            <p className="font-mono break-all opacity-70">{invalidPreview}</p>
+          </div>
+        )}
+
+        {/* Manual paste fallback */}
+        <div className="mt-4">
+          <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">
+            Or paste the check-in link
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={manual}
+              onChange={(e) => setManual(e.target.value)}
+              placeholder="https://…/attend?t=…"
+              className="flex-1 text-xs rounded-lg px-2 py-2 bg-gray-50 border border-gray-200 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+            <button
+              type="button"
+              onClick={submitManual}
+              disabled={!manual.trim()}
+              className="text-xs font-bold bg-[#0058be] text-white rounded-lg px-3 py-2 disabled:opacity-40"
+            >
+              Go
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
