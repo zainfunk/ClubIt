@@ -156,6 +156,10 @@ function WebScannerModal({
   const [errorMsg, setErrorMsg] = useState<string>('')
   const [invalidPreview, setInvalidPreview] = useState<string>('')
   const [manual, setManual] = useState<string>('')
+  // Visible decoder tag so users (and we) can tell which path is active
+  // when scans aren't being picked up.
+  const [decoder, setDecoder] = useState<'native' | 'html5' | null>(null)
+  const [frames, setFrames] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -212,12 +216,16 @@ function WebScannerModal({
           await video.play()
 
           const detector = new BD({ formats: ['qr_code'] })
+          setDecoder('native')
           setState('scanning')
 
+          let frameCount = 0
           const loop = async () => {
             if (cancelled) return
             try {
               const codes = await detector.detect(video)
+              frameCount++
+              if (frameCount % 15 === 0) setFrames(frameCount)
               if (codes.length > 0) {
                 const raw = codes[0].rawValue
                 const accepted = handleDecoded(raw)
@@ -242,26 +250,31 @@ function WebScannerModal({
         if (cancelled) return
         const Html5Qrcode = mod.Html5Qrcode
         const QR_CODE = mod.Html5QrcodeSupportedFormats.QR_CODE
+        // useBarCodeDetectorIfSupported lives under experimentalFeatures —
+        // not at the top level. Setting it at the top level was a silent
+        // no-op, which is why we were stuck on the slow JS decoder even
+        // on browsers that could have used the native API.
         const instance = new Html5Qrcode(html5ContainerId, {
           verbose: false,
           formatsToSupport: [QR_CODE],
-          useBarCodeDetectorIfSupported: true,
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         })
         html5Instance = instance
 
+        let frameCount = 0
         await instance.start(
           { facingMode: 'environment' },
           {
-            fps: 25,
+            fps: 30,
             qrbox: (vw: number, vh: number) => {
-              const side = Math.floor(Math.min(vw, vh) * 0.75)
+              const side = Math.floor(Math.min(vw, vh) * 0.8)
               return { width: side, height: side }
             },
             aspectRatio: 1,
             videoConstraints: {
               facingMode: 'environment',
-              width: { ideal: 1280 },
-              height: { ideal: 1280 },
+              width: { ideal: 1920 },
+              height: { ideal: 1920 },
             },
             disableFlip: false,
           },
@@ -269,8 +282,14 @@ function WebScannerModal({
             const accepted = handleDecoded(decoded)
             if (accepted) void instance.stop().catch(() => {})
           },
-          () => { /* per-frame decode errors are noisy; ignore */ },
+          () => {
+            // Count attempts via the error callback (fires every frame jsQR
+            // tried and didn't find a code). Lets us prove the loop is alive.
+            frameCount++
+            if (frameCount % 15 === 0) setFrames(frameCount)
+          },
         )
+        setDecoder('html5')
         setState('scanning')
       } catch (err) {
         handleStartError(err)
@@ -371,6 +390,13 @@ function WebScannerModal({
                 <span className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-white rounded-br-2xl" />
               </div>
             </div>
+
+            {/* Decoder/frames diagnostic tag — top-left */}
+            {decoder && (
+              <div className="absolute top-3 left-3 px-2 py-1 rounded-md bg-black/60 text-white text-[10px] font-mono backdrop-blur">
+                {decoder} · {frames}f
+              </div>
+            )}
 
             {/* Status pill */}
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
