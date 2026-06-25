@@ -340,7 +340,7 @@ export default function ClubDetail() {
                 return (
                   <div key={r.id} style={css(`display:flex;align-items:center;gap:11px;padding:11px 0;${i < arr.length - 1 ? 'border-bottom:1px solid #f4f5f7;' : ''}`)}>
                     <Avatar name={u?.name ?? '?'} size={36} bg={avBg(u?.name ?? r.userId)} />
-                    <div style={css('flex:1;min-width:0;')}><div style={css('font-size:13.5px;font-weight:600;color:#1f2734;')}>{u?.name ?? 'Student'}</div><div style={css('font-size:11px;color:#9aa0ac;')}>Wants to join</div></div>
+                    <div style={css('flex:1;min-width:0;')}><div style={css('font-size:13.5px;font-weight:600;color:#1f2734;')}>{u?.name ?? 'Student'}</div><div style={css('font-size:11px;color:#9aa0ac;')}>Wants to join · {relTime(r.requestedAt)}</div></div>
                     <button onClick={() => decideRequest(r.id, 'reject')} style={css('width:32px;height:32px;border-radius:10px;border:1px solid #eceef1;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#98a2b3" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
                     <button onClick={() => decideRequest(r.id, 'approve')} style={css('width:32px;height:32px;border-radius:10px;border:none;background:#10b981;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg></button>
                   </div>

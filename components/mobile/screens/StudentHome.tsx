@@ -9,7 +9,7 @@ import { apiDashboard } from '@/lib/school-api'
 import type { Club, ClubEvent, JoinRequest } from '@/types'
 import { css, TOP, BOTTOM, avBg, initials, clubGlyph, tintFor } from '../css'
 import { Loader } from '../primitives'
-import { monthDay } from '../format'
+import { monthDay, relTime } from '../format'
 
 interface DashData {
   clubs: Club[]
@@ -66,7 +66,7 @@ export default function StudentHome() {
                 {data.pendingRequests.map((r, i) => (
                   <div key={r.id} style={css(`display:flex;align-items:center;gap:11px;padding:12px 15px;${i < data.pendingRequests.length - 1 ? 'border-bottom:1px solid #f4f5f7;' : ''}`)}>
                     <span style={css('width:34px;height:34px;border-radius:10px;background:#fff7e6;display:flex;align-items:center;justify-content:center;flex:none;')}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg></span>
-                    <div style={css('flex:1;min-width:0;')}><div style={css('font-size:13.5px;font-weight:700;color:#1f2734;')}>{r.clubName}</div><div style={css('font-size:11.5px;color:#9aa0ac;font-weight:500;')}>Awaiting approval</div></div>
+                    <div style={css('flex:1;min-width:0;')}><div style={css('font-size:13.5px;font-weight:700;color:#1f2734;')}>{r.clubName}</div><div style={css('font-size:11.5px;color:#9aa0ac;font-weight:500;')}>Sent {relTime(r.requestedAt)} · Awaiting approval</div></div>
                     <span style={css('font-size:11px;font-weight:800;color:#b45309;background:#fef3c7;padding:3px 9px;border-radius:9px;flex:none;')}>Pending</span>
                   </div>
                 ))}
