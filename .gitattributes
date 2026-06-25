@@ -1,0 +1,4 @@
+# Always check shell scripts out with LF endings so they parse on macOS/Linux,
+# even if the working copy is on Windows with autocrlf enabled. Xcode Cloud
+# refuses to run ci_scripts/* with CRLF shebangs.
+*.sh text eol=lf
