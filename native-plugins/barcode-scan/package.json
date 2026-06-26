@@ -1,0 +1,21 @@
+{
+  "name": "clubit-barcode-scan",
+  "version": "1.0.0",
+  "description": "Local Capacitor plugin: native AVFoundation QR scanner for ClubIt check-in.",
+  "private": true,
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  },
+  "files": [
+    "ios/Sources",
+    "Package.swift"
+  ],
+  "keywords": [
+    "capacitor",
+    "plugin",
+    "native"
+  ],
+  "license": "UNLICENSED"
+}

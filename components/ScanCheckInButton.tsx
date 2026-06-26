@@ -2,10 +2,24 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { QrCode, X, XCircle } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { haptic } from '@/lib/haptics'
+
+/**
+ * Native AVFoundation QR scanner (local plugin `clubit-barcode-scan`). This is
+ * the primary path on iOS: the web/WKWebView decoders can't read a real
+ * photographed QR even with good pixels, but Apple's native detector reads it
+ * instantly. `scan()` resolves `{ value }` on success or `{ cancelled: true }`
+ * if the user backs out; it rejects "permission-denied"/"unavailable", and
+ * throws UNIMPLEMENTED on binaries built before the plugin shipped (older
+ * TestFlight) — in which case we fall back to the web scanner.
+ */
+interface BarcodeScanPlugin {
+  scan(): Promise<{ value?: string; cancelled?: boolean }>
+}
+const BarcodeScan = registerPlugin<BarcodeScanPlugin>('BarcodeScan')
 
 /**
  * Decode QR pixels with the strongest decoder available.
@@ -56,15 +70,14 @@ async function decodeQRPixels(
 /**
  * "Scan to check in" button.
  *
- * Native (iOS/Android): tries @capacitor-mlkit/barcode-scanning for the in-app
- * camera and routes /attend?t=... in-app — primary path for App Store
- * Guideline 4.2 (real device feature wired to a core flow). When that plugin
- * isn't linked into the binary (our iOS build is SPM-only, no MLKit), it falls
- * through to the in-WebView camera scanner below — which works because
- * Capacitor auto-grants the WKWebView camera permission.
+ * Native (iOS): primary path is the local AVFoundation plugin (BarcodeScan) —
+ * Apple's own detector, which reads real QRs reliably where the web decoders
+ * fail. Routes /attend?t=...&auto=1 on success. Falls back to the legacy MLKit
+ * path and then the web scanner on binaries built before the plugin shipped.
  *
  * Web (desktop or mobile browser): opens the WebScannerModal — a getUserMedia
- * camera feed decoded by BarcodeDetector (Chrome/Android) or jsQR (Safari/iOS).
+ * camera feed decoded by BarcodeDetector (Chrome/Android) or jsQR/zxing, plus a
+ * photo-capture fallback.
  */
 export default function ScanCheckInButton({ className }: { className?: string }) {
   const router = useRouter()
@@ -154,8 +167,40 @@ export default function ScanCheckInButton({ className }: { className?: string })
     }
   }
 
+  /** Native AVFoundation scanner. Returns:
+   *   'handled'  — routed to /attend, or the user cancelled (do nothing more)
+   *   'fallback' — plugin not in this binary; caller should try other paths */
+  async function scanWithNativePlugin(): Promise<'handled' | 'fallback'> {
+    try {
+      const result = await BarcodeScan.scan()
+      if (result.cancelled || !result.value) return 'handled'
+      const path = resolveAttendPath(result.value)
+      if (!path) {
+        showError("That QR code isn't a ClubIt check-in code")
+        return 'handled'
+      }
+      void haptic('success')
+      router.push(withAuto(path))
+      return 'handled'
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // Older binary without the native plugin → use the web scanner instead.
+      if (/not.?implemented|unimplemented/i.test(msg)) return 'fallback'
+      if (/permission/i.test(msg)) {
+        showError('Camera access is needed to scan a check-in code')
+        return 'handled'
+      }
+      // "unavailable" or any other native error → let the web path try.
+      return 'fallback'
+    }
+  }
+
   async function handleClick() {
     if (isNative) {
+      // Primary: native AVFoundation scanner. Falls back to the legacy MLKit
+      // path (also unavailable on this SPM build) and finally the web modal.
+      const native = await scanWithNativePlugin()
+      if (native === 'handled') return
       const handled = await scanNative()
       if (!handled) setWebOpen(true)
     } else {
