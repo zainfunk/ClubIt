@@ -242,6 +242,7 @@ function WebScannerModal({
   onScan: (raw: string) => boolean
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const photoInputRef = useRef<HTMLInputElement | null>(null)
   const [state, setState] = useState<ScanState>('starting')
   const [errorMsg, setErrorMsg] = useState<string>('')
   const [invalidPreview, setInvalidPreview] = useState<string>('')
@@ -250,6 +251,14 @@ function WebScannerModal({
   // when scans aren't being picked up.
   const [decoder, setDecoder] = useState<'native' | 'jsqr' | null>(null)
   const [frames, setFrames] = useState(0)
+  // Live diagnostics so a "not scanning" report is actionable instead of a
+  // guess: dims prove the stream is real, lum≈0 means drawImage is returning
+  // black frames (a WKWebView class of bug), and "saw" shows the last decoded
+  // value even when it's rejected — proving decode works vs. doesn't.
+  const [dims, setDims] = useState<string>('')
+  const [lum, setLum] = useState<number | null>(null)
+  const [sawRaw, setSawRaw] = useState<string>('')
+  const [photoMsg, setPhotoMsg] = useState<string>('')
 
   useEffect(() => {
     let cancelled = false
@@ -267,6 +276,7 @@ function WebScannerModal({
     }
 
     function handleDecoded(raw: string): boolean {
+      setSawRaw(raw.length > 40 ? raw.slice(0, 40) + '…' : raw)
       const accepted = onScan(raw)
       if (!accepted) flashInvalid(raw)
       return accepted
@@ -348,7 +358,19 @@ function WebScannerModal({
               if (canvas.height !== h) canvas.height = h
               ctx.drawImage(video, 0, 0, w, h)
               const img = ctx.getImageData(0, 0, w, h)
-              const result = jsQR(img.data, w, h, { inversionAttempts: 'dontInvert' })
+              if (frameCount % 15 === 0) {
+                setDims(`${vw}×${vh}`)
+                // Sample average brightness cheaply (every 4096th px) so we can
+                // tell live frames from black ones without a per-pixel scan.
+                let sum = 0
+                let n = 0
+                for (let i = 0; i < img.data.length; i += 4096) {
+                  sum += img.data[i] + img.data[i + 1] + img.data[i + 2]
+                  n += 3
+                }
+                setLum(n ? Math.round(sum / n) : 0)
+              }
+              const result = jsQR(img.data, w, h, { inversionAttempts: 'attemptBoth' })
               if (result?.data && handleDecoded(result.data)) return
             }
           }
@@ -396,6 +418,56 @@ function WebScannerModal({
     if (!accepted) {
       setInvalidPreview(v.length > 60 ? v.slice(0, 60) + '…' : v)
       setState('invalid')
+    }
+  }
+
+  /**
+   * Decode a still PHOTO of the QR (from the native iOS camera via
+   * <input capture>). A captured JPEG is autofocused, full-resolution, and
+   * decoded off an <img>→canvas — which is unaffected by the live-video frame
+   * problems that defeat real-time decoding inside WKWebView. This is the
+   * reliable path on the installed iOS app.
+   */
+  async function decodePhoto(file: File) {
+    setPhotoMsg('Reading photo…')
+    try {
+      const { default: jsQR } = await import('jsqr')
+      const url = URL.createObjectURL(file)
+      try {
+        const imgEl = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const im = new Image()
+          im.onload = () => resolve(im)
+          im.onerror = reject
+          im.src = url
+        })
+        // Cap the longest side so a 12MP photo decodes fast but stays sharp.
+        const scale = Math.min(1, 2000 / Math.max(imgEl.naturalWidth, imgEl.naturalHeight))
+        const w = Math.max(1, Math.round(imgEl.naturalWidth * scale))
+        const h = Math.max(1, Math.round(imgEl.naturalHeight * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        if (!ctx) { setPhotoMsg('Could not read the photo. Try again.'); return }
+        ctx.drawImage(imgEl, 0, 0, w, h)
+        const img = ctx.getImageData(0, 0, w, h)
+        const result = jsQR(img.data, w, h, { inversionAttempts: 'attemptBoth' })
+        if (result?.data) {
+          setSawRaw(result.data.length > 40 ? result.data.slice(0, 40) + '…' : result.data)
+          const accepted = onScan(result.data)
+          if (!accepted) {
+            setPhotoMsg('')
+            setInvalidPreview(result.data.length > 60 ? result.data.slice(0, 60) + '…' : result.data)
+            setState('invalid')
+          }
+        } else {
+          setPhotoMsg("Couldn't find a QR in that photo. Fill the frame with the code and keep it flat.")
+        }
+      } finally {
+        URL.revokeObjectURL(url)
+      }
+    } catch {
+      setPhotoMsg('Could not read the photo. Try again.')
     }
   }
 
@@ -450,10 +522,13 @@ function WebScannerModal({
               </div>
             </div>
 
-            {/* Decoder/frames diagnostic tag — top-left */}
+            {/* Diagnostic HUD — top-left. Read this aloud if scanning fails:
+                decoder/frames = loop alive; dims = real stream; lum = brightness
+                (≈0 ⇒ black frames); saw = last decoded value (proves decode). */}
             {decoder && (
-              <div className="absolute top-3 left-3 px-2 py-1 rounded-md bg-black/60 text-white text-[10px] font-mono backdrop-blur">
-                {decoder} · {frames}f
+              <div className="absolute top-3 left-3 max-w-[85%] px-2 py-1 rounded-md bg-black/70 text-white text-[10px] leading-tight font-mono backdrop-blur">
+                <div>{decoder} · {frames}f{dims && ` · ${dims}`}{lum !== null && ` · lum ${lum}`}</div>
+                <div className="truncate">saw: {sawRaw || '—'}</div>
               </div>
             )}
 
@@ -488,6 +563,34 @@ function WebScannerModal({
             <p className="font-mono break-all opacity-70">{invalidPreview}</p>
           </div>
         )}
+
+        {/* Photo-capture fallback — the reliable path on iOS. Opens the native
+            camera, takes one sharp photo, and decodes that still image. */}
+        <div className="mt-4">
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void decodePhoto(file)
+              e.target.value = ''
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            className="w-full inline-flex items-center justify-center gap-2 min-h-[44px] rounded-xl bg-[#0058be] text-white text-sm font-bold px-4 py-2.5 shadow active:translate-y-px"
+          >
+            <QrCode className="w-4 h-4" />
+            Take a photo of the QR
+          </button>
+          {photoMsg && (
+            <p className="mt-2 text-xs text-gray-500">{photoMsg}</p>
+          )}
+        </div>
 
         {/* Manual paste fallback */}
         <div className="mt-4">
