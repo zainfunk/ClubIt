@@ -20,8 +20,6 @@ const ROOT = join(__dirname, '..', '..')
 const DEV_PATHS = [
   'app/api/dev',
   'app/dev',
-  'app/api/superadmin/invite',
-  'app/api/invite',
 ]
 
 describe('W1.6: dev routes are stripped from production builds', () => {

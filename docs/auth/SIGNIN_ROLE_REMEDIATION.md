@@ -1,5 +1,18 @@
 # Goal: Solve Sign-in & Role Association For Good (iOS-compatible)
 
+> **⚠️ SUPERSEDED IN PART (2026-06-26 — "simplify the code system").**
+> The invite-code model below was deliberately simplified. Codes now grant their
+> role **directly and instantly** and are **infinitely reusable** — there is no
+> single-use consumption, no expiry, no email-domain bind, no email-verification
+> requirement, and **no staff-request approval step** (the `/api/school/staff-requests`
+> route and its admin UI were removed). `/api/join` never demotes (takes the
+> higher of the user's current role vs the code's). The legacy superadmin
+> "invite a school" flow (`/api/superadmin/invite`, `/api/invite/[token]`,
+> `/app/invite`) was removed entirely — schools onboard ONLY via `/onboard` →
+> superadmin approve. The DB-source-of-truth, id-scoped-write, iOS-safe
+> principles below all still hold; the role-elevation *mechanism* is what changed.
+> Leaked-code defenses are an intentional later concern.
+
 Status: EXECUTED (2026-06-24) · Owner: Zain · Created: 2026-06-24
 
 > Implemented in one pass. Phase 0 data repair applied live (migration

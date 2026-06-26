@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser, useClerk } from '@clerk/nextjs'
-import { Hash, CheckCircle, LogOut, Clock } from 'lucide-react'
+import { Hash, CheckCircle, LogOut } from 'lucide-react'
 import { saveSchoolSession, useMockAuth } from '@/lib/mock-auth'
 
 export default function JoinPage() {
@@ -14,7 +14,7 @@ export default function JoinPage() {
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<{ schoolName: string; role: string; pendingRole?: string } | null>(null)
+  const [success, setSuccess] = useState<{ schoolName: string; role: string } | null>(null)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -49,8 +49,8 @@ export default function JoinPage() {
       }
 
       refreshSchoolContext()
-      setSuccess({ schoolName: data.schoolName, role: data.role, pendingRole: data.pendingRole })
-      setTimeout(() => router.replace('/dashboard'), data.pendingRole ? 3200 : 1800)
+      setSuccess({ schoolName: data.schoolName, role: data.role })
+      setTimeout(() => router.replace('/dashboard'), 1800)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -59,22 +59,7 @@ export default function JoinPage() {
   }
 
   if (success) {
-    if (success.pendingRole) {
-      return (
-        <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-6">
-          <div className="text-center max-w-sm">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 rounded-2xl mb-4">
-              <Clock className="w-8 h-8 text-amber-600" />
-            </div>
-            <h1 className="text-xl font-bold text-gray-900">Request sent to {success.schoolName}</h1>
-            <p className="text-gray-500 text-sm mt-2">
-              An administrator must approve your <span className="font-semibold">{success.pendingRole}</span> access
-              before it takes effect. You&apos;re in as a student in the meantime — taking you to your dashboard…
-            </p>
-          </div>
-        </div>
-      )
-    }
+    const roleLabel = success.role === 'admin' ? 'an admin' : success.role === 'advisor' ? 'an advisor' : 'a student'
     return (
       <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-6">
         <div className="text-center">
@@ -82,7 +67,7 @@ export default function JoinPage() {
             <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
           <h1 className="text-xl font-bold text-gray-900">Welcome to {success.schoolName}!</h1>
-          <p className="text-gray-500 text-sm mt-1">Redirecting to your dashboard…</p>
+          <p className="text-gray-500 text-sm mt-1">You&apos;re in as {roleLabel}. Redirecting to your dashboard…</p>
         </div>
       </div>
     )

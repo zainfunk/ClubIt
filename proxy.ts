@@ -11,14 +11,12 @@ const isPublicRoute = createRouteMatcher([
   '/privacy',
   '/terms',
   '/support',
-  '/onboard(.*)',
+  // /setup is the school IT contact's code page — they may not have an account.
   '/setup(.*)',
-  '/invite(.*)',
-  '/join',
-  '/api/invite/(.*)',
   '/api/setup/(.*)',
-  '/api/join',
-  '/api/onboard',
+  // NOTE: /join and /onboard (and their APIs) are NOT public — they require a
+  // signed-in Clerk user. Clerk redirects unauthenticated visitors to sign-in
+  // with a return URL, so they're never stranded on a form they can't submit.
   // /api/webhooks/* removed in W2.6 -- duplicate Stripe handler that
   // accepted unsigned events when STRIPE_WEBHOOK_SECRET was unset (C-6).
   '/api/stripe/webhook',

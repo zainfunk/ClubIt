@@ -9,8 +9,9 @@
  *   - no collisions across 10,000 calls,
  *   - per-byte distribution in the setup token's decoded payload is flat
  *     (chi-squared p-value > 0.001 vs. uniform),
- *   - shape of generated codes matches the new format
- *     (3-letter prefix + dash + 22 base64url chars = 26 chars total).
+ *   - shape of generated codes matches the format (3-letter prefix + dash + 8
+ *     chars from the confusion-free 31-char alphabet = 12 chars total; short
+ *     enough for students to hand-type — see lib/schools-store.ts).
  *
  * Closes finding C-7 from docs/security/ClubIt-Security-Assessment.md.
  */
@@ -24,7 +25,8 @@ describe('W1.3: token generators are CSPRNG-backed', () => {
     const seen = new Set<string>()
     for (let i = 0; i < N; i++) {
       const code = generateInviteCode('STU')
-      expect(code).toMatch(/^STU-[A-Za-z0-9_-]{22}$/)
+      // PFX-<8 chars> from the confusion-free alphabet (2-9 + A-Z minus 0/O/1/I/L).
+      expect(code).toMatch(/^STU-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/)
       expect(seen.has(code), `collision at i=${i}: ${code}`).toBe(false)
       seen.add(code)
     }
@@ -32,9 +34,9 @@ describe('W1.3: token generators are CSPRNG-backed', () => {
   })
 
   it('generateInviteCode output is roughly uniform across the alphabet', () => {
-    // The 22-char body is base64url, which has 64 distinct characters.
-    // After 10k codes * 22 chars = 220k character samples, each character
-    // should appear ~3437 times on average. Tolerance: any character
+    // The 8-char body is drawn from the 31-char confusion-free alphabet.
+    // After 10k codes * 8 chars = 80k character samples, each character
+    // should appear ~2581 times on average. Tolerance: any character
     // appearing less than 50% of expected or more than 200% would
     // indicate gross bias.
     const counts = new Map<string, number>()
@@ -44,7 +46,7 @@ describe('W1.3: token generators are CSPRNG-backed', () => {
         counts.set(c, (counts.get(c) ?? 0) + 1)
       }
     }
-    const total = N * 22
+    const total = N * 8
     const alphabet = counts.size
     const expected = total / alphabet
     for (const [c, count] of counts) {

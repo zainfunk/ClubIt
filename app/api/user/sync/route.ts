@@ -55,12 +55,12 @@ export async function GET() {
   //
   // Safety: we copy ONLY the school_id (membership), never an elevated role.
   // School membership is grantable to anyone holding the multi-use student
-  // code, so sharing "which school" between a human's own verified-email
-  // accounts is no escalation; inheriting admin/advisor across accounts would
-  // be, and is deliberately not done. We require the current caller's primary
-  // email to be verified (so it's provably the same human), and we refuse to
-  // guess when siblings point at more than one distinct school.
-  if (!schoolId && email && clerkUser.primaryEmailAddress?.verification?.status === 'verified') {
+  // code, so sharing "which school" between a human's own same-email accounts
+  // is no escalation; inheriting admin/advisor across accounts would be, and is
+  // deliberately not done. (We no longer require a verified email — entering a
+  // code grants membership without verification, so reconcile matches that.) We
+  // refuse to guess when siblings point at more than one distinct school.
+  if (!schoolId && email) {
     // ilike = case-insensitive match; escape LIKE metacharacters (notably `_`,
     // which is common in generated emails like pw_adm_…@) so they're literal.
     const emailPattern = email.replace(/[\\%_]/g, '\\$&')

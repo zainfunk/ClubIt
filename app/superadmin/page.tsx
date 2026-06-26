@@ -162,118 +162,6 @@ function Spinner() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  InviteModal                                                        */
-/* ------------------------------------------------------------------ */
-
-function InviteModal({ onClose }: { onClose: () => void }) {
-  const [email, setEmail] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function generate(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/superadmin/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      })
-      const text = await res.text()
-      let data: Record<string, string> = {}
-      try { data = JSON.parse(text) } catch { /* empty response */ }
-      if (!res.ok) throw new Error(data.error ?? `Server error (${res.status})`)
-      setInviteUrl(`${window.location.origin}${data.inviteUrl}`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function copyLink() {
-    if (!inviteUrl) return
-    await navigator.clipboard.writeText(inviteUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const mailtoLink = inviteUrl
-    ? `mailto:${email}?subject=${encodeURIComponent('Set up your school on Clubit')}&body=${encodeURIComponent(`Hi,\n\nYou've been invited to set up your school on Clubit.\n\nClick the link below to get started:\n${inviteUrl}\n\nThis link is for your school only — please don't share it.\n\nClubIt Team`)}`
-    : ''
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-gray-900">Invite a school</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {!inviteUrl ? (
-          <form onSubmit={generate} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Contact email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="principal@school.edu"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400"
-                />
-              </div>
-              <p className="text-xs text-gray-400 mt-1.5">
-                The recipient gets a one-time link and fills in their school's name, district, and contact themselves.
-              </p>
-            </div>
-            {error && <p className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">{error}</p>}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'Generating...' : 'Generate invite link'}
-            </button>
-          </form>
-        ) : (
-          <div className="space-y-4">
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-xs text-gray-500 mb-2">Invite link for <span className="font-medium text-gray-700">{email}</span></p>
-              <p className="text-xs font-mono text-gray-700 break-all leading-relaxed">{inviteUrl}</p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={copyLink}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                {copied ? <CheckCircle className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'Copied!' : 'Copy link'}
-              </button>
-              <a
-                href={mailtoLink}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-black text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
-              >
-                <Mail className="w-4 h-4" />
-                Open in email
-              </a>
-            </div>
-            <p className="text-xs text-gray-400 text-center">Single-use invite link.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
 /*  SchoolDetailModal                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -1281,7 +1169,6 @@ export default function SuperAdminPage() {
   const [schools, setSchools] = useState<SchoolType[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [loading, setLoading] = useState(true)
-  const [showInvite, setShowInvite] = useState(false)
   const [detailSchoolId, setDetailSchoolId] = useState<string | null>(null)
 
   async function loadSchools() {
@@ -1334,7 +1221,6 @@ export default function SuperAdminPage() {
   return (
     <div className="max-w-5xl mx-auto">
       {/* Modals */}
-      {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
       {detailSchoolId && (
         <SchoolDetailModal
           schoolId={detailSchoolId}
@@ -1356,13 +1242,6 @@ export default function SuperAdminPage() {
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
-          </button>
-          <button
-            onClick={() => setShowInvite(true)}
-            className="flex items-center gap-1.5 text-sm bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-800 transition-colors"
-          >
-            <Mail className="w-4 h-4" />
-            Invite a school
           </button>
         </div>
       </div>

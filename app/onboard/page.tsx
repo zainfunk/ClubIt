@@ -53,8 +53,8 @@ export default function OnboardPage() {
           <RocketLoader
             open
             done={launched}
-            label={launched ? 'Welcome aboard!' : 'Launching your school…'}
-            subLabel={launched ? 'Spinning up your dashboard.' : 'Provisioning invite codes and dashboards.'}
+            label={launched ? 'Registration received!' : 'Submitting your registration…'}
+            subLabel={launched ? 'We’ll email you when it’s approved.' : 'Sending your school to our team for review.'}
           />
         )}
       </AnimatePresence>
@@ -67,7 +67,7 @@ export default function OnboardPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Register your school</h1>
           <p className="text-gray-500 mt-1 text-sm">
-            Your school goes live the moment you submit — invite codes ready to share right away.
+            Submit your details for a quick review. Once approved, you’ll get your invite codes and become the school admin.
           </p>
         </div>
 

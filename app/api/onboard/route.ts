@@ -57,6 +57,27 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // Double-submit guard (#3): the existingUser.school_id check above can't catch
+  // a rapid double-tap, because school_id isn't set until the END of this flow —
+  // two concurrent submits would both create a school and orphan the first one.
+  // If this user already has a pending request, return it instead of minting a
+  // duplicate. Migration 0013's partial unique index is the race-proof backstop
+  // (caught below as 23505); this is the friendly fast path.
+  const { data: existingPending } = await db
+    .from('schools')
+    .select('id')
+    .eq('requested_admin_user_id', userId)
+    .eq('status', 'pending')
+    .maybeSingle()
+
+  if (existingPending) {
+    return NextResponse.json({
+      schoolId: existingPending.id,
+      status: 'pending',
+      message: 'Your school registration is already pending review. We’ll email when it’s approved.',
+    })
+  }
+
   // Ensure the user row exists before we point school.requested_admin_user_id
   // at it (FK constraint).
   await db.from('users').upsert(
@@ -86,6 +107,23 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error) {
+    // 23505 = the partial unique index (migration 0013): a concurrent submit
+    // won the race. Return that pending school rather than erroring.
+    if ((error as { code?: string }).code === '23505') {
+      const { data: raced } = await db
+        .from('schools')
+        .select('id')
+        .eq('requested_admin_user_id', userId)
+        .eq('status', 'pending')
+        .maybeSingle()
+      if (raced) {
+        return NextResponse.json({
+          schoolId: raced.id,
+          status: 'pending',
+          message: 'Your school registration is already pending review. We’ll email when it’s approved.',
+        })
+      }
+    }
     console.error('onboard error', error)
     return NextResponse.json(
       { error: 'Failed to submit registration request. Please try again.' },

@@ -52,10 +52,6 @@ export async function POST(
       student_invite_code: studentCode,
       admin_invite_code: adminCode,
       advisor_invite_code: advisorCode,
-      // Mint fresh single-use markers as null so the new admin/advisor codes are
-      // redeemable (defensive — a re-approved/seeded row could carry stale ones).
-      admin_code_used_at: null,
-      advisor_code_used_at: null,
       setup_token: token,
       setup_token_expires_at: tokenExpiry,
     })

@@ -12,6 +12,21 @@ export async function POST(
   const { id } = await params
   const db = createServiceClient()
 
+  // Un-strand everyone attached to this pending school FIRST: clear school_id
+  // AND reset role to 'student' so the two never drift apart (a dangling staff
+  // role with no school is the exact inconsistency the sign-in remediation
+  // forbids). The FK is ON DELETE SET NULL, but that wouldn't reset role — and
+  // we want these users able to re-onboard or join cleanly afterwards.
+  const { error: detachErr } = await db
+    .from('users')
+    .update({ school_id: null, role: 'student' })
+    .eq('school_id', id)
+
+  if (detachErr) {
+    console.error('reject: detaching users failed', detachErr)
+    return NextResponse.json({ error: 'Failed to reject school' }, { status: 500 })
+  }
+
   const { error } = await db
     .from('schools')
     .delete()

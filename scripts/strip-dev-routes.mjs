@@ -30,8 +30,6 @@ const ROOT = process.cwd()
 const DEV_PATHS = [
   'app/api/dev',
   'app/dev',
-  'app/api/superadmin/invite',
-  'app/api/invite',
 ]
 
 const NODE_ENV = process.env.NODE_ENV ?? ''

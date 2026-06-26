@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { setupLimiter } from '@/lib/rate-limit'
 
@@ -58,11 +59,17 @@ export async function GET(
   })
 }
 
-// POST: mark setup as complete
+// POST: mark setup as complete.
+// Requires a signed-in user: this is a state change that redacts the codes, so a
+// stranger holding a forwarded setup URL must not be able to flip it (the GET is
+// public for the IT contact to read codes; the write is not).
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  const { userId } = await auth()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
   const rl = await setupLimiter.check(`ip:${ip}`)
   if (!rl.success) {
