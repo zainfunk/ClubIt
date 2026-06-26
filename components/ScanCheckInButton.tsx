@@ -10,12 +10,15 @@ import { haptic } from '@/lib/haptics'
 /**
  * "Scan to check in" button.
  *
- * Native (iOS/Android): uses @capacitor-mlkit/barcode-scanning for the in-app
+ * Native (iOS/Android): tries @capacitor-mlkit/barcode-scanning for the in-app
  * camera and routes /attend?t=... in-app — primary path for App Store
- * Guideline 4.2 (real device feature wired to a core flow).
+ * Guideline 4.2 (real device feature wired to a core flow). When that plugin
+ * isn't linked into the binary (our iOS build is SPM-only, no MLKit), it falls
+ * through to the in-WebView camera scanner below — which works because
+ * Capacitor auto-grants the WKWebView camera permission.
  *
- * Web (desktop or mobile browser): falls back to html5-qrcode in a modal so
- * users without the native app can still scan an advisor's QR.
+ * Web (desktop or mobile browser): opens the WebScannerModal — a getUserMedia
+ * camera feed decoded by BarcodeDetector (Chrome/Android) or jsQR (Safari/iOS).
  */
 export default function ScanCheckInButton({ className }: { className?: string }) {
   const router = useRouter()
@@ -217,12 +220,16 @@ function ScanErrorOverlay({
 type ScanState = 'starting' | 'scanning' | 'invalid' | 'error'
 
 /**
- * Modal camera scanner with three layered strategies, in order of preference:
- *   1. Native BarcodeDetector API — Safari iOS 17+, Chrome. Fastest, most
- *      reliable. Decodes 60+ frames/sec straight off the <video> element.
- *   2. html5-qrcode library — JS-only decoder fallback for older browsers.
- *   3. Manual paste fallback — always available, so a student can still
- *      check in by pasting the link if the camera flow fails.
+ * Modal camera scanner. ONE getUserMedia stream feeds a single <video>; the
+ * decoder is chosen per-frame:
+ *   1. BarcodeDetector API — Chrome / Android WebView. Fast, decodes straight
+ *      off the <video>. NOT present in WebKit (Safari / iOS WKWebView).
+ *   2. jsQR full-frame fallback — draws the whole video frame to a canvas and
+ *      decodes the entire image. This is the path the native iOS app uses
+ *      (Capacitor auto-grants camera permission, so getUserMedia works inside
+ *      the WKWebView). Full-frame avoids the cropped-qrbox region/aspect
+ *      misalignment that made the old html5-qrcode path fail to pick up codes.
+ *   3. Manual paste fallback — always available if the camera flow fails.
  *
  * onScan returns true if the modal should close (valid + routed), false to
  * keep scanning (invalid QR — show "Invalid QR" then resume scanning).
@@ -235,21 +242,19 @@ function WebScannerModal({
   onScan: (raw: string) => boolean
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const html5ContainerId = 'scan-checkin-html5qr'
   const [state, setState] = useState<ScanState>('starting')
   const [errorMsg, setErrorMsg] = useState<string>('')
   const [invalidPreview, setInvalidPreview] = useState<string>('')
   const [manual, setManual] = useState<string>('')
   // Visible decoder tag so users (and we) can tell which path is active
   // when scans aren't being picked up.
-  const [decoder, setDecoder] = useState<'native' | 'html5' | null>(null)
+  const [decoder, setDecoder] = useState<'native' | 'jsqr' | null>(null)
   const [frames, setFrames] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     let stream: MediaStream | null = null
     let rafId = 0
-    let html5Instance: { stop: () => Promise<unknown>; clear: () => void } | null = null
     let invalidResetId: ReturnType<typeof setTimeout> | null = null
 
     function flashInvalid(raw: string) {
@@ -268,116 +273,91 @@ function WebScannerModal({
     }
 
     void (async () => {
-      // --- Path 1: native BarcodeDetector ---
+      // One camera stream for both decoder paths.
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 1280 },
+          },
+        })
+      } catch (err) {
+        handleStartError(err)
+        return
+      }
+      if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
+
+      const video = videoRef.current
+      if (!video) return
+      video.srcObject = stream
+      video.setAttribute('playsinline', 'true')
+      video.muted = true
+      try { await video.play() } catch { /* autoplay quirks — loop still reads frames */ }
+
+      // Pick the decoder: BarcodeDetector when the engine has it (Chrome /
+      // Android WebView), else jsQR full-frame (Safari / iOS WKWebView).
       const BD = (globalThis as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (src: CanvasImageSource) => Promise<{ rawValue: string }[]> } }).BarcodeDetector
       const BDStatic = BD as unknown as { getSupportedFormats?: () => Promise<string[]> } | undefined
-      let supportsQR = false
+      let detector: { detect: (src: CanvasImageSource) => Promise<{ rawValue: string }[]> } | null = null
       try {
         if (BD) {
           const formats = (await BDStatic?.getSupportedFormats?.()) ?? []
-          supportsQR = formats.includes('qr_code')
+          if (formats.includes('qr_code')) detector = new BD({ formats: ['qr_code'] })
         }
       } catch {
-        supportsQR = false
+        detector = null
       }
 
-      if (BD && supportsQR) {
+      let jsQR: typeof import('jsqr').default | null = null
+      if (!detector) {
         try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: 'environment',
-              width: { ideal: 1920 },
-              height: { ideal: 1080 },
-            },
-          })
-          if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
-
-          const video = videoRef.current
-          if (!video) return
-          video.srcObject = stream
-          video.setAttribute('playsinline', 'true')
-          video.muted = true
-          await video.play()
-
-          const detector = new BD({ formats: ['qr_code'] })
-          setDecoder('native')
-          setState('scanning')
-
-          let frameCount = 0
-          const loop = async () => {
-            if (cancelled) return
-            try {
-              const codes = await detector.detect(video)
-              frameCount++
-              if (frameCount % 15 === 0) setFrames(frameCount)
-              if (codes.length > 0) {
-                const raw = codes[0].rawValue
-                const accepted = handleDecoded(raw)
-                if (accepted) return
-              }
-            } catch {
-              /* per-frame decode errors are expected — ignore */
-            }
-            rafId = requestAnimationFrame(loop)
-          }
-          loop()
-          return
+          jsQR = (await import('jsqr')).default
         } catch (err) {
           handleStartError(err)
           return
         }
+        if (cancelled) return
       }
 
-      // --- Path 2: html5-qrcode fallback ---
-      try {
-        const mod = await import('html5-qrcode')
-        if (cancelled) return
-        const Html5Qrcode = mod.Html5Qrcode
-        const QR_CODE = mod.Html5QrcodeSupportedFormats.QR_CODE
-        // useBarCodeDetectorIfSupported lives under experimentalFeatures —
-        // not at the top level. Setting it at the top level was a silent
-        // no-op, which is why we were stuck on the slow JS decoder even
-        // on browsers that could have used the native API.
-        const instance = new Html5Qrcode(html5ContainerId, {
-          verbose: false,
-          formatsToSupport: [QR_CODE],
-          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-        })
-        html5Instance = instance
+      setDecoder(detector ? 'native' : 'jsqr')
+      setState('scanning')
 
-        let frameCount = 0
-        await instance.start(
-          { facingMode: 'environment' },
-          {
-            fps: 30,
-            qrbox: (vw: number, vh: number) => {
-              const side = Math.floor(Math.min(vw, vh) * 0.8)
-              return { width: side, height: side }
-            },
-            aspectRatio: 1,
-            videoConstraints: {
-              facingMode: 'environment',
-              width: { ideal: 1920 },
-              height: { ideal: 1920 },
-            },
-            disableFlip: false,
-          },
-          (decoded) => {
-            const accepted = handleDecoded(decoded)
-            if (accepted) void instance.stop().catch(() => {})
-          },
-          () => {
-            // Count attempts via the error callback (fires every frame jsQR
-            // tried and didn't find a code). Lets us prove the loop is alive.
+      // Offscreen canvas for the jsQR path. Downscale the longest side so a
+      // 1280px frame decodes fast without choking the main thread.
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      let frameCount = 0
+
+      const loop = async () => {
+        if (cancelled) return
+        try {
+          if (video.readyState >= 2 && video.videoWidth > 0) {
             frameCount++
             if (frameCount % 15 === 0) setFrames(frameCount)
-          },
-        )
-        setDecoder('html5')
-        setState('scanning')
-      } catch (err) {
-        handleStartError(err)
+            if (detector) {
+              const codes = await detector.detect(video)
+              if (codes.length > 0 && handleDecoded(codes[0].rawValue)) return
+            } else if (jsQR && ctx) {
+              const vw = video.videoWidth
+              const vh = video.videoHeight
+              const scale = Math.min(1, 900 / Math.max(vw, vh))
+              const w = Math.round(vw * scale)
+              const h = Math.round(vh * scale)
+              if (canvas.width !== w) canvas.width = w
+              if (canvas.height !== h) canvas.height = h
+              ctx.drawImage(video, 0, 0, w, h)
+              const img = ctx.getImageData(0, 0, w, h)
+              const result = jsQR(img.data, w, h, { inversionAttempts: 'dontInvert' })
+              if (result?.data && handleDecoded(result.data)) return
+            }
+          }
+        } catch {
+          /* per-frame decode errors are expected — ignore */
+        }
+        rafId = requestAnimationFrame(() => { void loop() })
       }
+      void loop()
     })()
 
     function handleStartError(err: unknown) {
@@ -406,9 +386,6 @@ function WebScannerModal({
       if (invalidResetId) clearTimeout(invalidResetId)
       if (rafId) cancelAnimationFrame(rafId)
       if (stream) stream.getTracks().forEach((t) => t.stop())
-      if (html5Instance) {
-        html5Instance.stop().then(() => html5Instance!.clear()).catch(() => {})
-      }
     }
   }, [onScan])
 
@@ -450,15 +427,13 @@ function WebScannerModal({
           </div>
         ) : (
           <div className="relative overflow-hidden rounded-xl bg-black aspect-square">
-            {/* Native-path video */}
+            {/* Single camera feed for both decoder paths */}
             <video
               ref={videoRef}
               playsInline
               muted
               className="absolute inset-0 w-full h-full object-cover"
             />
-            {/* html5-qrcode container (only used as fallback; harmless if unused) */}
-            <div id={html5ContainerId} className="absolute inset-0" />
 
             {/* Scan box overlay */}
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
