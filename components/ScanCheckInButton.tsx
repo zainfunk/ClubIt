@@ -528,10 +528,25 @@ function WebScannerModal({
             setState('invalid')
           }
         } else {
-          // Include the captured dimensions so a failure is diagnosable, and
-          // tell the user the single biggest fix: get closer.
+          // Decisive diagnostic: sample the brightness of the pixels we actually
+          // handed the decoder. If lum≈0 the WKWebView canvas read-back is
+          // returning black (the real bug) — not the QR or the decoder.
+          let lumAvg = -1
+          try {
+            ctx.drawImage(imgEl, 0, 0, nw, nh, 0, 0, canvas.width, canvas.height)
+            const px = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+            let sum = 0
+            let n = 0
+            for (let i = 0; i < px.length; i += 400) {
+              sum += px[i] + px[i + 1] + px[i + 2]
+              n += 3
+            }
+            lumAvg = n ? Math.round(sum / n) : 0
+          } catch {
+            /* leave lumAvg = -1 */
+          }
           setPhotoMsg(
-            `No QR found (photo ${nw}×${nh}). Get closer so the code fills most of the frame, hold steady, and avoid glare.`,
+            `No QR found (photo ${nw}×${nh}, lum ${lumAvg}). If lum is near 0 the camera image came back blank — tell Zain. Otherwise get closer so the code fills the frame.`,
           )
         }
       } finally {

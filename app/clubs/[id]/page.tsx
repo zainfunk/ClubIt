@@ -1373,10 +1373,14 @@ function ClubDetailDesktop({ params }: PageProps) {
                   </button>
                 </div>
                 <div className="flex justify-center">
-                  <div className="rounded-xl border-4 border-white shadow-sm bg-white p-2">
+                  {/* bg-white p-6 = a generous quiet zone (≥4 modules of white
+                      around the code). react-qr-code renders no margin of its
+                      own, and too small a quiet zone is a classic reason a
+                      photographed QR won't decode. */}
+                  <div className="rounded-xl border-4 border-white shadow-sm bg-white p-6">
                     <QRCode
                       value={getAttendUrl(activeSession)}
-                      size={180}
+                      size={220}
                       level="M"
                     />
                   </div>
