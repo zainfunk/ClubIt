@@ -28,7 +28,6 @@ function AttendContent() {
   const { currentUser } = useMockAuth()
   const searchParams = useSearchParams()
   const token = searchParams.get('t') ?? ''
-  const autoMode = searchParams.get('auto') === '1'
 
   const [status, setStatus] = useState<Status>('idle')
   const [distanceM, setDistanceM] = useState<number | null>(null)
@@ -76,17 +75,19 @@ function AttendContent() {
     }
   }, [currentUser.id, currentUser.role, currentUser.schoolId, session])
 
-  // Auto-fire check-in when the page is opened from a scan (?auto=1) and the
-  // student is eligible. Guarded so it only runs once per mount.
+  // Auto-fire check-in as soon as the student is eligible. The page is reached
+  // by scanning the advisor's QR — with the iPhone Camera (opens /attend
+  // directly) or the in-app scanner — so there's no reason to wait for a tap.
+  // Full gating still runs inside checkIn() (membership, same school, distance,
+  // duplicates). Guarded so it only fires once per mount.
   useEffect(() => {
-    if (!autoMode) return
     if (autoFiredRef.current) return
     if (!session || !canCheckIn) return
     if (status !== 'idle') return
     autoFiredRef.current = true
     void checkIn()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoMode, session, canCheckIn, status])
+  }, [session, canCheckIn, status])
 
   async function checkIn() {
     if (!session) {
@@ -150,15 +151,6 @@ function AttendContent() {
     setStatus('success')
   }
 
-  // TEMP (iPhone-Camera-only check-in): the in-app native scanner needs an iOS
-  // rebuild to work. Until then, advisors' QR codes are scanned with the iOS
-  // Camera app, which opens this page directly. Show a simple success screen
-  // for any scanned check-in link. The real eligibility + recording flow above
-  // (and the invalid-link guard below) returns when we delete this block.
-  if (token) {
-    return <CheckedInScreen />
-  }
-
   if (!token || !session) {
     return (
       <div className="text-center py-20">
@@ -209,7 +201,7 @@ function AttendContent() {
         {status === 'success' && (
           <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl">
             <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
-            <p className="font-semibold text-green-800">Attendance recorded!</p>
+            <p className="font-semibold text-green-800">Successfully checked in</p>
             <p className="text-sm text-green-600 mt-1">{session.meetingDate}</p>
           </div>
         )}
@@ -258,7 +250,7 @@ function AttendContent() {
                   className="text-3xl font-extrabold text-white tracking-tight"
                   style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}
                 >
-                  Attendance recorded!
+                  Successfully checked in
                 </motion.h2>
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -419,51 +411,6 @@ function AttendContent() {
         <div className="mt-4">
           <Link href="/" className="text-xs text-blue-600 hover:underline">Back to home</Link>
         </div>
-      </div>
-    </div>
-  )
-}
-
-/**
- * TEMP success screen shown when a check-in QR is opened from the iPhone Camera
- * app. Pure visual confirmation — no eligibility checks or attendance
- * recording. Delete this (and its use in AttendContent) once the native in-app
- * scanner ships and the full flow is back in play.
- */
-function CheckedInScreen() {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-emerald-500 to-emerald-700 px-6">
-      <div className="text-center">
-        <motion.div
-          initial={{ scale: 0, rotate: -45 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: 'spring', stiffness: 240, damping: 14, delay: 0.05 }}
-          className="mx-auto mb-6 inline-flex h-32 w-32 items-center justify-center rounded-full bg-white shadow-2xl"
-        >
-          <CheckCircle className="w-20 h-20 text-emerald-500" strokeWidth={2.5} />
-        </motion.div>
-        <motion.h1
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="text-3xl font-extrabold text-white tracking-tight"
-          style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}
-        >
-          Successfully checked in
-        </motion.h1>
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45 }}
-          className="mt-8"
-        >
-          <Link
-            href="/"
-            className="inline-block bg-white text-emerald-700 font-bold text-sm rounded-full px-6 py-3 shadow-lg active:translate-y-px"
-          >
-            Done
-          </Link>
-        </motion.div>
       </div>
     </div>
   )
