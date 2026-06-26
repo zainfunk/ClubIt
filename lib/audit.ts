@@ -32,6 +32,7 @@ export type AuditAction =
   | 'user.override_changed'
   | 'user.privacy_changed'
   | 'user.profile_changed'
+  | 'user.password_reset_link_created'
   // school lifecycle
   | 'school.requested'
   | 'school.approved'

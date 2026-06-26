@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import Link from 'next/link'
 import { applyOverrides } from '@/lib/user-store'
 import Avatar from '@/components/Avatar'
-import { Users, Shield, Vote, Plus, GraduationCap, MessageSquare, CheckCircle, Clock, Copy, Check, KeyRound } from 'lucide-react'
+import { Users, Shield, Vote, Plus, GraduationCap, MessageSquare, CheckCircle, Clock, Copy, Check, KeyRound, X } from 'lucide-react'
 
 export default function AdminPage() {
   if (useIsAdminPhone()) return <AdminPanel />
@@ -33,6 +33,9 @@ function AdminPageDesktop() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
   const [staffRequests, setStaffRequests] = useState<{ id: string; name: string; email: string; requestedRole: 'admin' | 'advisor' }[]>([])
   const [actingRequest, setActingRequest] = useState<string | null>(null)
+  const [accessActionId, setAccessActionId] = useState<string | null>(null)
+  const [accessLink, setAccessLink] = useState<{ url: string; user: User; expiresInSeconds: number } | null>(null)
+  const [accessLinkCopied, setAccessLinkCopied] = useState(false)
 
   function applyClubsPayload(payload: {
     clubs?: Club[]
@@ -204,6 +207,33 @@ function AdminPageDesktop() {
       setRoleError(err instanceof Error ? err.message : 'Failed to update role')
     } finally {
       setUpdatingRoleId(null)
+    }
+  }
+
+  async function generatePasswordResetLink(user: User) {
+    setAccessActionId(user.id)
+    setRoleError(null)
+    try {
+      const res = await fetch(`/api/school/users/${user.id}/password-reset-link`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Could not create reset link')
+      setAccessLinkCopied(false)
+      setAccessLink({ url: data.url, user, expiresInSeconds: data.expiresInSeconds })
+    } catch (err) {
+      setRoleError(err instanceof Error ? err.message : 'Could not create reset link')
+    } finally {
+      setAccessActionId(null)
+    }
+  }
+
+  async function copyAccessLink() {
+    if (!accessLink) return
+    try {
+      await navigator.clipboard.writeText(accessLink.url)
+      setAccessLinkCopied(true)
+      setTimeout(() => setAccessLinkCopied(false), 1500)
+    } catch {
+      /* clipboard may be unavailable */
     }
   }
 
@@ -507,6 +537,20 @@ function AdminPageDesktop() {
                         {updatingRoleId === user.id ? '...' : nextRole}
                       </button>
                     ))}
+                    {user.id !== actualUser.id && (
+                      <>
+                        <span className="h-5 w-px bg-slate-200 mx-1" aria-hidden />
+                        <button
+                          disabled={accessActionId === user.id}
+                          onClick={() => generatePasswordResetLink(user)}
+                          title="Generate a one-time sign-in link this user can use to reset their password"
+                          className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 border border-slate-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <KeyRound className="w-3 h-3" />
+                          Reset password
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
@@ -718,6 +762,40 @@ function AdminPageDesktop() {
           )}
         </div>
       </div>
+
+      {accessLink && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" onClick={() => setAccessLink(null)}>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-lg w-full p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0"><KeyRound className="w-4 h-4 text-indigo-600" /></div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>Password reset link</h3>
+                  <p className="text-xs text-slate-500 truncate">for {accessLink.user.name} ({accessLink.user.email})</p>
+                </div>
+              </div>
+              <button onClick={() => setAccessLink(null)} className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg p-1 transition" aria-label="Close">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-600 mb-3">
+              Share this link with the student. Clicking it signs them in once, without a password. From there they can set a new one in their account settings. Expires in {Math.round(accessLink.expiresInSeconds / 60)} minutes.
+            </p>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-3">
+              <code className="text-xs text-slate-700 break-all flex-1 font-mono">{accessLink.url}</code>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={copyAccessLink} className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition">
+                {accessLinkCopied ? <><Check className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy link</>}
+              </button>
+              <button onClick={() => setAccessLink(null)} className="h-8 px-4 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 transition">Done</button>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-3">
+              Anyone with this link can sign in as this user, so only share it over a trusted channel.
+            </p>
+          </div>
+        </div>
+      )}
     </RoleGuard>
   )
 }
