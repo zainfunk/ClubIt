@@ -150,6 +150,15 @@ function AttendContent() {
     setStatus('success')
   }
 
+  // TEMP (iPhone-Camera-only check-in): the in-app native scanner needs an iOS
+  // rebuild to work. Until then, advisors' QR codes are scanned with the iOS
+  // Camera app, which opens this page directly. Show a simple success screen
+  // for any scanned check-in link. The real eligibility + recording flow above
+  // (and the invalid-link guard below) returns when we delete this block.
+  if (token) {
+    return <CheckedInScreen />
+  }
+
   if (!token || !session) {
     return (
       <div className="text-center py-20">
@@ -410,6 +419,51 @@ function AttendContent() {
         <div className="mt-4">
           <Link href="/" className="text-xs text-blue-600 hover:underline">Back to home</Link>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * TEMP success screen shown when a check-in QR is opened from the iPhone Camera
+ * app. Pure visual confirmation — no eligibility checks or attendance
+ * recording. Delete this (and its use in AttendContent) once the native in-app
+ * scanner ships and the full flow is back in play.
+ */
+function CheckedInScreen() {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-emerald-500 to-emerald-700 px-6">
+      <div className="text-center">
+        <motion.div
+          initial={{ scale: 0, rotate: -45 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: 'spring', stiffness: 240, damping: 14, delay: 0.05 }}
+          className="mx-auto mb-6 inline-flex h-32 w-32 items-center justify-center rounded-full bg-white shadow-2xl"
+        >
+          <CheckCircle className="w-20 h-20 text-emerald-500" strokeWidth={2.5} />
+        </motion.div>
+        <motion.h1
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="text-3xl font-extrabold text-white tracking-tight"
+          style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}
+        >
+          Successfully checked in
+        </motion.h1>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45 }}
+          className="mt-8"
+        >
+          <Link
+            href="/"
+            className="inline-block bg-white text-emerald-700 font-bold text-sm rounded-full px-6 py-3 shadow-lg active:translate-y-px"
+          >
+            Done
+          </Link>
+        </motion.div>
       </div>
     </div>
   )
