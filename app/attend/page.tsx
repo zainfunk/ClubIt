@@ -1,12 +1,9 @@
 'use client'
 
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
-import { getSessionById, haversineMeters, markSessionCheckin, upsertRecord } from '@/lib/attendance-store'
-import { computeMeetingDuration } from '@/lib/rewards/hours'
-import { supabase } from '@/lib/supabase'
 import Avatar from '@/components/Avatar'
 import { AlertTriangle, CheckCircle, Clock, MapPin, XCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -14,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { haptic } from '@/lib/haptics'
 
 type Status =
+  | 'loading'
   | 'idle'
   | 'checking'
   | 'success'
@@ -24,134 +22,133 @@ type Status =
   | 'location-error'
   | 'forbidden'
 
+interface AttendData {
+  session: {
+    id: string
+    clubId: string
+    meetingDate: string
+    expiresAt: string
+    maxDistanceMeters: number
+    requiresLocation: boolean
+  }
+  club: { id: string; name: string; iconUrl: string | null } | null
+  canCheckIn: boolean
+  alreadyRecorded: boolean
+}
+
 function AttendContent() {
   const { currentUser } = useMockAuth()
   const searchParams = useSearchParams()
   const token = searchParams.get('t') ?? ''
 
-  const [status, setStatus] = useState<Status>('idle')
+  const [status, setStatus] = useState<Status>('loading')
+  const [data, setData] = useState<AttendData | null>(null)
+  const [notFound, setNotFound] = useState(false)
   const [distanceM, setDistanceM] = useState<number | null>(null)
-  const [session, setSession] = useState<Awaited<ReturnType<typeof getSessionById>> | null | undefined>(undefined)
-  const [club, setClub] = useState<{ id: string; name: string; icon_url?: string | null; school_id?: string | null; advisor_id?: string | null } | null>(null)
-  const [canCheckIn, setCanCheckIn] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const autoFiredRef = useRef(false)
 
+  // Load the session + eligibility from the server (service-role; not blocked by
+  // RLS the way the old client read was — that's what showed "Invalid Link").
   useEffect(() => {
-    getSessionById(token).then(setSession)
-  }, [token])
-
-  useEffect(() => {
-    if (!session || !currentUser.id || !currentUser.schoolId) return
-
+    if (!token) {
+      setNotFound(true)
+      return
+    }
     let cancelled = false
-
-    Promise.all([
-      supabase
-        .from('clubs')
-        .select('id, name, icon_url, school_id, advisor_id')
-        .eq('id', session.clubId)
-        .maybeSingle(),
-      supabase
-        .from('memberships')
-        .select('user_id')
-        .eq('club_id', session.clubId)
-        .eq('user_id', currentUser.id)
-        .maybeSingle(),
-    ]).then(([clubRes, membershipRes]) => {
-      if (cancelled) return
-
-      setClub(clubRes.data ?? null)
-
-      const sameSchool = clubRes.data?.school_id === currentUser.schoolId
-      const isAdvisor = clubRes.data?.advisor_id === currentUser.id
-      const isMember = Boolean(membershipRes.data)
-      const isAdmin = currentUser.role === 'admin'
-
-      setCanCheckIn(Boolean(sameSchool && (isAdmin || isAdvisor || isMember)))
-    })
-
+    fetch(`/api/attend/${token}`, { cache: 'no-store' })
+      .then(async (res) => {
+        if (cancelled) return
+        if (res.status === 404) {
+          setNotFound(true)
+          return
+        }
+        if (!res.ok) {
+          setSubmitError('Could not load this attendance link. Please try again.')
+          setStatus('idle')
+          return
+        }
+        const json = (await res.json()) as AttendData
+        if (cancelled) return
+        setData(json)
+        setStatus(json.alreadyRecorded ? 'already' : 'idle')
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSubmitError('Could not load this attendance link. Please try again.')
+          setStatus('idle')
+        }
+      })
     return () => {
       cancelled = true
     }
-  }, [currentUser.id, currentUser.role, currentUser.schoolId, session])
+  }, [token])
 
-  // Auto-fire check-in as soon as the student is eligible. The page is reached
-  // by scanning the advisor's QR — with the iPhone Camera (opens /attend
-  // directly) or the in-app scanner — so there's no reason to wait for a tap.
-  // Full gating still runs inside checkIn() (membership, same school, distance,
-  // duplicates). Guarded so it only fires once per mount.
-  useEffect(() => {
-    if (autoFiredRef.current) return
-    if (!session || !canCheckIn) return
-    if (status !== 'idle') return
-    autoFiredRef.current = true
-    void checkIn()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, canCheckIn, status])
-
-  async function checkIn() {
-    if (!session) {
-      setStatus('no-session')
-      return
-    }
-
-    if (!canCheckIn) {
+  const checkIn = useCallback(async () => {
+    if (!data) return
+    if (!data.canCheckIn) {
       setStatus('forbidden')
       return
     }
-
-    if (new Date() > new Date(session.expiresAt)) {
+    if (new Date() > new Date(data.session.expiresAt)) {
       setStatus('expired')
       return
     }
-
-    if (session.recordedUserIds.includes(currentUser.id)) {
+    if (data.alreadyRecorded) {
       setStatus('already')
       return
     }
 
+    setSubmitError(null)
     setStatus('checking')
 
-    if (session.maxDistanceMeters > 0 && session.advisorLat !== undefined && session.advisorLng !== undefined) {
+    let coords: { lat: number; lng: number } | null = null
+    if (data.session.requiresLocation) {
       try {
         const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 })
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 }),
         )
-        const dist = haversineMeters(
-          session.advisorLat,
-          session.advisorLng,
-          pos.coords.latitude,
-          pos.coords.longitude
-        )
-        setDistanceM(Math.round(dist))
-        if (dist > session.maxDistanceMeters) {
-          setStatus('distance')
-          return
-        }
+        coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
       } catch {
         setStatus('location-error')
         return
       }
     }
 
-    const durationMinutes = await computeMeetingDuration(session.clubId, session.meetingDate)
-    await upsertRecord(session.clubId, currentUser.id, session.meetingDate, true, durationMinutes)
-    await markSessionCheckin(token, currentUser.id)
-    // Award XP and re-evaluate badges (best-effort; UI proceeds either way).
     try {
-      await fetch('/api/rewards/check-in', {
+      const res = await fetch(`/api/attend/${token}/check-in`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clubId: session.clubId, durationMinutes }),
+        body: JSON.stringify(coords ?? {}),
       })
-    } catch (err) {
-      console.error('reward award failed', err)
+      const json = (await res.json().catch(() => null)) as { status?: Status; distanceM?: number } | null
+      if (!json?.status) {
+        setSubmitError('Something went wrong. Please try again.')
+        setStatus('idle')
+        return
+      }
+      if (typeof json.distanceM === 'number') setDistanceM(json.distanceM)
+      setStatus(json.status)
+      if (json.status === 'success') void haptic('success')
+    } catch {
+      setSubmitError('Network error. Please try again.')
+      setStatus('idle')
     }
-    void haptic('success')
-    setStatus('success')
-  }
+  }, [data, token])
 
-  if (!token || !session) {
+  // Auto-fire check-in as soon as the student is eligible. The page is reached by
+  // scanning the advisor's QR, so there's no reason to wait for a tap. Full gating
+  // still runs server-side. Guarded so it only fires once per mount.
+  useEffect(() => {
+    if (autoFiredRef.current) return
+    if (!data || !data.canCheckIn || data.alreadyRecorded) return
+    if (status !== 'idle') return
+    autoFiredRef.current = true
+    void checkIn()
+  }, [data, status, checkIn])
+
+  // Missing/invalid token, or the server couldn't find the session.
+  if (!token || notFound) {
     return (
       <div className="text-center py-20">
         <XCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
@@ -162,6 +159,11 @@ function AttendContent() {
     )
   }
 
+  if (status === 'loading' || !data) {
+    return <div className="text-center py-20 text-gray-400">Loading…</div>
+  }
+
+  const { session, club } = data
   const expiresAt = new Date(session.expiresAt)
   const isExpired = new Date() > expiresAt
 
@@ -169,7 +171,7 @@ function AttendContent() {
     <div className="max-w-sm mx-auto py-12">
       <div className="bg-white rounded-2xl border p-8 text-center shadow-sm">
         <div className="mb-6">
-          <span className="text-5xl">{club?.icon_url ?? '📌'}</span>
+          <span className="text-5xl">{club?.iconUrl ?? '📌'}</span>
           <h1 className="text-xl font-bold text-gray-900 mt-3">{club?.name ?? 'Club'}</h1>
           <p className="text-sm text-gray-500 mt-1">Attendance check-in</p>
           <div className="flex items-center justify-center gap-4 mt-3 text-xs text-gray-400">
@@ -258,7 +260,7 @@ function AttendContent() {
                   transition={{ delay: 0.4 }}
                   className="mt-2 text-base text-white/90 font-medium"
                 >
-                  {club?.name ?? 'Club'} . {session.meetingDate}
+                  {club?.name ?? 'Club'} · {session.meetingDate}
                 </motion.p>
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -288,9 +290,7 @@ function AttendContent() {
           </div>
         )}
 
-        {/* Full-screen overlay when a student re-scans after already checking in.
-            Enforces the "once per student" rule visibly — the backing data check
-            lives in lib/attendance-store.ts (recordedUserIds includes guard). */}
+        {/* Full-screen overlay when a student re-scans after already checking in. */}
         <AnimatePresence>
           {status === 'already' && (
             <motion.div
@@ -392,6 +392,10 @@ function AttendContent() {
           </div>
         )}
 
+        {submitError && (
+          <p className="mb-4 text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">{submitError}</p>
+        )}
+
         {!isExpired && status !== 'success' && status !== 'already' && (
           <p className="text-xs text-gray-400 mb-4">
             Expires at {expiresAt.toLocaleTimeString()}
@@ -399,12 +403,8 @@ function AttendContent() {
         )}
 
         {status !== 'success' && status !== 'already' && !isExpired && (
-          <Button
-            className="w-full"
-            onClick={checkIn}
-            disabled={status === 'checking'}
-          >
-            {status === 'checking' ? 'Checking location...' : 'Mark me present'}
+          <Button className="w-full" onClick={checkIn} disabled={status === 'checking'}>
+            {status === 'checking' ? 'Checking…' : 'Mark me present'}
           </Button>
         )}
 

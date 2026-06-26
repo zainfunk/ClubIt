@@ -7,9 +7,7 @@ import { use, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
-import {
-  saveSession, upsertRecord,
-} from '@/lib/attendance-store'
+import { upsertRecord } from '@/lib/attendance-store'
 import { computeMeetingDuration } from '@/lib/rewards/hours'
 import { Input } from '@/components/ui/input'
 import {
@@ -29,13 +27,6 @@ import QRCode from 'react-qr-code'
 import { toast } from 'sonner'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-/** CSPRNG-backed short ID. Replaces Math.random per finding C-7. */
-function csprngHex8(): string {
-  const buf = new Uint8Array(4)
-  globalThis.crypto.getRandomValues(buf)
-  return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('')
-}
 
 function SocialIcon({ platform }: { platform: SocialPlatform }) {
   const cls = 'w-4 h-4'
@@ -614,20 +605,40 @@ function ClubDetailDesktop({ params }: PageProps) {
         lng = pos.coords.longitude
       } catch { /* location unavailable — skip */ }
     }
-    const session: AttendanceSession = {
-      id: `sess-${Date.now()}-${csprngHex8()}`,
-      clubId: id,
-      meetingDate: qrDate,
-      createdBy: currentUser.id,
-      expiresAt: new Date(Date.now() + qrExpiry * 60_000).toISOString(),
-      maxDistanceMeters: qrDistance,
-      advisorLat: lat,
-      advisorLng: lng,
-      recordedUserIds: [],
+    try {
+      const res = await fetch('/api/attend/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clubId: id,
+          meetingDate: qrDate,
+          expiryMinutes: qrExpiry,
+          maxDistanceMeters: qrDistance,
+          advisorLat: lat,
+          advisorLng: lng,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.id) {
+        toast.error(json?.error ?? 'Failed to start attendance. Please try again.')
+        return
+      }
+      const session: AttendanceSession = {
+        id: json.id,
+        clubId: json.clubId,
+        meetingDate: json.meetingDate,
+        createdBy: json.createdBy,
+        expiresAt: json.expiresAt,
+        maxDistanceMeters: json.maxDistanceMeters,
+        advisorLat: json.advisorLat,
+        advisorLng: json.advisorLng,
+        recordedUserIds: json.recordedUserIds ?? [],
+      }
+      setActiveSession(session)
+      setShowQrForm(false)
+    } catch {
+      toast.error('Failed to start attendance. Please try again.')
     }
-    await saveSession(session)
-    setActiveSession(session)
-    setShowQrForm(false)
   }
 
   function getAttendUrl(session: AttendanceSession): string {
