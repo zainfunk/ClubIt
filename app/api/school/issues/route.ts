@@ -31,7 +31,7 @@ export async function GET() {
 
   const { data } = await ctx.db
     .from('issue_reports')
-    .select('id, message, reporter_name, status, created_at')
+    .select('id, message, reporter_name, reporter_email, status, created_at')
     .eq('school_id', ctx.schoolId)
     .eq('status', 'open')
     .order('created_at', { ascending: false })

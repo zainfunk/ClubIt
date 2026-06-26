@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabase'
 import { setName, setEmail } from '@/lib/user-store'
 import { getProfile, setProfile, SOCIAL_PLATFORMS, PersonalSocialLink } from '@/lib/profile-store'
 import { getAdminSettings } from '@/lib/settings-store'
-import { getRecordsByClub } from '@/lib/attendance-store'
+import { apiUserAttendance } from '@/lib/school-api'
 import { AttendanceRecord, Club, User } from '@/types'
 import Avatar from '@/components/Avatar'
 import { Input } from '@/components/ui/input'
@@ -189,10 +189,14 @@ function ProfileDesktop() {
 
   const [supabaseAttendance, setSupabaseAttendance] = useState<AttendanceRecord[]>([])
   useEffect(() => {
-    Promise.all(memberClubs.map((c) => getRecordsByClub(c.id))).then((results) => {
-      setSupabaseAttendance(results.flat().filter((r) => r.userId === profileUser.id))
-    })
-  }, [profileUser.id, memberClubs])
+    if (!profileUser.id) return
+    let cancelled = false
+    // Service-role route so attendance/streaks don't silently empty out under RLS.
+    apiUserAttendance(profileUser.id)
+      .then((records) => { if (!cancelled) setSupabaseAttendance(records) })
+      .catch(() => { if (!cancelled) setSupabaseAttendance([]) })
+    return () => { cancelled = true }
+  }, [profileUser.id])
 
   function getClubAttendance(clubId: string): AttendanceRecord[] {
     return supabaseAttendance

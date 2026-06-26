@@ -7,7 +7,7 @@ import { useIsMobilePhone } from '@/components/mobile/useIsAdminPhone'
 import AdminHome from '@/components/mobile/screens/AdminHome'
 import StudentHome from '@/components/mobile/screens/StudentHome'
 import AdvisorHome from '@/components/mobile/screens/AdvisorHome'
-import { supabase } from '@/lib/supabase'
+import { apiResolveIssue } from '@/lib/school-api'
 import { Users, BookOpen, Pin, Calendar, MessageSquare, CheckCircle, Clock, AlertCircle, ChevronDown, ChevronUp, ArrowRight, Plus, X } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { FadeIn, Stagger } from '@/components/ui/FadeIn'
@@ -84,8 +84,11 @@ function DesktopDashboard() {
   }, [currentUser.id, currentUser.role])
 
   async function resolveIssue(id: string) {
-    const { error } = await supabase.from('issue_reports').update({ status: 'resolved' }).eq('id', id)
-    if (error) { toast.error('Failed to resolve issue'); return }
+    try {
+      await apiResolveIssue(id)
+    } catch {
+      toast.error('Failed to resolve issue'); return
+    }
     setIssueReports((prev) => prev.map((r) => r.id === id ? { ...r, status: 'resolved' } : r))
     invalidateCachePrefix('/api/school/dashboard')
     toast.success('Issue resolved')

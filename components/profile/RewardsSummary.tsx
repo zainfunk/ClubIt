@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { computeUserTotalHours, formatHours, MemberHours } from '@/lib/rewards/hours'
 import { computeStreak, StreakInfo } from '@/lib/rewards/streaks'
-import { getRecordsByClub } from '@/lib/attendance-store'
+import { apiUserAttendance } from '@/lib/school-api'
 import { getAdminSettings } from '@/lib/settings-store'
 import { Clock, Flame } from 'lucide-react'
 
@@ -12,7 +12,7 @@ interface Props {
   clubIds: string[]
 }
 
-export default function RewardsSummary({ userId, clubIds }: Props) {
+export default function RewardsSummary({ userId }: Props) {
   const [hours, setHours] = useState<MemberHours>({ autoMinutes: 0, adjustmentMinutes: 0, totalMinutes: 0 })
   const [streak, setStreak] = useState<StreakInfo>({ current: 0, longest: 0 })
   const [loading, setLoading] = useState(true)
@@ -21,11 +21,11 @@ export default function RewardsSummary({ userId, clubIds }: Props) {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    // Total hours + attendance records both via service-role routes so they
+    // don't silently return 0 under RLS on the iOS shell.
     Promise.all([
       computeUserTotalHours(userId),
-      Promise.all(clubIds.map((id) => getRecordsByClub(id))).then((r) =>
-        r.flat().filter((rec) => rec.userId === userId),
-      ),
+      apiUserAttendance(userId).catch(() => []),
     ]).then(([h, records]) => {
       if (cancelled) return
       setHours(h)
@@ -33,7 +33,7 @@ export default function RewardsSummary({ userId, clubIds }: Props) {
       setLoading(false)
     })
     return () => { cancelled = true }
-  }, [userId, clubIds])
+  }, [userId])
 
   if (!settings.hoursTrackingEnabled && !settings.streaksEnabled) {
     return null

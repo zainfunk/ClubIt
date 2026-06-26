@@ -14,7 +14,7 @@ import {
 } from '@/lib/settings-store'
 import { useAppSettings } from '@/components/SettingsProvider'
 import DeleteAccountSection from '@/components/settings/DeleteAccountSection'
-import { supabase } from '@/lib/supabase'
+import { apiSubmitIssue } from '@/lib/school-api'
 import {
   Moon, Sun, Shield, Eye, EyeOff, Users, Trophy,
   Calendar, Share2, AlertCircle, ChevronRight, Lock, CheckCircle,
@@ -143,22 +143,24 @@ function SettingsDesktop() {
   const [issueText, setIssueText] = useState('')
   const [issueSubmitted, setIssueSubmitted] = useState(false)
   const [issueSubmitting, setIssueSubmitting] = useState(false)
+  const [issueError, setIssueError] = useState<string | null>(null)
 
   async function submitIssue() {
     if (!issueText.trim()) return
     setIssueSubmitting(true)
-    await supabase.from('issue_reports').insert({
-      school_id: currentUser.schoolId ?? null,
-      reporter_id: currentUser.id,
-      reporter_name: currentUser.name,
-      reporter_email: currentUser.email,
-      message: issueText.trim(),
-      status: 'open',
-    })
-    setIssueText('')
-    setIssueSubmitted(true)
-    setIssueSubmitting(false)
-    setTimeout(() => setIssueSubmitted(false), 3000)
+    setIssueError(null)
+    try {
+      // Service-role route so the report actually persists (the old direct
+      // client insert could silently fail under RLS and still show "submitted").
+      await apiSubmitIssue(issueText.trim())
+      setIssueText('')
+      setIssueSubmitted(true)
+      setTimeout(() => setIssueSubmitted(false), 3000)
+    } catch {
+      setIssueError('Could not submit your report. Please try again.')
+    } finally {
+      setIssueSubmitting(false)
+    }
   }
 
   if (!loaded) return null
@@ -381,6 +383,9 @@ function SettingsDesktop() {
                 {issueSubmitting ? 'Sending…' : 'Send Report'}
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
+              {issueError && (
+                <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5">{issueError}</p>
+              )}
             </>
           )}
         </div>

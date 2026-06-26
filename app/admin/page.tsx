@@ -4,7 +4,7 @@ import { useIsAdminPhone } from '@/components/mobile/useIsAdminPhone'
 import AdminPanel from '@/components/mobile/screens/AdminPanel'
 import { useState, useEffect } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
-import { supabase } from '@/lib/supabase'
+import { apiSchoolUsers, apiSchoolIssues, apiResolveIssue } from '@/lib/school-api'
 import { Club, SchoolElection, User, Role } from '@/types'
 import RoleGuard from '@/components/layout/RoleGuard'
 import ClubForm from '@/components/admin/ClubForm'
@@ -58,32 +58,39 @@ function AdminPageDesktop() {
 
   useEffect(() => {
     if (!actualUser.schoolId) return
-    // Load users and their club memberships for this school
-    supabase.from('users').select('id, name, email, role').eq('school_id', actualUser.schoolId).then(async ({ data }) => {
-      if (!data?.length) return
-      const users = data.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role as Role }))
-      setAllUsers(users)
-
-      const userIds = users.map((u) => u.id)
-      const { data: memData } = await supabase.from('memberships').select('user_id, club_id').in('user_id', userIds)
-      if (memData) {
-        const map: Record<string, string[]> = {}
-        for (const m of memData) {
-          if (!map[m.user_id]) map[m.user_id] = []
-          map[m.user_id].push(m.club_id)
-        }
-        setMembershipsByUser(map)
-      }
-    })
-    // Load issue reports for this school
-    supabase.from('issue_reports').select('*').eq('school_id', actualUser.schoolId).order('created_at', { ascending: false }).then(({ data }) => {
-      if (data) setIssueReports(data)
-    })
+    let cancelled = false
+    // Roster + issues via service-role routes so they don't silently come back
+    // empty under RLS (which showed "no users have joined" and blocked creating
+    // elections because there were no candidates).
+    apiSchoolUsers()
+      .then((users) => { if (!cancelled) setAllUsers(users) })
+      .catch(() => { if (!cancelled) setAllUsers([]) })
+    apiSchoolIssues()
+      .then((issues) => { if (!cancelled) setIssueReports(issues) })
+      .catch(() => { if (!cancelled) setIssueReports([]) })
+    return () => { cancelled = true }
   }, [actualUser.schoolId])
 
+  // Build per-user club memberships from the already-loaded clubs (each carries
+  // its memberIds), instead of a separate RLS-fragile memberships read.
+  useEffect(() => {
+    const map: Record<string, string[]> = {}
+    for (const club of clubs) {
+      for (const uid of club.memberIds ?? []) {
+        if (!map[uid]) map[uid] = []
+        map[uid].push(club.id)
+      }
+    }
+    setMembershipsByUser(map)
+  }, [clubs])
+
   async function resolveIssue(id: string) {
-    await supabase.from('issue_reports').update({ status: 'resolved' }).eq('id', id)
-    setIssueReports((prev) => prev.map((r) => r.id === id ? { ...r, status: 'resolved' } : r))
+    try {
+      await apiResolveIssue(id)
+      setIssueReports((prev) => prev.map((r) => r.id === id ? { ...r, status: 'resolved' } : r))
+    } catch {
+      setRoleError('Could not resolve the issue. Please try again.')
+    }
   }
 
   useEffect(() => {

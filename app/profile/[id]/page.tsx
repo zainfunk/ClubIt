@@ -14,7 +14,7 @@ import {
 import {
   getAdminSettings, canViewAchievements, canViewAttendance, canViewClubs,
 } from '@/lib/settings-store'
-import { getRecordsByClub } from '@/lib/attendance-store'
+import { apiUserAttendance } from '@/lib/school-api'
 import { AttendanceRecord, Club, User, Role } from '@/types'
 import Avatar from '@/components/Avatar'
 import { Input } from '@/components/ui/input'
@@ -169,10 +169,15 @@ export default function ViewProfilePage({ params }: PageProps) {
 
   const [supabaseAttendance, setSupabaseAttendance] = useState<AttendanceRecord[]>([])
   useEffect(() => {
-    Promise.all(memberClubs.map((c) => getRecordsByClub(c.id))).then((results) => {
-      setSupabaseAttendance(results.flat().filter((r) => r.userId === profileUser.id))
-    })
-  }, [profileUser.id, memberClubs])
+    if (!profileUser.id) return
+    let cancelled = false
+    // Service-role route (privacy-gated) so attendance doesn't silently empty
+    // out under RLS; returns [] when the viewer isn't allowed to see it.
+    apiUserAttendance(profileUser.id)
+      .then((records) => { if (!cancelled) setSupabaseAttendance(records) })
+      .catch(() => { if (!cancelled) setSupabaseAttendance([]) })
+    return () => { cancelled = true }
+  }, [profileUser.id])
 
   function getClubAttendance(clubId: string): AttendanceRecord[] {
     return supabaseAttendance

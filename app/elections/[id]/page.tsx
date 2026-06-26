@@ -65,6 +65,7 @@ export default function FormDetailPage({ params }: { params: Promise<{ id: strin
   const [pendingCandidate, setPendingCandidate] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [responseCount, setResponseCount] = useState(0)
+  const [voteError, setVoteError] = useState<string | null>(null)
 
   const loadItem = useCallback(async () => {
     if (!currentUser.schoolId) {
@@ -173,10 +174,17 @@ export default function FormDetailPage({ params }: { params: Promise<{ id: strin
   async function confirmVote() {
     if (!votingItem || !pendingCandidate) return
 
-    if (kind === 'election') {
-      await castVote(votingItem.id, pendingCandidate, currentUser.id)
-    } else {
-      await castPollVote(votingItem.id, pendingCandidate, currentUser.id)
+    setVoteError(null)
+    try {
+      if (kind === 'election') {
+        await castVote(votingItem.id, pendingCandidate, currentUser.id)
+      } else {
+        await castPollVote(votingItem.id, pendingCandidate, currentUser.id)
+      }
+    } catch (err) {
+      void haptic('error')
+      setVoteError(err instanceof Error ? err.message : 'Could not record your vote. Please try again.')
+      return
     }
 
     void haptic('success')
@@ -203,6 +211,10 @@ export default function FormDetailPage({ params }: { params: Promise<{ id: strin
         <ChevronLeft className="w-4 h-4" />
         Forms & Elections
       </Link>
+
+      {voteError && (
+        <p className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">{voteError}</p>
+      )}
 
       <div
         className="rounded-2xl overflow-hidden"

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClubAttendance } from '@/lib/school-api'
 import { formatHours, DEFAULT_MEETING_MINUTES } from '@/lib/rewards/hours'
 import { getAdminSettings } from '@/lib/settings-store'
 import { Clock, Pencil, Check, X, Loader2 } from 'lucide-react'
@@ -39,46 +39,39 @@ export default function MemberHoursTable({ clubId, members }: Props) {
     }
     let cancelled = false
     setLoading(true)
-    Promise.all([
-      supabase
-        .from('attendance_records')
-        .select('user_id, duration_minutes, present')
-        .eq('club_id', clubId)
-        .in('user_id', memberIds),
-      supabase
-        .from('memberships')
-        .select('user_id, hours_adjustment_minutes')
-        .eq('club_id', clubId)
-        .in('user_id', memberIds),
-    ]).then(([attRes, memRes]) => {
-      if (cancelled) return
-      const adjustmentByUser = new Map<string, number>()
-      for (const m of memRes.data ?? []) {
-        adjustmentByUser.set(m.user_id as string, (m.hours_adjustment_minutes as number | null) ?? 0)
-      }
-      const autoByUser = new Map<string, { mins: number; meetings: number }>()
-      for (const r of attRes.data ?? []) {
-        if (!r.present) continue
-        const cur = autoByUser.get(r.user_id as string) ?? { mins: 0, meetings: 0 }
-        cur.mins += (r.duration_minutes as number | null) ?? DEFAULT_MEETING_MINUTES
-        cur.meetings += 1
-        autoByUser.set(r.user_id as string, cur)
-      }
-      const newRows: MemberRow[] = members.map((m) => {
-        const auto = autoByUser.get(m.id) ?? { mins: 0, meetings: 0 }
-        const adj = adjustmentByUser.get(m.id) ?? 0
-        return {
-          userId: m.id,
-          name: m.name,
-          autoMinutes: auto.mins,
-          adjustmentMinutes: adj,
-          totalMinutes: Math.max(0, auto.mins + adj),
-          attendedMeetings: auto.meetings,
+    // Service-role route so the per-member hours don't silently come back empty
+    // under RLS / the iOS-shell JWT bridge.
+    apiClubAttendance(clubId)
+      .then(({ records, adjustments }) => {
+        if (cancelled) return
+        const autoByUser = new Map<string, { mins: number; meetings: number }>()
+        for (const r of records) {
+          if (!r.present) continue
+          const cur = autoByUser.get(r.userId) ?? { mins: 0, meetings: 0 }
+          cur.mins += r.durationMinutes ?? DEFAULT_MEETING_MINUTES
+          cur.meetings += 1
+          autoByUser.set(r.userId, cur)
         }
-      }).sort((a, b) => b.totalMinutes - a.totalMinutes)
-      setRows(newRows)
-      setLoading(false)
-    })
+        const newRows: MemberRow[] = members.map((m) => {
+          const auto = autoByUser.get(m.id) ?? { mins: 0, meetings: 0 }
+          const adj = adjustments[m.id] ?? 0
+          return {
+            userId: m.id,
+            name: m.name,
+            autoMinutes: auto.mins,
+            adjustmentMinutes: adj,
+            totalMinutes: Math.max(0, auto.mins + adj),
+            attendedMeetings: auto.meetings,
+          }
+        }).sort((a, b) => b.totalMinutes - a.totalMinutes)
+        setRows(newRows)
+        setLoading(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setRows([])
+        setLoading(false)
+      })
     return () => { cancelled = true }
   }, [clubId, memberIds, members])
 

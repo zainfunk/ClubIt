@@ -65,12 +65,20 @@ export async function hasPollVoted(pollId: string, voterId: string): Promise<boo
 }
 
 export async function castPollVote(
-  pollId: string, candidateUserId: string, voterId: string
+  pollId: string, candidateUserId: string, _voterId?: string
 ): Promise<void> {
-  if (await hasPollVoted(pollId, voterId)) return
-  await supabase.from('poll_votes').insert({
-    poll_id: pollId,
-    candidate_user_id: candidateUserId,
-    voter_user_id: voterId,
+  // Routed through the service-role server endpoint (not a direct client
+  // insert) so the vote persists on the iOS shell, where the Clerk->Supabase
+  // JWT bridge is unreliable and the poll_votes RLS insert would silently fail.
+  // The server validates open/same-school and enforces one vote per voter,
+  // derived from the session. Mirrors castVote for school elections.
+  const res = await fetch(`/api/school/polls/${pollId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ candidateUserId }),
   })
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(data.error ?? `Vote failed (${res.status})`)
+  }
 }

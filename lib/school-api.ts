@@ -79,6 +79,7 @@ export interface SchoolIssue {
   id: string
   message: string
   reporter_name: string
+  reporter_email: string
   status: string
   created_at: string
 }
@@ -96,6 +97,46 @@ export async function apiResolveIssue(id: string): Promise<void> {
     body: JSON.stringify({ id }),
   })
   if (!res.ok) throw new Error(`resolve issue → ${res.status}`)
+}
+
+/** Submit an issue report (routed to the school's admins/advisors). */
+export async function apiSubmitIssue(message: string): Promise<void> {
+  const res = await fetch('/api/school/issues', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error((data as { error?: string }).error ?? `submit issue → ${res.status}`)
+  }
+}
+
+/** Cast a vote in a club poll (service-role; persists on the iOS shell). */
+export async function apiCastPollVote(pollId: string, candidateUserId: string): Promise<void> {
+  const res = await fetch(`/api/school/polls/${pollId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ candidateUserId }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error((data as { error?: string }).error ?? `Vote failed (${res.status})`)
+  }
+}
+
+/** Attendance records for one club, plus per-member hour adjustments (manager view). */
+export function apiClubAttendance(
+  clubId: string,
+): Promise<{ records: AttendanceRecord[]; adjustments: Record<string, number> }> {
+  return getJSON(`/api/school/attendance?clubId=${encodeURIComponent(clubId)}`)
+}
+
+/** Attendance records for one user across the caller's school (privacy-gated server-side). */
+export function apiUserAttendance(userId: string): Promise<AttendanceRecord[]> {
+  return getJSON<{ records: AttendanceRecord[] }>(
+    `/api/school/attendance?userId=${encodeURIComponent(userId)}`,
+  ).then((d) => d.records ?? [])
 }
 
 export interface ClubDetailPayload {
