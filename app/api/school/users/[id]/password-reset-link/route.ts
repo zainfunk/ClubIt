@@ -65,6 +65,18 @@ export async function POST(
     return NextResponse.json({ error: 'You can only manage users in your own school' }, { status: 403 })
   }
 
+  // A sign-in token logs the holder in AS the target with no password — i.e.
+  // full account takeover. Restrict it to students (its stated purpose: a
+  // student who lost their password). Without this, an admin could mint a link
+  // to sign in as another admin/advisor. Staff reset their own password via
+  // Clerk's normal flow.
+  if (target.role !== 'student') {
+    return NextResponse.json(
+      { error: 'Password reset links can only be issued for student accounts.' },
+      { status: 403 },
+    )
+  }
+
   let signInToken
   try {
     const client = await clerkClient()

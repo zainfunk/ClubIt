@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { sanitizeText } from '@/lib/sanitize'
 import { checkContent, censorProfanity } from '@/lib/content-filter'
+import { chatLimiter } from '@/lib/rate-limit'
 import { Role } from '@/types'
 import { randomUUID } from 'node:crypto'
 
@@ -88,6 +89,14 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const requester = await getRequester()
   if (!requester) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rl = await chatLimiter.check(`user:${requester.userId}`)
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: 'You are sending messages too quickly. Please slow down.', retryAfter: rl.retryAfter },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } },
+    )
+  }
 
   const body = await request.json()
   const clubId = typeof body.clubId === 'string' ? body.clubId.trim() : ''

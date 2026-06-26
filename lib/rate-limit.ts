@@ -163,6 +163,19 @@ export const profileLimiter = makeLimiter({ name: 'profile', max: 30, windowSeco
 // 60 per user per hour. Superadmin tools should be busy but bounded.
 export const superadminLimiter = makeLimiter({ name: 'superadmin', max: 60, windowSeconds: 3600 })
 
+// 20 messages per user per minute. Chat should feel instant, but a script
+// shouldn't be able to flood a club (spam to minors).
+export const chatLimiter = makeLimiter({ name: 'chat', max: 20, windowSeconds: 60 })
+
+// 10 (un)registrations per user per hour. Caps unbounded device_push_tokens
+// growth from a misbehaving / malicious client.
+export const pushLimiter = makeLimiter({ name: 'push', max: 10, windowSeconds: 3600 })
+
+// 30 self check-ins per user per hour. A real student checks in a handful of
+// times a day; this caps XP-inflation abuse. Only applied to the self-award
+// path — advisor roster marking (targetUserId) is not limited.
+export const checkinLimiter = makeLimiter({ name: 'checkin', max: 30, windowSeconds: 3600 })
+
 // ---------------------------------------------------------------------------
 // Backward-compat shim for the old `rateLimit(key)` function.
 // Existing callers in /api/join keep working until they're migrated.

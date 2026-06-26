@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { sanitizeText } from '@/lib/sanitize'
+import { audit } from '@/lib/audit'
 
 async function requireSuperAdmin() {
   const { userId } = await auth()
@@ -60,7 +61,7 @@ export async function PATCH(
 
 /** DELETE — permanently delete a school and all associated data */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const userId = await requireSuperAdmin()
@@ -69,25 +70,37 @@ export async function DELETE(
   const { id } = await params
   const db = createServiceClient()
 
-  // Get all users in this school to clean up their records
-  const { data: schoolUsers } = await db
-    .from('users')
-    .select('id')
-    .eq('school_id', id)
-
+  // Users in this school (kept — they're Clerk accounts — just unlinked).
+  const { data: schoolUsers } = await db.from('users').select('id').eq('school_id', id)
   const userIds = (schoolUsers ?? []).map((u) => u.id)
 
-  // Get all clubs belonging to this school's users (advisors)
-  const { data: clubs } = await db
-    .from('clubs')
-    .select('id')
-    .in('advisor_id', userIds.length > 0 ? userIds : ['__none__'])
-
+  // Clubs by school_id (not advisor_id — that missed clubs whose advisor row
+  // was already detached, leaving orphans and 500s on the final delete).
+  const { data: clubs } = await db.from('clubs').select('id').eq('school_id', id)
   const clubIds = (clubs ?? []).map((c) => c.id)
 
-  // Delete in dependency order
   if (clubIds.length > 0) {
+    // Grandchildren keyed by their own parent ids.
+    const [{ data: polls }, { data: forms }] = await Promise.all([
+      db.from('polls').select('id').in('club_id', clubIds),
+      db.from('club_forms').select('id').in('club_id', clubIds),
+    ])
+    const pollIds = (polls ?? []).map((p) => p.id)
+    const formIds = (forms ?? []).map((f) => f.id)
+
+    if (pollIds.length > 0) {
+      await db.from('poll_votes').delete().in('poll_id', pollIds)
+      await db.from('poll_candidates').delete().in('poll_id', pollIds)
+    }
+    if (formIds.length > 0) {
+      await db.from('form_responses').delete().in('form_id', formIds)
+    }
+
+    // Club-scoped children.
+    await db.from('chat_message_reports').delete().eq('school_id', id)
     await db.from('chat_messages').delete().in('club_id', clubIds)
+    await db.from('club_dues_payments').delete().in('club_id', clubIds)
+    await db.from('user_badges').delete().in('club_id', clubIds)
     await db.from('memberships').delete().in('club_id', clubIds)
     await db.from('join_requests').delete().in('club_id', clubIds)
     await db.from('events').delete().in('club_id', clubIds)
@@ -95,27 +108,51 @@ export async function DELETE(
     await db.from('attendance_records').delete().in('club_id', clubIds)
     await db.from('attendance_sessions').delete().in('club_id', clubIds)
     await db.from('polls').delete().in('club_id', clubIds)
+    await db.from('club_forms').delete().in('club_id', clubIds)
     await db.from('leadership_positions').delete().in('club_id', clubIds)
     await db.from('club_social_links').delete().in('club_id', clubIds)
     await db.from('meeting_times').delete().in('club_id', clubIds)
     await db.from('clubs').delete().in('id', clubIds)
   }
 
-  // Delete school-level data
+  // School elections + their children.
+  const { data: elections } = await db.from('school_elections').select('id').eq('school_id', id)
+  const electionIds = (elections ?? []).map((e) => e.id)
+  if (electionIds.length > 0) {
+    await db.from('election_votes').delete().in('election_id', electionIds)
+    await db.from('election_candidates').delete().in('election_id', electionIds)
+    await db.from('school_elections').delete().eq('school_id', id)
+  }
+
+  // Remaining school-level data.
   await db.from('issue_reports').delete().eq('school_id', id)
   await db.from('notifications').delete().eq('school_id', id)
+  await db.from('subscriptions').delete().eq('school_id', id)
+  await db.from('payment_events').delete().eq('school_id', id)
+  await db.from('school_invites').delete().eq('school_id', id)
+  await db.from('staff_access_requests').delete().eq('school_id', id)
+  await db.from('admin_settings').delete().eq('school_id', id)
 
-  // Unlink users from the school (don't delete the user records — they're Clerk accounts)
+  // Unlink users (keep the Clerk-backed user rows; reset role so it can't dangle).
   if (userIds.length > 0) {
     await db.from('users').update({ school_id: null, role: 'student' }).in('id', userIds)
   }
 
-  // Delete the school itself
   const { error } = await db.from('schools').delete().eq('id', id)
-
   if (error) {
+    console.error('school delete error', error)
     return NextResponse.json({ error: 'Failed to delete school' }, { status: 500 })
   }
+
+  await audit({
+    action: 'school.deleted',
+    targetTable: 'schools',
+    targetId: id,
+    after: { clubsDeleted: clubIds.length, usersUnlinked: userIds.length },
+    actorUserId: userId,
+    actorRole: 'superadmin',
+    request,
+  })
 
   return NextResponse.json({ success: true, deleted: id })
 }

@@ -12,6 +12,23 @@ export async function GET(request: NextRequest) {
   const userId = request.nextUrl.searchParams.get('userId') ?? caller
   const db = createServiceClient()
 
+  // IDOR + privacy gate: only the caller, same-school staff, or a target who
+  // made attendance public may read someone else's hours. Otherwise return
+  // zeros (not an error) so the profile UI degrades gracefully.
+  if (userId !== caller) {
+    const [{ data: targetUser }, { data: callerRow }, { data: privacy }] = await Promise.all([
+      db.from('users').select('school_id').eq('id', userId).maybeSingle(),
+      db.from('users').select('school_id, role').eq('id', caller).maybeSingle(),
+      db.from('user_privacy_settings').select('attendance_public').eq('user_id', userId).maybeSingle(),
+    ])
+    const sameSchool = !!targetUser?.school_id && targetUser.school_id === callerRow?.school_id
+    const isStaff =
+      callerRow?.role === 'admin' || callerRow?.role === 'superadmin' || callerRow?.role === 'advisor'
+    if (!sameSchool || !(isStaff || privacy?.attendance_public === true)) {
+      return NextResponse.json({ autoMinutes: 0, adjustmentMinutes: 0, totalMinutes: 0 })
+    }
+  }
+
   const [attRes, memRes] = await Promise.all([
     db.from('attendance_records').select('duration_minutes').eq('user_id', userId).eq('present', true),
     db.from('memberships').select('hours_adjustment_minutes').eq('user_id', userId),

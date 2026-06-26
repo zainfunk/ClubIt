@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
+import { pushLimiter } from '@/lib/rate-limit'
 
 // Node runtime: the sender (lib/push-send.ts) uses node:http2 + node:crypto.
 export const runtime = 'nodejs'
@@ -14,6 +15,14 @@ const PLATFORMS: Platform[] = ['ios', 'android', 'web']
 export async function POST(request: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rl = await pushLimiter.check(`user:${userId}`)
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: 'Too many requests', retryAfter: rl.retryAfter },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } },
+    )
+  }
 
   const body = (await request.json().catch(() => ({}))) as {
     token?: string
@@ -52,6 +61,14 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rl = await pushLimiter.check(`user:${userId}`)
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: 'Too many requests', retryAfter: rl.retryAfter },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } },
+    )
+  }
 
   const body = (await request.json().catch(() => ({}))) as { token?: string }
   const token = body.token?.trim()

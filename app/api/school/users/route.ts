@@ -18,7 +18,7 @@ export async function GET() {
 
   const { data: callerRow } = await db
     .from('users')
-    .select('school_id')
+    .select('school_id, role')
     .eq('id', userId)
     .maybeSingle()
 
@@ -26,6 +26,11 @@ export async function GET() {
   if (!schoolId) {
     return NextResponse.json({ users: [] })
   }
+
+  // Email is PII (these are minors). Only staff get classmates' emails; everyone
+  // else sees names only (and their own email).
+  const callerRole = callerRow?.role as Role | undefined
+  const canSeeEmails = callerRole === 'admin' || callerRole === 'advisor' || callerRole === 'superadmin'
 
   const [{ data: userRows }, { data: overrideRows }] = await Promise.all([
     db.from('users').select('id, name, email, role, school_id, avatar_url').eq('school_id', schoolId).order('name'),
@@ -39,10 +44,11 @@ export async function GET() {
 
   const users: User[] = (userRows ?? []).map((row) => {
     const o = overrides[row.id]
+    const showEmail = canSeeEmails || row.id === userId
     return {
       id: row.id,
       name: o?.name?.trim() || row.name,
-      email: o?.email?.trim() || row.email,
+      email: showEmail ? (o?.email?.trim() || row.email) : '',
       role: row.role as Role,
       avatarUrl: row.avatar_url ?? undefined,
       schoolId: row.school_id ?? undefined,
