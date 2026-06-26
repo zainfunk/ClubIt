@@ -8,6 +8,52 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { haptic } from '@/lib/haptics'
 
 /**
+ * Decode QR pixels with the strongest decoder available.
+ *
+ * zxing (TRY_HARDER) is markedly better than jsQR at the cases that defeat
+ * real-world captures — a QR that's small within the frame, rotated, off a
+ * glary screen, or slightly blurred — so it goes first. jsQR is a fast second
+ * pass. `hard` is the one-shot photo budget (zxing + jsQR); live frames skip
+ * zxing to stay at video frame rate.
+ *
+ * Returns the decoded string, or null if nothing was found.
+ */
+async function decodeQRPixels(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  hard: boolean,
+): Promise<string | null> {
+  if (hard) {
+    try {
+      const zx = await import('@zxing/library')
+      const lum = new Uint8ClampedArray(width * height)
+      for (let i = 0; i < width * height; i++) {
+        lum[i] = (data[i * 4] * 0.299 + data[i * 4 + 1] * 0.587 + data[i * 4 + 2] * 0.114) | 0
+      }
+      const source = new zx.RGBLuminanceSource(lum, width, height)
+      const bmp = new zx.BinaryBitmap(new zx.HybridBinarizer(source))
+      const hints = new Map()
+      hints.set(zx.DecodeHintType.TRY_HARDER, true)
+      hints.set(zx.DecodeHintType.POSSIBLE_FORMATS, [zx.BarcodeFormat.QR_CODE])
+      const res = new zx.QRCodeReader().decode(bmp, hints)
+      const text = res?.getText()
+      if (text) return text
+    } catch {
+      /* zxing throws NotFoundException when there's no code — fall through */
+    }
+  }
+  try {
+    const { default: jsQR } = await import('jsqr')
+    const res = jsQR(data, width, height, { inversionAttempts: 'attemptBoth' })
+    if (res?.data) return res.data
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+/**
  * "Scan to check in" button.
  *
  * Native (iOS/Android): tries @capacitor-mlkit/barcode-scanning for the in-app
@@ -431,7 +477,6 @@ function WebScannerModal({
   async function decodePhoto(file: File) {
     setPhotoMsg('Reading photo…')
     try {
-      const { default: jsQR } = await import('jsqr')
       const url = URL.createObjectURL(file)
       try {
         const imgEl = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -440,28 +485,54 @@ function WebScannerModal({
           im.onerror = reject
           im.src = url
         })
-        // Cap the longest side so a 12MP photo decodes fast but stays sharp.
-        const scale = Math.min(1, 2000 / Math.max(imgEl.naturalWidth, imgEl.naturalHeight))
-        const w = Math.max(1, Math.round(imgEl.naturalWidth * scale))
-        const h = Math.max(1, Math.round(imgEl.naturalHeight * scale))
+        const nw = imgEl.naturalWidth
+        const nh = imgEl.naturalHeight
         const canvas = document.createElement('canvas')
-        canvas.width = w
-        canvas.height = h
         const ctx = canvas.getContext('2d', { willReadFrequently: true })
-        if (!ctx) { setPhotoMsg('Could not read the photo. Try again.'); return }
-        ctx.drawImage(imgEl, 0, 0, w, h)
-        const img = ctx.getImageData(0, 0, w, h)
-        const result = jsQR(img.data, w, h, { inversionAttempts: 'attemptBoth' })
-        if (result?.data) {
-          setSawRaw(result.data.length > 40 ? result.data.slice(0, 40) + '…' : result.data)
-          const accepted = onScan(result.data)
+        if (!ctx || !nw || !nh) { setPhotoMsg('Could not read the photo. Try again.'); return }
+
+        // Render the source (or a region of it) at a target long-side and try
+        // to decode. Multiple passes cover the common real-world failures:
+        //  - whole photo at high res (QR fills the frame)
+        //  - centre crop, upscaled (QR is small / far away in the frame)
+        const tryRegion = async (
+          sx: number, sy: number, sw: number, sh: number, longSide: number,
+        ): Promise<string | null> => {
+          const scale = Math.min(1, longSide / Math.max(sw, sh))
+          const w = Math.max(1, Math.round(sw * scale))
+          const h = Math.max(1, Math.round(sh * scale))
+          canvas.width = w
+          canvas.height = h
+          ctx.drawImage(imgEl, sx, sy, sw, sh, 0, 0, w, h)
+          const img = ctx.getImageData(0, 0, w, h)
+          return decodeQRPixels(img.data, w, h, true)
+        }
+
+        const cropW = Math.round(nw * 0.6)
+        const cropH = Math.round(nh * 0.6)
+        const cropX = Math.round((nw - cropW) / 2)
+        const cropY = Math.round((nh - cropH) / 2)
+
+        let decoded: string | null = null
+        // Pass 1: whole image, generous resolution.
+        decoded = await tryRegion(0, 0, nw, nh, 2400)
+        // Pass 2: centre 60% upscaled — rescues a QR that's small in the frame.
+        if (!decoded) decoded = await tryRegion(cropX, cropY, cropW, cropH, 1600)
+
+        if (decoded) {
+          setSawRaw(decoded.length > 40 ? decoded.slice(0, 40) + '…' : decoded)
+          const accepted = onScan(decoded)
           if (!accepted) {
             setPhotoMsg('')
-            setInvalidPreview(result.data.length > 60 ? result.data.slice(0, 60) + '…' : result.data)
+            setInvalidPreview(decoded.length > 60 ? decoded.slice(0, 60) + '…' : decoded)
             setState('invalid')
           }
         } else {
-          setPhotoMsg("Couldn't find a QR in that photo. Fill the frame with the code and keep it flat.")
+          // Include the captured dimensions so a failure is diagnosable, and
+          // tell the user the single biggest fix: get closer.
+          setPhotoMsg(
+            `No QR found (photo ${nw}×${nh}). Get closer so the code fills most of the frame, hold steady, and avoid glare.`,
+          )
         }
       } finally {
         URL.revokeObjectURL(url)
