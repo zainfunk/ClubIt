@@ -4,9 +4,12 @@ import { createServiceClient } from '@/lib/supabase'
 import { sanitizeText } from '@/lib/sanitize'
 import { checkContent, censorProfanity } from '@/lib/content-filter'
 import { chatLimiter } from '@/lib/rate-limit'
+import { sendPushToUser, pushConfigured } from '@/lib/push-send'
 import { Role } from '@/types'
 import { randomUUID } from 'node:crypto'
 
+// node runtime: the push sender (lib/push-send.ts) uses node:http2 + node:crypto.
+export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 interface RequesterContext {
@@ -171,6 +174,28 @@ export async function POST(request: NextRequest) {
   if (error) {
     console.error('chat message insert error', error)
     return NextResponse.json({ error: 'Failed to send message' }, { status: 500 })
+  }
+
+  // Notify other members of the club (best-effort). Guarded by pushConfigured()
+  // so it's a complete no-op — not even a DB read — until APNs is set up.
+  if (pushConfigured()) {
+    try {
+      const { data: members } = await db
+        .from('memberships')
+        .select('user_id')
+        .eq('club_id', clubId)
+      const recipientIds = new Set((members ?? []).map((m) => m.user_id as string))
+      if (club.advisor_id) recipientIds.add(club.advisor_id as string)
+      recipientIds.delete(requester.userId)
+      const snippet = content.length > 120 ? content.slice(0, 117) + '…' : content
+      await Promise.all(
+        [...recipientIds].map((rid) =>
+          sendPushToUser(rid, { title: 'New message', body: snippet, path: `/chat/${clubId}` }),
+        ),
+      )
+    } catch (e) {
+      console.error('chat push notify failed', e)
+    }
   }
 
   return NextResponse.json({

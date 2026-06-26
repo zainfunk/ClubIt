@@ -6,5 +6,13 @@
 	<array>
 		<string>Default</string>
 	</array>
+	<!-- Push Notifications. "production" is correct for App Store / TestFlight
+	     archives (the only build path, via Codemagic app_store signing). Without
+	     this entitlement, PushNotifications.register() fails with a
+	     registrationError and no APNs token is ever produced. The App ID must
+	     also have the Push Notifications capability enabled in the Apple Developer
+	     portal and the provisioning profile must include it. -->
+	<key>aps-environment</key>
+	<string>production</string>
 </dict>
 </plist>

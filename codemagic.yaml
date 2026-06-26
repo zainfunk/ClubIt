@@ -12,8 +12,13 @@ workflows:
       xcode: 16
       node: 20
       vars:
-        # Set this in Codemagic dashboard -> Environment variables
-        APP_SERVER_URL: "https://clubit.vercel.app"
+        # MUST be the canonical production domain (NOT *.vercel.app): the native
+        # WebView origin has to match where Clerk + cookies live (clubit.app) or
+        # the session won't persist in the shell, and Apple 4.2 reads a
+        # *.vercel.app shell as "just the website". Keep in sync with
+        # allowNavigation in capacitor.config.ts. Override in the Codemagic
+        # dashboard only with another clubit.app host.
+        APP_SERVER_URL: "https://clubit.app"
     triggering:
       events:
         - push

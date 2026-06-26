@@ -26,11 +26,27 @@ export default function NativeBootstrap() {
 
     const cleanups: Array<() => void> = []
 
+    // Hide the native splash as the VERY FIRST thing once the web layer mounts,
+    // independent of the other plugin imports below — so a slow status-bar /
+    // keyboard import can't strand the user on the indigo splash (launchAutoHide
+    // is false in capacitor.config.ts). A timeout backstop force-hides it even
+    // if this import is itself slow.
+    let splashHidden = false
+    const hideSplash = () => {
+      if (splashHidden) return
+      splashHidden = true
+      import('@capacitor/splash-screen')
+        .then(({ SplashScreen }) => SplashScreen.hide().catch(() => {}))
+        .catch(() => {})
+    }
+    hideSplash()
+    const splashTimer = setTimeout(hideSplash, 4000)
+    cleanups.push(() => clearTimeout(splashTimer))
+
     ;(async () => {
-      const [{ StatusBar, Style }, { SplashScreen }, { Keyboard, KeyboardResize }, { App }] =
+      const [{ StatusBar, Style }, { Keyboard, KeyboardResize }, { App }] =
         await Promise.all([
           import('@capacitor/status-bar'),
-          import('@capacitor/splash-screen'),
           import('@capacitor/keyboard'),
           import('@capacitor/app'),
         ])
@@ -43,11 +59,6 @@ export default function NativeBootstrap() {
       // Keyboard pushes content up instead of overlaying it.
       try {
         await Keyboard.setResizeMode({ mode: KeyboardResize.Native })
-      } catch { /* not fatal */ }
-
-      // Web layer is mounted — hide the native splash.
-      try {
-        await SplashScreen.hide()
       } catch { /* not fatal */ }
 
       // Hardware/edge back gesture: navigate back within the app, or stay put
