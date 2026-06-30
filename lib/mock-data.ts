@@ -392,16 +392,16 @@ export function getNewsByClub(clubId: string): ClubNews[] {
 }
 
 export const CHAT_MESSAGES: ChatMessage[] = [
-  { id: 'msg-1', clubId: 'club-robotics', senderId: 'user-student-1', content: 'Hey team! Anyone working on the chassis this week?', sentAt: '2026-04-04T09:15:00Z' },
-  { id: 'msg-2', clubId: 'club-robotics', senderId: 'user-student-2', content: "Yeah, I'll be in Room 204 on Tuesday after school.", sentAt: '2026-04-04T09:22:00Z' },
-  { id: 'msg-3', clubId: 'club-robotics', senderId: 'user-advisor-1', content: 'Great! Remember the qualifier is April 20th. Make sure the motors are calibrated before then.', sentAt: '2026-04-04T09:45:00Z' },
-  { id: 'msg-4', clubId: 'club-robotics', senderId: 'user-student-1', content: 'On it. Also thinking about adding a sensor array for the obstacle course.', sentAt: '2026-04-04T10:01:00Z' },
-  { id: 'msg-5', clubId: 'club-drama', senderId: 'user-student-2', content: 'Auditions are April 15th — who else is trying out?', sentAt: '2026-04-03T14:00:00Z' },
-  { id: 'msg-6', clubId: 'club-drama', senderId: 'user-student-3', content: "I am! Hoping to get the lead this year. Been practicing all week.", sentAt: '2026-04-03T14:10:00Z' },
-  { id: 'msg-7', clubId: 'club-drama', senderId: 'user-advisor-2', content: 'Come prepared with a 2-minute monologue. Sheet music for the musical numbers will be handed out on the day.', sentAt: '2026-04-03T14:30:00Z' },
-  { id: 'msg-8', clubId: 'club-chess', senderId: 'user-student-1', content: 'Tournament is May 3rd. Want to do a practice session before?', sentAt: '2026-04-02T16:00:00Z' },
-  { id: 'msg-9', clubId: 'club-chess', senderId: 'user-student-3', content: 'Definitely. How about next Wednesday in the library at 3 PM?', sentAt: '2026-04-02T16:30:00Z' },
-  { id: 'msg-10', clubId: 'club-chess', senderId: 'user-student-1', content: "Works for me. I'll bring the boards.", sentAt: '2026-04-02T16:45:00Z' },
-  { id: 'msg-11', clubId: 'club-environment', senderId: 'user-student-2', content: "Earth Day is April 22nd. Who's coming to the campus clean-up?", sentAt: '2026-04-01T11:00:00Z' },
-  { id: 'msg-12', clubId: 'club-environment', senderId: 'user-advisor-2', content: 'Count me in. I can bring extra gloves and bags. Great initiative, Jordan!', sentAt: '2026-04-01T11:20:00Z' },
+  { id: 'msg-1', clubId: 'club-robotics', channelId: null, senderId: 'user-student-1', content: 'Hey team! Anyone working on the chassis this week?', sentAt: '2026-04-04T09:15:00Z' },
+  { id: 'msg-2', clubId: 'club-robotics', channelId: null, senderId: 'user-student-2', content: "Yeah, I'll be in Room 204 on Tuesday after school.", sentAt: '2026-04-04T09:22:00Z' },
+  { id: 'msg-3', clubId: 'club-robotics', channelId: null, senderId: 'user-advisor-1', content: 'Great! Remember the qualifier is April 20th. Make sure the motors are calibrated before then.', sentAt: '2026-04-04T09:45:00Z' },
+  { id: 'msg-4', clubId: 'club-robotics', channelId: null, senderId: 'user-student-1', content: 'On it. Also thinking about adding a sensor array for the obstacle course.', sentAt: '2026-04-04T10:01:00Z' },
+  { id: 'msg-5', clubId: 'club-drama', channelId: null, senderId: 'user-student-2', content: 'Auditions are April 15th — who else is trying out?', sentAt: '2026-04-03T14:00:00Z' },
+  { id: 'msg-6', clubId: 'club-drama', channelId: null, senderId: 'user-student-3', content: "I am! Hoping to get the lead this year. Been practicing all week.", sentAt: '2026-04-03T14:10:00Z' },
+  { id: 'msg-7', clubId: 'club-drama', channelId: null, senderId: 'user-advisor-2', content: 'Come prepared with a 2-minute monologue. Sheet music for the musical numbers will be handed out on the day.', sentAt: '2026-04-03T14:30:00Z' },
+  { id: 'msg-8', clubId: 'club-chess', channelId: null, senderId: 'user-student-1', content: 'Tournament is May 3rd. Want to do a practice session before?', sentAt: '2026-04-02T16:00:00Z' },
+  { id: 'msg-9', clubId: 'club-chess', channelId: null, senderId: 'user-student-3', content: 'Definitely. How about next Wednesday in the library at 3 PM?', sentAt: '2026-04-02T16:30:00Z' },
+  { id: 'msg-10', clubId: 'club-chess', channelId: null, senderId: 'user-student-1', content: "Works for me. I'll bring the boards.", sentAt: '2026-04-02T16:45:00Z' },
+  { id: 'msg-11', clubId: 'club-environment', channelId: null, senderId: 'user-student-2', content: "Earth Day is April 22nd. Who's coming to the campus clean-up?", sentAt: '2026-04-01T11:00:00Z' },
+  { id: 'msg-12', clubId: 'club-environment', channelId: null, senderId: 'user-advisor-2', content: 'Count me in. I can bring extra gloves and bags. Great initiative, Jordan!', sentAt: '2026-04-01T11:20:00Z' },
 ]
