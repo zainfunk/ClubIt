@@ -183,9 +183,18 @@ export interface SchoolElection {
   myVoteCandidateId?: string | null
 }
 
+export interface ChatChannel {
+  id: string
+  clubId: string
+  name: string
+  createdBy: string | null
+  createdAt: string
+}
+
 export interface ChatMessage {
   id: string
   clubId: string
+  channelId: string | null
   senderId: string
   content: string
   sentAt: string // ISO timestamp

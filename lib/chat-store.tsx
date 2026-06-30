@@ -7,7 +7,7 @@ import { ChatMessage } from '@/types'
 
 interface ChatContextValue {
   messages: ChatMessage[]
-  sendMessage: (clubId: string, content: string) => Promise<void>
+  sendMessage: (clubId: string, content: string, channelId?: string | null) => Promise<void>
   sendError: string | null
   clearSendError: () => void
 }
@@ -18,6 +18,7 @@ function mapRow(r: Record<string, unknown>): ChatMessage {
   return {
     id: r.id as string,
     clubId: (r.club_id ?? r.clubId) as string,
+    channelId: ((r.channel_id ?? r.channelId) as string | null) ?? null,
     senderId: (r.sender_id ?? r.senderId) as string,
     content: r.content as string,
     sentAt: (r.sent_at ?? r.sentAt) as string,
@@ -49,6 +50,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               existing.senderId === m.senderId &&
               existing.content === m.content &&
               existing.clubId === m.clubId &&
+              existing.channelId === m.channelId &&
               Math.abs(new Date(existing.sentAt).getTime() - new Date(m.sentAt).getTime()) < 60_000
             ) {
               map.delete(key)
@@ -106,7 +108,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser.schoolId])
 
-  async function sendMessage(clubId: string, content: string) {
+  async function sendMessage(clubId: string, content: string, channelId?: string | null) {
     const trimmed = content.trim()
     if (!trimmed) return
 
@@ -117,6 +119,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const optimistic: ChatMessage = {
       id: tempId,
       clubId,
+      channelId: channelId ?? null,
       senderId: currentUser.id,
       content: trimmed,
       sentAt: new Date().toISOString(),
@@ -127,7 +130,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const res = await fetch('/api/school/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clubId, content: trimmed }),
+        body: JSON.stringify({ clubId, channelId: channelId ?? null, content: trimmed }),
       })
 
       const data = await res.json() as { error?: string; message?: Record<string, unknown> }

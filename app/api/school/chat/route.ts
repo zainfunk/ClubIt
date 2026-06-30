@@ -104,6 +104,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const clubId = typeof body.clubId === 'string' ? body.clubId.trim() : ''
   const rawContent = typeof body.content === 'string' ? sanitizeText(body.content.trim()) : ''
+  const channelId = typeof body.channelId === 'string' ? body.channelId.trim() : null
 
   if (!clubId || !rawContent) {
     return NextResponse.json({ error: 'clubId and content are required' }, { status: 400 })
@@ -164,6 +165,7 @@ export async function POST(request: NextRequest) {
   const message = {
     id: `msg-${randomUUID()}`,
     club_id: clubId,
+    channel_id: channelId,
     sender_id: requester.userId,
     content,
     sent_at: new Date().toISOString(),
@@ -202,6 +204,7 @@ export async function POST(request: NextRequest) {
     message: {
       id: message.id,
       clubId: message.club_id,
+      channelId: message.channel_id,
       senderId: message.sender_id,
       content: message.content,
       sentAt: message.sent_at,

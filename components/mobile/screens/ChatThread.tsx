@@ -8,7 +8,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { useChatStore } from '@/lib/chat-store'
 import { apiSchoolClubs, apiSchoolUsers } from '@/lib/school-api'
-import type { Club, User } from '@/types'
+import type { ChatChannel, Club, User } from '@/types'
 import { css, TOP, BOTTOM, clubGlyph, tintFor } from '../css'
 import { useToast } from '../toast'
 
@@ -26,11 +26,28 @@ export default function ChatThread() {
   const [actionMsg, setActionMsg] = useState<{ id: string; senderId: string; name: string } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // Channel state
+  const [channels, setChannels] = useState<ChatChannel[]>([])
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
+  const [creatingChannel, setCreatingChannel] = useState(false)
+  const [newChannelName, setNewChannelName] = useState('')
+  const [channelSaving, setChannelSaving] = useState(false)
+
+  const selectedChannel = channels.find((c) => c.id === selectedChannelId) ?? channels[0] ?? null
+
+  const canManageChannels =
+    currentUser.role === 'admin' ||
+    club?.advisorId === currentUser.id
+
   const clubMessages = useMemo(
     () => messages
-      .filter(m => m.clubId === clubId && !blocked.has(m.senderId))
+      .filter(m =>
+        m.clubId === clubId &&
+        m.channelId === (selectedChannel?.id ?? null) &&
+        !blocked.has(m.senderId)
+      )
       .sort((a, b) => a.sentAt.localeCompare(b.sentAt)),
-    [messages, clubId, blocked]
+    [messages, clubId, blocked, selectedChannel]
   )
 
   // Load who this user has blocked so their messages stay hidden.
@@ -67,6 +84,21 @@ export default function ChatThread() {
     return () => { cancelled = true }
   }, [clubId])
 
+  // Fetch channels for this club
+  useEffect(() => {
+    if (!clubId) return
+    let cancelled = false
+    fetch(`/api/school/chat/channels?clubId=${clubId}`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { channels?: ChatChannel[] } | null) => {
+        if (cancelled || !d?.channels) return
+        setChannels(d.channels)
+        if (d.channels.length > 0) setSelectedChannelId(prev => prev ?? d.channels![0].id)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [clubId])
+
   // Resolve sender names for whoever appears in the thread.
   useEffect(() => {
     let cancelled = false
@@ -93,19 +125,108 @@ export default function ChatThread() {
     const text = draft.trim()
     if (!text || !clubId) return
     setDraft('')
-    void sendMessage(clubId, text)
+    void sendMessage(clubId, text, selectedChannel?.id ?? null)
+  }
+
+  async function handleCreateChannel() {
+    const name = newChannelName.trim()
+    if (!name || channelSaving || !clubId) return
+    setChannelSaving(true)
+    try {
+      const res = await fetch('/api/school/chat/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clubId, name }),
+      })
+      const data = await res.json() as { channel?: ChatChannel }
+      if (res.ok && data.channel) {
+        setChannels(prev => [...prev, data.channel!])
+        setSelectedChannelId(data.channel!.id)
+        setNewChannelName('')
+        setCreatingChannel(false)
+      } else {
+        toast('Could not create channel')
+      }
+    } catch {
+      toast('Could not create channel')
+    } finally {
+      setChannelSaving(false)
+    }
   }
 
   return (
     <div style={css('position:absolute;inset:0;display:flex;flex-direction:column;background:#f2f2f7;animation:scIn .24s ease;')}>
+      {/* Header */}
       <div style={{ ...css('padding:0 14px 11px;background:rgba(242,242,247,.86);backdrop-filter:blur(14px);border-bottom:1px solid #e6e6ec;display:flex;align-items:center;gap:11px;flex:none;z-index:5;'), paddingTop: TOP(12) }}>
         <button onClick={() => router.push('/chat')} style={css('border:none;background:none;cursor:pointer;padding:2px;')}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg></button>
         <span style={css(`width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex:none;background:${club ? tintFor(club.id) : '#eef0ff'};`)}>{club ? clubGlyph(club) : '💬'}</span>
-        <div style={css('flex:1;min-width:0;')}><div style={css("font-family:var(--font-manrope);font-weight:700;font-size:15px;color:#0f1729;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;")}>{club?.name ?? 'Club chat'}</div><div style={css('font-size:11px;color:#9aa0ac;font-weight:500;')}>{club ? `${club.memberIds.length} members` : ''}</div></div>
+        <div style={css('flex:1;min-width:0;')}>
+          <div style={css("font-family:var(--font-manrope);font-weight:700;font-size:15px;color:#0f1729;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;")}>{club?.name ?? 'Club chat'}</div>
+          <div style={css('font-size:11px;color:#9aa0ac;font-weight:500;')}>{club ? `${club.memberIds.length} members` : ''}</div>
+        </div>
       </div>
 
+      {/* Channel tabs */}
+      {channels.length > 0 && (
+        <div style={css('background:#fff;border-bottom:1px solid #e6e6ec;flex:none;overflow-x:auto;display:flex;align-items:center;padding:0 10px;gap:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none;')}>
+          {channels.map((ch) => {
+            const active = ch.id === selectedChannel?.id
+            return (
+              <button
+                key={ch.id}
+                onClick={() => setSelectedChannelId(ch.id)}
+                style={css(`border:none;background:none;cursor:pointer;padding:9px 10px;font-size:13px;font-weight:${active ? '700' : '500'};color:${active ? '#6366f1' : '#9aa0ac'};white-space:nowrap;border-bottom:2px solid ${active ? '#6366f1' : 'transparent'};transition:color .15s,border-color .15s;display:flex;align-items:center;gap:4px;`)}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
+                {ch.name}
+              </button>
+            )
+          })}
+          {canManageChannels && !creatingChannel && (
+            <button
+              onClick={() => setCreatingChannel(true)}
+              style={css('border:none;background:none;cursor:pointer;padding:9px 10px;color:#9aa0ac;display:flex;align-items:center;gap:3px;font-size:12px;font-weight:600;white-space:nowrap;')}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New
+            </button>
+          )}
+          {canManageChannels && creatingChannel && (
+            <div style={css('display:flex;align-items:center;gap:5px;padding:4px 8px;background:#f4f4f8;border-radius:8px;margin:4px 4px;')}>
+              <input
+                autoFocus
+                value={newChannelName}
+                onChange={e => setNewChannelName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); void handleCreateChannel() }
+                  if (e.key === 'Escape') { setCreatingChannel(false); setNewChannelName('') }
+                }}
+                placeholder="channel-name"
+                maxLength={50}
+                style={css('border:none;background:none;outline:none;font-size:13px;font-weight:600;color:#1f2734;width:100px;')}
+              />
+              <button
+                onClick={() => void handleCreateChannel()}
+                disabled={channelSaving || !newChannelName.trim()}
+                style={css('border:none;background:#6366f1;color:#fff;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700;cursor:pointer;opacity:' + (channelSaving || !newChannelName.trim() ? '0.5' : '1') + ';')}
+              >
+                Add
+              </button>
+              <button
+                onClick={() => { setCreatingChannel(false); setNewChannelName('') }}
+                style={css('border:none;background:none;cursor:pointer;color:#9aa0ac;font-size:16px;line-height:1;padding:0 2px;')}
+              >×</button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div ref={scrollRef} className="m-noscroll" style={css('flex:1;overflow-y:auto;padding:16px 16px 12px;display:flex;flex-direction:column;gap:11px;')}>
-        {clubMessages.length === 0 && <div style={css('margin:auto;font-size:13px;color:#9aa0ac;font-weight:500;')}>No messages yet — say hello 👋</div>}
+        {clubMessages.length === 0 && (
+          <div style={css('margin:auto;font-size:13px;color:#9aa0ac;font-weight:500;text-align:center;')}>
+            {selectedChannel ? `No messages in #${selectedChannel.name} yet` : 'No messages yet — say hello 👋'}
+          </div>
+        )}
         {clubMessages.map((m, i, arr) => {
           const mine = m.senderId === currentUser.id
           const prev = arr[i - 1]
@@ -129,7 +250,7 @@ export default function ChatThread() {
           value={draft}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') send() }}
-          placeholder="Message…"
+          placeholder={selectedChannel ? `#${selectedChannel.name}…` : 'Message…'}
           style={css('flex:1;background:#fff;border:1px solid #e2e3e8;border-radius:21px;padding:10px 15px;font-size:13.5px;color:#1f2734;font-weight:500;outline:none;font-family:inherit;min-width:0;')}
         />
         <button onClick={send} style={css('width:40px;height:40px;border-radius:50%;border:none;background:#6366f1;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></svg></button>

@@ -9,11 +9,10 @@ import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
 import { useChatStore } from '@/lib/chat-store'
 import { fetchUsersByIds } from '@/lib/school-data'
-import { supabase } from '@/lib/supabase'
-import { Club, User } from '@/types'
+import { ChatChannel, Club, User } from '@/types'
 import Avatar from '@/components/Avatar'
 import MessageActions from '@/components/chat/MessageActions'
-import { ArrowLeft, MessageSquare, Send, Users } from 'lucide-react'
+import { ArrowLeft, Hash, MessageSquare, Plus, Send, Users, X } from 'lucide-react'
 
 function formatTime(iso: string) {
   const d = new Date(iso)
@@ -50,8 +49,17 @@ function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
   const [club, setClub] = useState<Club | null>(null)
   const [clubLoading, setClubLoading] = useState(true)
   const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set())
+
+  // Channel state
+  const [channels, setChannels] = useState<ChatChannel[]>([])
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
+  const [creatingChannel, setCreatingChannel] = useState(false)
+  const [newChannelName, setNewChannelName] = useState('')
+  const [channelSaving, setChannelSaving] = useState(false)
+
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const channelInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!currentUser.id) return
@@ -78,7 +86,22 @@ function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
     }
   }, [clubId, currentUser.id])
 
-  // Load the set of users this person has blocked (Guideline 1.2).
+  // Fetch channels when club changes
+  useEffect(() => {
+    if (!clubId || !currentUser.id) return
+    let cancelled = false
+    fetch(`/api/school/chat/channels?clubId=${clubId}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data: { channels?: ChatChannel[] }) => {
+        if (cancelled) return
+        const list = data.channels ?? []
+        setChannels(list)
+        if (list.length > 0) setSelectedChannelId((prev) => prev ?? list[0].id)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [clubId, currentUser.id])
+
   useEffect(() => {
     if (!currentUser.id) return
     let cancelled = false
@@ -103,18 +126,14 @@ function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
       Promise.resolve().then(() => {
         if (!cancelled) setUsersById({})
       })
-      return () => {
-        cancelled = true
-      }
+      return () => { cancelled = true }
     }
 
     fetchUsersByIds(userIds).then((users) => {
       if (!cancelled) setUsersById(users)
     })
 
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [club, clubId, messages])
 
   const canAccess =
@@ -122,6 +141,12 @@ function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
     devRole === 'admin' ||
     devRole === 'advisor' ||
     myClubIds.includes(clubId) ||
+    club?.advisorId === currentUser.id
+
+  const canManageChannels =
+    currentUser.role === 'admin' ||
+    devRole === 'admin' ||
+    devRole === 'advisor' ||
     club?.advisorId === currentUser.id
 
   useEffect(() => {
@@ -134,6 +159,10 @@ function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  useEffect(() => {
+    if (creatingChannel) channelInputRef.current?.focus()
+  }, [creatingChannel])
+
   if (clubLoading || !accessChecked) return null
   if (!club || !canAccess) return null
 
@@ -145,8 +174,13 @@ function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
     ? schoolClubs
     : schoolClubs.filter((entry) => myClubIds.includes(entry.id) || entry.advisorId === currentUser.id)
 
+  const selectedChannel = channels.find((c) => c.id === selectedChannelId) ?? channels[0] ?? null
+
   const clubMessages = messages.filter(
-    (message) => message.clubId === clubId && !blockedIds.has(message.senderId),
+    (message) =>
+      message.clubId === clubId &&
+      message.channelId === (selectedChannel?.id ?? null) &&
+      !blockedIds.has(message.senderId),
   )
   const members = club.memberIds
     .map((memberId) => resolveUser(memberId))
@@ -165,7 +199,7 @@ function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
 
   function handleSend() {
     if (!draft.trim()) return
-    void sendMessage(clubId, draft)
+    void sendMessage(clubId, draft, selectedChannel?.id ?? null)
     setDraft('')
     inputRef.current?.focus()
   }
@@ -177,9 +211,36 @@ function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
     }
   }
 
+  async function handleCreateChannel() {
+    const name = newChannelName.trim()
+    if (!name || channelSaving) return
+    setChannelSaving(true)
+    try {
+      const res = await fetch('/api/school/chat/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clubId, name }),
+      })
+      const data = await res.json() as { channel?: ChatChannel; error?: string }
+      if (res.ok && data.channel) {
+        setChannels((prev) => [...prev, data.channel!])
+        setSelectedChannelId(data.channel!.id)
+        setNewChannelName('')
+        setCreatingChannel(false)
+      }
+    } finally {
+      setChannelSaving(false)
+    }
+  }
+
+  function handleChannelKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') { e.preventDefault(); void handleCreateChannel() }
+    if (e.key === 'Escape') { setCreatingChannel(false); setNewChannelName('') }
+  }
+
   return (
     <div className="-mx-4 sm:-mx-6 md:-mx-10 -my-6 md:-my-8 -mb-14 md:-mb-8 flex overflow-hidden h-[calc(100dvh-7rem)] md:h-[calc(100vh-3.5rem)]" style={{ fontFamily: 'var(--font-inter)' }}>
-      {/* Sidebar — hidden on mobile */}
+      {/* Sidebar — clubs list */}
       <div className="hidden md:flex w-72 shrink-0 bg-white border-r border-slate-200/60 flex-col overflow-hidden">
         <div className="px-5 py-5 border-b border-slate-100 shrink-0">
           <h3 className="text-sm font-bold text-slate-900" style={{ fontFamily: 'var(--font-manrope)' }}>Your Chats</h3>
@@ -232,6 +293,80 @@ function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
         </div>
       </div>
 
+      {/* Channel panel */}
+      <div className="hidden md:flex w-48 shrink-0 bg-slate-900 flex-col overflow-hidden">
+        <div className="px-4 py-4 border-b border-slate-700/60 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-indigo-500/20 flex items-center justify-center text-sm shrink-0">
+              {club.iconUrl ?? '📌'}
+            </div>
+            <p className="text-xs font-bold text-slate-100 truncate" style={{ fontFamily: 'var(--font-manrope)' }}>
+              {club.name}
+            </p>
+          </div>
+        </div>
+
+        <div className="px-3 pt-4 pb-1 shrink-0">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Channels</span>
+            {canManageChannels && (
+              <button
+                onClick={() => { setCreatingChannel(true) }}
+                className="text-slate-500 hover:text-slate-300 transition-colors p-0.5 rounded"
+                title="New channel"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto pb-2">
+          {channels.map((ch) => {
+            const isActive = ch.id === selectedChannel?.id
+            return (
+              <button
+                key={ch.id}
+                onClick={() => setSelectedChannelId(ch.id)}
+                className={`w-full flex items-center gap-1.5 px-3 py-1.5 rounded-md mx-1 text-left transition-colors ${
+                  isActive
+                    ? 'bg-slate-700/60 text-slate-100'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/30'
+                }`}
+                style={{ width: 'calc(100% - 8px)' }}
+              >
+                <Hash className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                <span className="text-sm font-medium truncate">{ch.name}</span>
+              </button>
+            )
+          })}
+
+          {creatingChannel && (
+            <div className="px-2 pt-1">
+              <div className="flex items-center gap-1 bg-slate-700/50 rounded-md px-2 py-1.5">
+                <Hash className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <input
+                  ref={channelInputRef}
+                  value={newChannelName}
+                  onChange={(e) => setNewChannelName(e.target.value)}
+                  onKeyDown={handleChannelKeyDown}
+                  placeholder="channel-name"
+                  maxLength={50}
+                  className="flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 outline-none min-w-0"
+                />
+                <button
+                  onClick={() => { setCreatingChannel(false); setNewChannelName('') }}
+                  className="text-slate-500 hover:text-slate-300"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1 px-1">Enter to create · Esc to cancel</p>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0 bg-slate-50">
         {/* Chat header */}
@@ -246,12 +381,15 @@ function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
             {club.iconUrl ?? '📌'}
           </div>
           <div className="flex-1 min-w-0">
-            <p
-              className="font-bold text-slate-900 leading-tight truncate text-base"
-              style={{ fontFamily: 'var(--font-manrope)' }}
-            >
-              {club.name}
-            </p>
+            <div className="flex items-center gap-1.5">
+              {selectedChannel && <Hash className="w-4 h-4 text-slate-400 shrink-0" />}
+              <p
+                className="font-bold text-slate-900 leading-tight truncate text-base"
+                style={{ fontFamily: 'var(--font-manrope)' }}
+              >
+                {selectedChannel ? selectedChannel.name : club.name}
+              </p>
+            </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <Users className="w-3 h-3 text-slate-400" />
               <p className="text-xs text-slate-400 font-medium">
@@ -284,7 +422,9 @@ function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
                 <MessageSquare className="w-7 h-7 text-slate-300" />
               </div>
               <p className="text-slate-500 text-sm font-medium">No messages yet</p>
-              <p className="text-slate-400 text-xs mt-1">Start the conversation!</p>
+              <p className="text-slate-400 text-xs mt-1">
+                {selectedChannel ? `Start the conversation in #${selectedChannel.name}!` : 'Start the conversation!'}
+              </p>
             </div>
           )}
 
@@ -372,12 +512,17 @@ function ClubChatDesktop({ params }: { params: Promise<{ clubId: string }> }) {
           )}
           <div className="flex items-center gap-3">
             <div className="flex-1 flex items-center bg-slate-50 border border-slate-200/60 rounded-2xl px-5 h-12 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-300 transition-all">
+              {selectedChannel && (
+                <span className="text-slate-400 text-sm mr-2 shrink-0 flex items-center gap-0.5">
+                  <Hash className="w-3.5 h-3.5" />{selectedChannel.name}
+                </span>
+              )}
               <input
                 ref={inputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={`Message ${club.name}...`}
+                placeholder="Message…"
                 className="flex-1 bg-transparent outline-none text-sm placeholder:text-slate-400 text-slate-800"
               />
             </div>
