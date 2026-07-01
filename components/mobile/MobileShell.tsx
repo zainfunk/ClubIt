@@ -8,6 +8,7 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { Role } from '@/types'
+import { useChatStore } from '@/lib/chat-store'
 import { css, BOTTOM, TABBAR_SPACE } from './css'
 import { GlobalMobileStyles, Chevron } from './primitives'
 import { ToastProvider } from './toast'
@@ -74,7 +75,12 @@ export default function MobileShell({ role, userName, children }: { role: Role; 
   const router = useRouter()
   const [moreOpen, setMoreOpen] = useState(false)
 
-  const tabs = tabsFor(role)
+  const { totalUnread } = useChatStore()
+  const tabs = tabsFor(role).map(t =>
+    t.key === 'chat' && totalUnread > 0
+      ? { ...t, badge: totalUnread > 9 ? 9 : totalUnread }
+      : t,
+  )
   const moreItems = moreItemsFor(role)
   const showTabBar = !isDetailRoute(pathname)
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMockAuth } from '@/lib/mock-auth'
 import { onRealtimeEvent } from '@/lib/realtime'
 import { ChatMessage } from '@/types'
@@ -10,6 +10,12 @@ interface ChatContextValue {
   sendMessage: (clubId: string, content: string, channelId?: string | null) => Promise<void>
   sendError: string | null
   clearSendError: () => void
+  /** Unread message count per club (messages from others newer than last read). */
+  unreadByClub: Record<string, number>
+  /** Total unread across all clubs — drives the bottom-nav Chat tab badge. */
+  totalUnread: number
+  /** Mark a club's chat read up to now (called when opening a thread). */
+  markClubRead: (clubId: string) => void
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -29,6 +35,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useMockAuth()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [sendError, setSendError] = useState<string | null>(null)
+
+  // Channels this user is allowed to read, kept in a ref so the realtime
+  // listener always sees the latest set without re-subscribing. Realtime
+  // broadcasts every insert school-wide, so we drop inserts for channels the
+  // user isn't a member of — otherwise a private channel's messages would leak
+  // into the chat-list preview.
+  const accessibleChannelIds = useRef<Set<string>>(new Set())
+
+  // Last-read timestamp per club (ISO string), loaded from the server.
+  const [reads, setReads] = useState<Record<string, string>>({})
 
   /**
    * Merge incoming messages into state, deduplicating by id.
@@ -69,7 +85,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch('/api/school/chat', { cache: 'no-store' })
       if (!res.ok) return
-      const data = await res.json() as { messages?: Record<string, unknown>[] }
+      const data = await res.json() as { messages?: Record<string, unknown>[]; accessibleChannelIds?: string[] }
+      if (data.accessibleChannelIds) {
+        accessibleChannelIds.current = new Set(data.accessibleChannelIds)
+      }
       if (data.messages) {
         // Use mergeMessages instead of setMessages so we don't overwrite
         // realtime events that arrived while the fetch was in flight.
@@ -80,13 +99,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function fetchReads() {
+    try {
+      const res = await fetch('/api/school/chat/reads', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json() as { reads?: Record<string, string> }
+      if (data.reads) setReads(data.reads)
+    } catch {
+      // non-fatal — unread badges just won't reflect prior reads
+    }
+  }
+
   // Initial load
   useEffect(() => {
     if (!currentUser.schoolId) {
       setMessages([])
+      setReads({})
       return
     }
     void fetchMessages()
+    void fetchReads()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser.schoolId])
 
@@ -94,11 +126,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsub = onRealtimeEvent((event) => {
       if (event.type === 'chat_message_insert') {
-        mergeMessages([mapRow(event.payload)])
+        const msg = mapRow(event.payload)
+        // Only accept inserts for channels this user can read. Own messages are
+        // always accepted so the sender's optimistic update reconciles even if
+        // the accessible-channel set hasn't refreshed yet.
+        if (msg.senderId === currentUser.id || (msg.channelId && accessibleChannelIds.current.has(msg.channelId))) {
+          mergeMessages([msg])
+        }
       }
     })
     return unsub
-  }, [])
+  }, [currentUser.id])
 
   // Polling fallback — keeps things in sync if realtime channel drops
   useEffect(() => {
@@ -152,8 +190,37 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Unread = messages from someone else, newer than this club's last-read mark.
+  const unreadByClub = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const m of messages) {
+      if (m.senderId === currentUser.id) continue
+      if (m.id.startsWith('msg-temp-')) continue
+      const lastRead = reads[m.clubId]
+      if (!lastRead || m.sentAt > lastRead) {
+        counts[m.clubId] = (counts[m.clubId] ?? 0) + 1
+      }
+    }
+    return counts
+  }, [messages, reads, currentUser.id])
+
+  const totalUnread = useMemo(
+    () => Object.values(unreadByClub).reduce((sum, n) => sum + n, 0),
+    [unreadByClub],
+  )
+
+  function markClubRead(clubId: string) {
+    // Optimistically advance the read mark so badges clear immediately.
+    setReads((prev) => ({ ...prev, [clubId]: new Date().toISOString() }))
+    void fetch('/api/school/chat/reads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clubId }),
+    }).catch(() => {})
+  }
+
   return (
-    <ChatContext.Provider value={{ messages, sendMessage, sendError, clearSendError: () => setSendError(null) }}>
+    <ChatContext.Provider value={{ messages, sendMessage, sendError, clearSendError: () => setSendError(null), unreadByClub, totalUnread, markClubRead }}>
       {children}
     </ChatContext.Provider>
   )

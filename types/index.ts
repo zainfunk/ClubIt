@@ -200,6 +200,16 @@ export interface ChatMessage {
   sentAt: string // ISO timestamp
 }
 
+export interface ClubDocument {
+  id: string
+  name: string
+  contentType: string
+  sizeBytes: number
+  uploadedBy: string
+  createdAt: string
+  url: string | null // short-lived signed download URL
+}
+
 export interface Notification {
   id: string
   userId: string

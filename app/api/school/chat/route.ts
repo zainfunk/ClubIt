@@ -38,38 +38,66 @@ async function getRequester(): Promise<RequesterContext | null> {
   }
 }
 
-// GET — fetch all chat messages for clubs the user has access to
+// Compute the set of channel IDs a requester may read. Admins/advisors get
+// every channel in their scope; regular members get only channels they've been
+// added to. Also returns the club IDs those channels belong to.
+async function accessibleChannels(
+  db: ReturnType<typeof createServiceClient>,
+  requester: RequesterContext,
+): Promise<{ channelIds: string[]; clubIds: string[] }> {
+  if (requester.role === 'admin' || requester.role === 'superadmin') {
+    const { data: clubs } = await db.from('clubs').select('id').eq('school_id', requester.schoolId)
+    const clubIds = (clubs ?? []).map((c) => c.id as string)
+    if (clubIds.length === 0) return { channelIds: [], clubIds: [] }
+    const { data: channels } = await db.from('chat_channels').select('id').in('club_id', clubIds)
+    return { channelIds: (channels ?? []).map((c) => c.id as string), clubIds }
+  }
+
+  // Advisors see every channel in the clubs they advise; members see the
+  // specific channels they belong to.
+  const [{ data: advisedClubs }, { data: memberRows }] = await Promise.all([
+    db.from('clubs').select('id').eq('school_id', requester.schoolId).eq('advisor_id', requester.userId),
+    db.from('chat_channel_members').select('channel_id').eq('user_id', requester.userId),
+  ])
+
+  const channelIds = new Set<string>((memberRows ?? []).map((r) => r.channel_id as string))
+  const clubIds = new Set<string>()
+
+  const advisedIds = (advisedClubs ?? []).map((c) => c.id as string)
+  if (advisedIds.length > 0) {
+    const { data: advisedChannels } = await db.from('chat_channels').select('id, club_id').in('club_id', advisedIds)
+    for (const c of advisedChannels ?? []) {
+      channelIds.add(c.id as string)
+      clubIds.add(c.club_id as string)
+    }
+  }
+
+  // Map member channels back to their clubs (for the chat-list scope).
+  if (channelIds.size > 0) {
+    const { data: chans } = await db.from('chat_channels').select('id, club_id').in('id', [...channelIds])
+    for (const c of chans ?? []) clubIds.add(c.club_id as string)
+  }
+
+  return { channelIds: [...channelIds], clubIds: [...clubIds] }
+}
+
+// GET — fetch chat messages from every channel the user can read
 export async function GET() {
   const requester = await getRequester()
   if (!requester) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const db = createServiceClient()
 
-  let clubIds: string[]
+  const { channelIds, clubIds } = await accessibleChannels(db, requester)
 
-  if (requester.role === 'admin' || requester.role === 'superadmin') {
-    const { data: clubs } = await db
-      .from('clubs')
-      .select('id')
-      .eq('school_id', requester.schoolId)
-    clubIds = (clubs ?? []).map((c) => c.id)
-  } else {
-    const [{ data: advisedClubs }, { data: memberships }] = await Promise.all([
-      db.from('clubs').select('id').eq('school_id', requester.schoolId).eq('advisor_id', requester.userId),
-      db.from('memberships').select('club_id').eq('user_id', requester.userId),
-    ])
-    clubIds = Array.from(new Set([
-      ...(advisedClubs ?? []).map((c) => c.id),
-      ...(memberships ?? []).map((m) => m.club_id),
-    ]))
+  if (channelIds.length === 0) {
+    return NextResponse.json({ messages: [], accessibleChannelIds: [], accessibleClubIds: clubIds })
   }
-
-  if (clubIds.length === 0) return NextResponse.json({ messages: [] })
 
   const { data: messages, error } = await db
     .from('chat_messages')
     .select('*')
-    .in('club_id', clubIds)
+    .in('channel_id', channelIds)
     .order('sent_at', { ascending: true })
 
   if (error) {
@@ -85,7 +113,11 @@ export async function GET() {
   const blockedIds = new Set((blocks ?? []).map((b) => b.blocked_id))
   const visible = (messages ?? []).filter((m) => !blockedIds.has(m.sender_id))
 
-  return NextResponse.json({ messages: visible, accessibleClubIds: clubIds })
+  return NextResponse.json({
+    messages: visible,
+    accessibleChannelIds: channelIds,
+    accessibleClubIds: clubIds,
+  })
 }
 
 // POST — send a message to a club
@@ -104,10 +136,10 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const clubId = typeof body.clubId === 'string' ? body.clubId.trim() : ''
   const rawContent = typeof body.content === 'string' ? sanitizeText(body.content.trim()) : ''
-  const channelId = typeof body.channelId === 'string' ? body.channelId.trim() : null
+  const channelId = typeof body.channelId === 'string' ? body.channelId.trim() : ''
 
-  if (!clubId || !rawContent) {
-    return NextResponse.json({ error: 'clubId and content are required' }, { status: 400 })
+  if (!clubId || !channelId || !rawContent) {
+    return NextResponse.json({ error: 'clubId, channelId and content are required' }, { status: 400 })
   }
 
   // Two-tier moderation (Guideline 1.2):
@@ -140,23 +172,35 @@ export async function POST(request: NextRequest) {
 
   if (!club) return NextResponse.json({ error: 'Club not found' }, { status: 404 })
 
+  // The channel must exist and belong to this club.
+  const { data: channel } = await db
+    .from('chat_channels')
+    .select('id, club_id')
+    .eq('id', channelId)
+    .maybeSingle()
+
+  if (!channel || channel.club_id !== clubId) {
+    return NextResponse.json({ error: 'Channel not found' }, { status: 404 })
+  }
+
   // Check user can send: must be a manager (admin/advisor of club) or a member
+  // of this specific channel.
   const isManager =
     requester.role === 'admin' ||
     requester.role === 'superadmin' ||
     club.advisor_id === requester.userId
 
   if (!isManager) {
-    const { data: membership } = await db
-      .from('memberships')
-      .select('id')
-      .eq('club_id', clubId)
+    const { data: channelMember } = await db
+      .from('chat_channel_members')
+      .select('user_id')
+      .eq('channel_id', channelId)
       .eq('user_id', requester.userId)
       .maybeSingle()
 
-    if (!membership) {
+    if (!channelMember) {
       return NextResponse.json(
-        { error: 'You must be a member of this club to send messages' },
+        { error: 'You must be a member of this channel to send messages' },
         { status: 403 }
       )
     }
@@ -183,9 +227,9 @@ export async function POST(request: NextRequest) {
   if (pushConfigured()) {
     try {
       const { data: members } = await db
-        .from('memberships')
+        .from('chat_channel_members')
         .select('user_id')
-        .eq('club_id', clubId)
+        .eq('channel_id', channelId)
       const recipientIds = new Set((members ?? []).map((m) => m.user_id as string))
       if (club.advisor_id) recipientIds.add(club.advisor_id as string)
       recipientIds.delete(requester.userId)

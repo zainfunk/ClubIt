@@ -4,11 +4,11 @@
 // students see Join / Leave / Pending. Live via /api/school/clubs/[id]
 // (service-role; reliable on the phone shell — see lib/school-api.ts).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useMockAuth } from '@/lib/mock-auth'
 import { apiClubDetail, clubAction, type ClubDetailPayload } from '@/lib/school-api'
-import type { ClubEvent, Poll, User } from '@/types'
+import type { ClubDocument, ClubEvent, Poll, User } from '@/types'
 import { css, TOP, avBg, clubGlyph, gradientFor } from '../css'
 import { BackButton, Avatar, Loader } from '../primitives'
 import { dayShort, timeRange, monthDay, relTime } from '../format'
@@ -35,6 +35,12 @@ export default function ClubDetail() {
   const [showPollSheet, setShowPollSheet] = useState(false)
   const [editPoll, setEditPoll] = useState<Poll | null>(null)
 
+  // Documents (permission slips, forms, etc.). null = no access / not loaded yet.
+  const [documents, setDocuments] = useState<ClubDocument[] | null>(null)
+  const [docsCanManage, setDocsCanManage] = useState(false)
+  const [uploadingDoc, setUploadingDoc] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     if (!actualUser.id || !clubId) return
     let cancelled = false
@@ -43,6 +49,54 @@ export default function ClubDetail() {
       .catch(() => { if (!cancelled) setLoaded(true) })
     return () => { cancelled = true }
   }, [actualUser.id, clubId])
+
+  async function loadDocuments() {
+    if (!clubId) return
+    try {
+      const res = await fetch(`/api/school/clubs/documents?clubId=${clubId}`, { cache: 'no-store' })
+      if (!res.ok) { setDocuments(null); return }
+      const d = await res.json() as { documents?: ClubDocument[]; canManage?: boolean }
+      setDocuments(d.documents ?? [])
+      setDocsCanManage(!!d.canManage)
+    } catch {
+      setDocuments(null)
+    }
+  }
+
+  useEffect(() => {
+    if (!actualUser.id || !clubId) return
+    void loadDocuments()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actualUser.id, clubId])
+
+  async function uploadDocument(file: File) {
+    if (!clubId || uploadingDoc) return
+    setUploadingDoc(true)
+    try {
+      const form = new FormData()
+      form.append('clubId', clubId)
+      form.append('file', file)
+      const res = await fetch('/api/school/clubs/documents', { method: 'POST', body: form })
+      if (res.ok) { await loadDocuments(); toast('Document uploaded') }
+      else {
+        const e = await res.json().catch(() => null) as { error?: string } | null
+        toast(e?.error ?? 'Could not upload document')
+      }
+    } catch {
+      toast('Could not upload document')
+    } finally {
+      setUploadingDoc(false)
+    }
+  }
+
+  async function deleteDocument(documentId: string) {
+    setDocuments(prev => prev ? prev.filter(d => d.id !== documentId) : prev)
+    try {
+      const res = await fetch('/api/school/clubs/documents', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentId }) })
+      if (res.ok) toast('Document removed')
+      else { await loadDocuments(); toast('Could not remove document') }
+    } catch { await loadDocuments() }
+  }
 
   async function reload() {
     if (clubId) setData(await apiClubDetail(clubId))
@@ -273,6 +327,48 @@ export default function ClubDetail() {
           </>
         )}
 
+        {/* ── Documents ── */}
+        {documents !== null && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const f = e.target.files?.[0]
+                if (f) void uploadDocument(f)
+                e.target.value = ''
+              }}
+            />
+            <div style={css('display:flex;align-items:center;justify-content:space-between;margin:22px 4px 11px;')}>
+              <div style={css("font-family:var(--font-manrope);font-weight:800;font-size:16px;color:#0f1729;")}>Documents</div>
+              {docsCanManage && (
+                <button onClick={() => fileInputRef.current?.click()} disabled={uploadingDoc} style={css(`font-size:12.5px;font-weight:700;color:#6366f1;background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:4px;opacity:${uploadingDoc ? '0.5' : '1'};`)}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M17 8l-5-5-5 5" /><path d="M12 3v12" /></svg>
+                  {uploadingDoc ? 'Uploading…' : 'Upload'}
+                </button>
+              )}
+            </div>
+            {documents.length === 0 ? (
+              <div style={css('background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:18px;text-align:center;font-size:12.5px;color:#9aa0ac;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>{docsCanManage ? 'Upload permission slips and forms for your members.' : 'No documents shared yet.'}</div>
+            ) : documents.map(doc => (
+              <div key={doc.id} style={css('display:flex;gap:12px;align-items:center;background:#fff;border:1px solid #eef0f3;border-radius:18px;padding:13px;margin-bottom:10px;box-shadow:0 1px 2px rgba(16,24,40,.04);')}>
+                <span style={css('width:40px;height:40px;flex:none;border-radius:11px;background:#eef0ff;display:flex;align-items:center;justify-content:center;')}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg></span>
+                <div style={css('flex:1;min-width:0;')}>
+                  <div style={css('font-size:13.5px;font-weight:700;color:#0f1729;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;')}>{doc.name}</div>
+                  <div style={css('font-size:11px;color:#9aa0ac;font-weight:500;margin-top:2px;')}>{formatBytes(doc.sizeBytes)} · {relTime(doc.createdAt)}</div>
+                </div>
+                {doc.url && (
+                  <a href={doc.url} target="_blank" rel="noopener noreferrer" download={doc.name} style={css('width:32px;height:32px;border-radius:10px;border:1px solid #eceef1;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;text-decoration:none;')}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg></a>
+                )}
+                {docsCanManage && (
+                  <button onClick={() => void deleteDocument(doc.id)} style={css('width:32px;height:32px;border-radius:10px;border:1px solid #eceef1;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;')}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd0d8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg></button>
+                )}
+              </div>
+            ))}
+          </>
+        )}
+
         {/* ── Elections / polls ── */}
         {(polls.length > 0 || isManager) && (
           <>
@@ -379,4 +475,10 @@ export default function ClubDetail() {
 function MembershipNote({ count, shown }: { count: number; shown: number }) {
   if (count <= shown) return null
   return <div style={css('padding:11px 0;font-size:11.5px;color:#b3b9c4;text-align:center;')}>{count - shown} more not shown</div>
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }

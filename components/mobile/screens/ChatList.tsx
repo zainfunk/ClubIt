@@ -16,7 +16,7 @@ import { relTime } from '../format'
 export default function ChatList() {
   const { actualUser, currentUser } = useMockAuth()
   const router = useRouter()
-  const { messages } = useChatStore()
+  const { messages, unreadByClub } = useChatStore()
   const [clubs, setClubs] = useState<Club[] | null>(null)
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function ChatList() {
               <span style={css(`width:52px;height:52px;border-radius:17px;display:flex;align-items:center;justify-content:center;font-size:25px;flex:none;background:${tintFor(club.id)};`)}>{clubGlyph(club)}</span>
               <div style={css('flex:1;min-width:0;')}>
                 <div style={css('display:flex;align-items:center;justify-content:space-between;gap:8px;')}><span style={css("font-family:var(--font-manrope);font-weight:700;font-size:14.5px;color:#0f1729;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;")}>{club.name}</span><span style={css('font-size:11px;color:#9aa0ac;font-weight:500;flex:none;')}>{last ? relTime(last.sentAt) : ''}</span></div>
-                <div style={css('display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px;')}><span style={css('font-size:12.5px;color:#8a8f9a;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;')}>{last ? last.content : 'No messages yet'}</span></div>
+                <div style={css('display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px;')}><span style={css(`font-size:12.5px;color:${(unreadByClub[club.id] ?? 0) > 0 ? '#1f2734' : '#8a8f9a'};font-weight:${(unreadByClub[club.id] ?? 0) > 0 ? '700' : '500'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;`)}>{last ? last.content : 'No messages yet'}</span>{(unreadByClub[club.id] ?? 0) > 0 && <span style={css('flex:none;min-width:18px;height:18px;border-radius:9px;background:#ef4444;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px;')}>{(unreadByClub[club.id] ?? 0) > 9 ? '9+' : unreadByClub[club.id]}</span>}</div>
               </div>
             </button>
           ))}

@@ -60,8 +60,22 @@ export async function GET(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: 'Failed to load channels' }, { status: 500 })
 
+  // Advisors and admins see every channel in the club and can manage them.
+  // Regular members see only channels they've been added to.
+  const canManage = isAdmin || isAdvisor
+  let visible = channels ?? []
+  if (!canManage) {
+    const { data: memberRows } = await db
+      .from('chat_channel_members')
+      .select('channel_id')
+      .eq('user_id', requester.userId)
+    const memberChannelIds = new Set((memberRows ?? []).map((r) => r.channel_id))
+    visible = visible.filter((c) => memberChannelIds.has(c.id))
+  }
+
   return NextResponse.json({
-    channels: (channels ?? []).map((c) => ({
+    canManage,
+    channels: visible.map((c) => ({
       id: c.id,
       clubId: c.club_id,
       name: c.name,
@@ -115,6 +129,19 @@ export async function POST(request: NextRequest) {
 
   const { error } = await db.from('chat_channels').insert(channel)
   if (error) return NextResponse.json({ error: 'Failed to create channel' }, { status: 500 })
+
+  // Seed membership: the creator, plus the club's advisor, are always members
+  // of a new channel. The advisor then adds the specific people who belong.
+  const seedIds = new Set<string>([requester.userId])
+  if (club.advisor_id) seedIds.add(club.advisor_id as string)
+  await db.from('chat_channel_members').insert(
+    [...seedIds].map((uid) => ({
+      channel_id: channel.id,
+      user_id: uid,
+      added_by: requester.userId,
+      added_at: channel.created_at,
+    })),
+  )
 
   return NextResponse.json({
     channel: {
