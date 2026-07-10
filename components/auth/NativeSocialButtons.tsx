@@ -32,6 +32,14 @@ import { Button } from '@/components/ui/button'
 
 type Strategy = 'oauth_google' | 'oauth_apple'
 
+// A random nonce for Sign in with Apple. Apple copies this into the ID token's
+// `nonce` claim, which Clerk requires to be present (see start()).
+function generateNonce(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 export default function NativeSocialButtons() {
   const clerk = useClerk()
   const router = useRouter()
@@ -87,9 +95,19 @@ export default function NativeSocialButtons() {
         token = result?.idToken
         clerkStrategy = 'google_one_tap'
       } else {
+        // Clerk REQUIRES the Apple ID token to carry a `nonce` claim — see
+        // https://clerk.com/docs/references/ios/sign-in-with-apple ("You must
+        // set the nonce property of the ASAuthorizationAppleIDRequest ... in
+        // order to authenticate with Clerk"). Without it, Clerk's frontend-api
+        // rejects the token with `authorization_invalid` ("you are not
+        // authorized to perform this request"). Google's `google_one_tap` has
+        // no such requirement, which is why only Apple failed. Apple embeds the
+        // value verbatim in the token's `nonce` claim; Clerk only needs it to
+        // be present, so a random per-attempt value is sufficient.
+        const nonce = generateNonce()
         const res = await SocialLogin.login({
           provider: 'apple',
-          options: { scopes: ['email', 'name'] },
+          options: { scopes: ['email', 'name'], nonce },
         })
         // @capgo/capacitor-social-login returns the Apple JWT under `idToken`
         // (AppleProvider.swift), NOT `identityToken`.
