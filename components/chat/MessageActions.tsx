@@ -74,8 +74,13 @@ export default function MessageActions({
     <div className="relative self-center" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        aria-label="Message options"
-        className="p-1 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition opacity-0 group-hover:opacity-100"
+        aria-label="Report or block"
+        title="Report or block"
+        // Always visible: on a touch device (e.g. the iPad used for App Review)
+        // there is no hover, so a hover-only reveal would leave the report/block
+        // controls unreachable — App Store Guideline 1.2 requires them to be
+        // accessible. Muted by default, full-strength on hover for pointer users.
+        className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition opacity-70 hover:opacity-100"
       >
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
       </button>

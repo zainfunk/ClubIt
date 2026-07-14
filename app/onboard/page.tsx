@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useUser } from '@clerk/nextjs'
 import { School, Building2, Mail, User, MapPin } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import RocketLoader from '@/components/ui/RocketLoader'
@@ -9,6 +10,7 @@ import { FadeIn } from '@/components/ui/FadeIn'
 
 export default function OnboardPage() {
   const router = useRouter()
+  const { user: clerkUser, isLoaded } = useUser()
   const [form, setForm] = useState({
     name: '',
     district: '',
@@ -18,6 +20,22 @@ export default function OnboardPage() {
   const [loading, setLoading] = useState(false)
   const [launched, setLaunched] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Prefill the contact name/email from the signed-in identity. With Sign in
+  // with Apple, this data is supplied by the Authentication Services framework,
+  // so re-asking the user to type it violates App Store Guideline 4 (Design →
+  // Sign in with Apple). We autofill it here; the fields stay editable so an
+  // admin can substitute a different school contact if they want.
+  useEffect(() => {
+    if (!isLoaded || !clerkUser) return
+    const idName = clerkUser.fullName ?? ''
+    const idEmail = clerkUser.primaryEmailAddress?.emailAddress ?? ''
+    setForm(prev => ({
+      ...prev,
+      contactName: prev.contactName || idName,
+      contactEmail: prev.contactEmail || idEmail,
+    }))
+  }, [isLoaded, clerkUser])
 
   function update(field: keyof typeof form, value: string) {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -121,6 +139,9 @@ export default function OnboardPage() {
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400"
               />
             </div>
+            {form.contactName && (
+              <p className="text-xs text-gray-400 mt-1.5">Autofilled from your account — edit if needed.</p>
+            )}
           </div>
 
           {/* Contact email */}
@@ -137,6 +158,9 @@ export default function OnboardPage() {
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400"
               />
             </div>
+            {form.contactEmail && (
+              <p className="text-xs text-gray-400 mt-1.5">Autofilled from your account — edit if needed.</p>
+            )}
           </div>
 
           {error && (
