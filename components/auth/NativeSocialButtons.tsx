@@ -32,6 +32,14 @@ import { Button } from '@/components/ui/button'
 
 type Strategy = 'oauth_google' | 'oauth_apple'
 
+// For the native token sign-in flow, Clerk reports "this social identity has
+// no account yet" by rejecting with the `external_account_not_found` code —
+// the cue to transfer into a sign-up rather than a real failure.
+function isExternalAccountNotFound(e: unknown): boolean {
+  const errs = (e as { errors?: Array<{ code?: string }> })?.errors
+  return Array.isArray(errs) && errs.some((x) => x?.code === 'external_account_not_found')
+}
+
 // A random nonce for Sign in with Apple. Apple copies this into the ID token's
 // `nonce` claim, which Clerk requires to be present (see start()).
 function generateNonce(): string {
@@ -64,6 +72,20 @@ export default function NativeSocialButtons() {
       })
     })()
   }, [])
+
+  // Transfer a just-verified social identity into a new Clerk account and
+  // route the newcomer to /join (invite-code / school onboarding).
+  const transferToSignUp = async () => {
+    const signUp = await clerk.client.signUp.create({ transfer: true })
+    if (signUp.createdSessionId) {
+      await clerk.setActive({ session: signUp.createdSessionId })
+      router.push('/join')
+      return
+    }
+    // e.g. status === 'missing_requirements' — Clerk needs a field the token
+    // didn't supply; hand off to the hosted sign-up to finish.
+    router.push('/sign-up')
+  }
 
   const start = async (strategy: Strategy) => {
     if (busy) return
@@ -118,22 +140,37 @@ export default function NativeSocialButtons() {
 
       if (!token) throw new Error('No identity token returned by the provider.')
 
-      const signIn = await clerk.client.signIn.create({
-        strategy: clerkStrategy,
-        token,
-      })
+      // Native token flow ("google_one_tap" / "oauth_token_apple"): Clerk
+      // verifies the provider ID token server-side. For an EXISTING user this
+      // resolves with a complete sign-in. For a BRAND-NEW user it does NOT
+      // resolve with a `transferable` verification (that's the browser
+      // `authenticateWithRedirect` ticket flow) — instead it REJECTS with
+      // `external_account_not_found`. That rejection is Clerk's signal to
+      // transfer the just-verified identity into a fresh sign-up. Clerk keeps
+      // the transferable attempt on the client, so signUp.create({transfer})
+      // immediately after the throw picks it up. Not catching this is why
+      // account creation errored out while existing-user sign-in worked.
+      let signIn
+      try {
+        signIn = await clerk.client.signIn.create({ strategy: clerkStrategy, token })
+      } catch (signInErr) {
+        if (isExternalAccountNotFound(signInErr)) {
+          await transferToSignUp()
+          return
+        }
+        throw signInErr
+      }
+
       if (signIn.createdSessionId) {
         await clerk.setActive({ session: signIn.createdSessionId })
         router.push('/')
         return
       }
-      if (signIn.firstFactorVerification.status === 'transferable') {
-        const signUp = await clerk.client.signUp.create({ transfer: true })
-        if (signUp.createdSessionId) {
-          await clerk.setActive({ session: signUp.createdSessionId })
-          router.push('/join')
-          return
-        }
+      // Belt-and-suspenders: if a Clerk version resolves with a transferable
+      // verification instead of throwing, still route into the sign-up.
+      if (signIn.firstFactorVerification?.status === 'transferable') {
+        await transferToSignUp()
+        return
       }
       router.push('/sign-up')
     } catch (e) {
