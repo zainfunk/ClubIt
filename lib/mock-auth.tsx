@@ -206,8 +206,15 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Apply cached session or Clerk role immediately for fast rendering.
-    // Only resolve (enable redirects) if we have a cache hit — otherwise
-    // wait for the DB sync to avoid redirecting with stale/wrong role.
+    //
+    // We do NOT resolve (enable redirects / show school-scoped pages) from the
+    // cache alone. The cache is only a paint hint — it can be stale (the user
+    // left/was removed from the school, or the school was reseeded server-side),
+    // and trusting it as authoritative is what let a no-longer-enrolled user see
+    // the dashboard until /api/user/sync corrected it. Resolution now happens in
+    // exactly one place: the finally block of syncSchoolContext, against the
+    // authoritative DB state. Applying the cached values here still gives an
+    // instant, fully-populated paint the moment children are allowed to show.
     const cached = getSchoolSession(id)
     if (cached) {
       applySchoolState({
@@ -218,7 +225,6 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
         setupCompletedAt: cached.setupCompletedAt ?? null,
         persist: false,
       })
-      setIsResolved(true)
     } else if (clerkRole) {
       // Set user state for rendering but do NOT resolve yet —
       // the DB might have a different role (e.g. Clerk says admin,
@@ -332,13 +338,32 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     ? { ...baseUser, role: devRole }
     : baseUser
 
+  // A redirect is "pending" when school context is resolved but the current
+  // route isn't where this user belongs (e.g. a no-school user sitting on
+  // /dashboard who is about to be bounced to /join). We compute it here with
+  // the SAME inputs the redirect effect uses so the render gate and the
+  // navigation never disagree.
+  const pendingRedirect =
+    isResolved && baseUser.id
+      ? getRequiredRoute(pathname, baseUser.role, baseUser.schoolId, schoolStatus)
+      : null
+
   // Show children when:
   // - Clerk hasn't loaded yet (unauthenticated pages need to render)
   // - No signed-in user
-  // - School context is resolved
   // - Current page doesn't require school context (sign-in, superadmin, etc.)
+  // - School context is resolved AND no redirect to a different route is
+  //   pending. That last clause is the fix: without it, a no-school user's
+  //   /dashboard paints for a frame (looking "as if they're in a school")
+  //   before the post-paint redirect effect bounces them to /join. Holding
+  //   children back until the redirect lands removes that flash and the
+  //   "click anything → code page" bounce.
   const isNoSchoolRoute = NO_SCHOOL_REQUIRED.some((route) => pathname.startsWith(route))
-  const showChildren = !isLoaded || !clerkUser || isResolved || isNoSchoolRoute
+  const showChildren =
+    !isLoaded ||
+    !clerkUser ||
+    isNoSchoolRoute ||
+    (isResolved && (!pendingRedirect || pendingRedirect === pathname))
 
   return (
     <AuthContext.Provider
