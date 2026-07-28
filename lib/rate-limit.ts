@@ -153,6 +153,10 @@ export const joinLimiter = makeLimiter({ name: 'join', max: 5, windowSeconds: 90
 // 5 per IP per 15 minutes for the public, unauthenticated setup token route.
 export const setupLimiter = makeLimiter({ name: 'setup', max: 5, windowSeconds: 900 })
 
+// 5 per IP per hour for the public, unauthenticated marketing contact form.
+// A real prospect submits once; this caps spam/abuse of the open endpoint.
+export const contactLimiter = makeLimiter({ name: 'contact', max: 5, windowSeconds: 3600 })
+
 // 10 per user per hour. Stripe Checkout creation is rare; multiple
 // retries are usually a stuck client, not a real flow.
 export const checkoutLimiter = makeLimiter({ name: 'checkout', max: 10, windowSeconds: 3600 })

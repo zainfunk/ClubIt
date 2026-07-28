@@ -11,6 +11,8 @@ const isPublicRoute = createRouteMatcher([
   '/privacy',
   '/terms',
   '/support',
+  '/contact',
+  '/api/contact',
   // /setup is the school IT contact's code page — they may not have an account.
   '/setup(.*)',
   '/api/setup/(.*)',

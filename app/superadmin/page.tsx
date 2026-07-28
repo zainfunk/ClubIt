@@ -11,6 +11,7 @@ import {
   Trash2, Pencil, Save, CreditCard,
 } from 'lucide-react'
 import { School as SchoolType } from '@/types'
+import ContactRequestsPanel from '@/components/superadmin/ContactRequestsPanel'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -1278,6 +1279,9 @@ export default function SuperAdminPage() {
       <div className="mb-6">
         <ServerStatusPanel />
       </div>
+
+      {/* Leads from the marketing contact form */}
+      <ContactRequestsPanel />
 
       {/* School Management Section */}
       <div className="mb-4">

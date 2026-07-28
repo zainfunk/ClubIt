@@ -188,10 +188,10 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <Link
-                href="/sign-up"
+                href="/contact"
                 className="group inline-flex items-center gap-2 h-12 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold shadow-xl shadow-slate-900/20 transition-all hover:scale-[1.02]"
               >
-                Get Started — $1.50/student
+                Get in touch — $1.50/student
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
               <a
@@ -698,14 +698,14 @@ export default function LandingPage() {
               </ul>
 
               <Link
-                href="/subscribe"
+                href="/contact"
                 className="group w-full inline-flex items-center justify-center gap-2 h-14 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-base shadow-xl shadow-slate-900/20 transition-all hover:scale-[1.01]"
               >
-                Get Started — $1.50/student/year
+                Get in touch to get started
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
               <p className="text-center text-xs text-slate-500 mt-4">
-                Cancel anytime. Purchase orders accepted for schools.
+                We&apos;ll set your school up and invoice you. Purchase orders accepted.
               </p>
 
               <div className="mt-6 pt-6 border-t border-slate-100">
@@ -775,10 +775,10 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
-                href="/sign-up"
+                href="/contact"
                 className="group inline-flex items-center gap-2 h-12 px-8 rounded-xl bg-white text-slate-900 font-bold shadow-xl hover:scale-[1.02] transition-all"
               >
-                Get Started — $1.50/student
+                Get in touch — $1.50/student
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
               <Link href="/sign-in" className="text-indigo-100 hover:text-white text-sm font-semibold underline underline-offset-4">
