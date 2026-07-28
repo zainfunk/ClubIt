@@ -10,7 +10,6 @@ import {
   UserCheck,
   Crown,
   LayoutDashboard,
-  Smartphone,
   Monitor,
   Apple,
   Check,
@@ -18,7 +17,6 @@ import {
   Menu,
   X,
   ChevronDown,
-  Star,
   Compass,
   ShieldCheck,
 } from 'lucide-react'
@@ -33,7 +31,6 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [capacity, setCapacity] = useState(12)
-  const [pricingInterval, setPricingInterval] = useState<'monthly' | 'yearly'>('yearly')
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -194,7 +191,7 @@ export default function LandingPage() {
                 href="/sign-up"
                 className="group inline-flex items-center gap-2 h-12 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold shadow-xl shadow-slate-900/20 transition-all hover:scale-[1.02]"
               >
-                Get Started — $500/year
+                Get Started — $1.50/student
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
               <a
@@ -570,7 +567,6 @@ export default function LandingPage() {
           <div className="mt-16 flex items-center justify-center gap-6 text-sm text-slate-500">
             <span className="font-semibold">Works on</span>
             <div className="flex items-center gap-2"><Apple className="w-4 h-4" /> iOS</div>
-            <div className="flex items-center gap-2"><Smartphone className="w-4 h-4" /> Android</div>
             <div className="flex items-center gap-2"><Monitor className="w-4 h-4" /> Web</div>
           </div>
         </div>
@@ -587,15 +583,13 @@ export default function LandingPage() {
               Built mobile-first, because students live on their phones.
             </h2>
             <p className="text-lg text-slate-600 leading-relaxed mb-6">
-              ClubIt runs natively on iOS and Android, with a fast responsive web app for teachers and admins.
+              ClubIt runs natively on iOS, with a fast responsive web app for teachers and admins.
               No app fatigue — just the features students actually use.
             </p>
             <ul className="space-y-3 text-slate-700">
               {[
                 'Browse every club with covers and descriptions',
-                'Get push notifications when your club meets',
                 'Leader tools for managing rosters on the go',
-                "Works offline — syncs when you're back online",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2">
                   <Check className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -656,9 +650,9 @@ export default function LandingPage() {
               Pricing
             </div>
             <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tight mb-4" style={{ fontFamily: 'var(--font-manrope)' }}>
-              One price. One school. Everything included.
+              Simple, per-student pricing.
             </h2>
-            <p className="text-lg text-slate-600">No per-seat fees, no gotchas, no upsells.</p>
+            <p className="text-lg text-slate-600">Just $1.50 per student, per year. No setup fees, no gotchas, no upsells.</p>
           </div>
 
           <div className="relative max-w-lg mx-auto">
@@ -673,56 +667,26 @@ export default function LandingPage() {
                 </span>
               </div>
 
-              {/* Billing toggle */}
-              <div className="flex items-center justify-center gap-1 p-1 rounded-full bg-slate-100 mb-6">
-                <button
-                  onClick={() => setPricingInterval('monthly')}
-                  className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${
-                    pricingInterval === 'monthly'
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Monthly
-                </button>
-                <button
-                  onClick={() => setPricingInterval('yearly')}
-                  className={`px-5 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-1.5 ${
-                    pricingInterval === 'yearly'
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Yearly
-                  <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                    Save $100
-                  </span>
-                </button>
-              </div>
-
               <div className="flex items-baseline gap-2 mb-2">
                 <span className="text-6xl font-extrabold tracking-tight" style={{ fontFamily: 'var(--font-manrope)' }}>
-                  {pricingInterval === 'yearly' ? '$500' : '$50'}
+                  $1.50
                 </span>
                 <span className="text-lg text-slate-500 font-semibold">
-                  / {pricingInterval === 'yearly' ? 'year' : 'month'}
+                  / student / year
                 </span>
               </div>
               <p className="text-slate-600 mb-8">
-                {pricingInterval === 'yearly'
-                  ? 'One flat rate. Unlimited students, teachers, and clubs.'
-                  : '$600/year billed monthly. Unlimited students, teachers, and clubs.'}
+                Billed annually per enrolled student. Unlimited clubs and teachers, no setup fees.
               </p>
 
               <ul className="space-y-3 mb-8">
                 {[
                   'Unlimited clubs',
-                  'Unlimited students',
+                  'Unlimited teachers',
                   'Admin, teacher, and student roles',
                   'Live capacity tracking',
-                  'Mobile + web apps (iOS, Android, browser)',
+                  'iOS + web apps (browser)',
                   'Priority support',
-                  'Free updates forever',
                 ].map((f) => (
                   <li key={f} className="flex items-center gap-3 text-slate-700">
                     <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
@@ -737,16 +701,16 @@ export default function LandingPage() {
                 href="/subscribe"
                 className="group w-full inline-flex items-center justify-center gap-2 h-14 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-base shadow-xl shadow-slate-900/20 transition-all hover:scale-[1.01]"
               >
-                Start free trial — {pricingInterval === 'yearly' ? '$500/year' : '$50/month'}
+                Get Started — $1.50/student/year
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
               <p className="text-center text-xs text-slate-500 mt-4">
-                30-day free trial. Cancel anytime. Purchase orders accepted for schools.
+                Cancel anytime. Purchase orders accepted for schools.
               </p>
 
               <div className="mt-6 pt-6 border-t border-slate-100">
                 <div className="flex items-center justify-center gap-2 flex-wrap">
-                  {['Visa', 'Mastercard', 'Amex', 'Apple Pay', 'Google Pay'].map((m) => (
+                  {['Visa', 'Mastercard', 'Amex', 'Apple Pay'].map((m) => (
                     <span key={m} className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-slate-100 text-slate-600">
                       {m}
                     </span>
@@ -757,63 +721,6 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ============ TESTIMONIALS ============ */}
-      <section className="py-24">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tight mb-4" style={{ fontFamily: 'var(--font-manrope)' }}>
-              Loved by students, teachers, and principals.
-            </h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                quote: "I signed up for three clubs in like 30 seconds. Our old system was a Google Form from 2015.",
-                name: 'Maya Patel',
-                role: 'Junior, Student',
-                school: 'Westview High',
-                avatar: 'bg-gradient-to-br from-indigo-400 to-purple-500',
-                initial: 'MP',
-              },
-              {
-                quote: "As a club advisor, I finally know who's actually in my club. Rosters update themselves. It's a small thing but it changed my year.",
-                name: 'Ms. Rivera',
-                role: 'Teacher, Chess Club Advisor',
-                school: 'Lakeside Prep',
-                avatar: 'bg-gradient-to-br from-emerald-400 to-teal-500',
-                initial: 'MR',
-              },
-              {
-                quote: "Club season used to be a spreadsheet nightmare for our office. ClubIt killed the chaos. Worth every dollar.",
-                name: 'Dr. Chen',
-                role: 'Principal',
-                school: 'Northgate Academy',
-                avatar: 'bg-gradient-to-br from-rose-400 to-amber-500',
-                initial: 'DC',
-              },
-            ].map((t) => (
-              <div key={t.name} className="rounded-2xl bg-white border border-slate-200 p-6 shadow-xl shadow-slate-900/5">
-                <div className="flex gap-1 mb-4">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  ))}
-                </div>
-                <p className="text-slate-700 leading-relaxed mb-6">"{t.quote}"</p>
-                <div className="flex items-center gap-3">
-                  <div className={`w-11 h-11 rounded-full ${t.avatar} flex items-center justify-center text-white font-bold`}>
-                    {t.initial}
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm">{t.name}</div>
-                    <div className="text-xs text-slate-500">{t.role} · {t.school}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </section>
@@ -829,20 +736,8 @@ export default function LandingPage() {
           <div className="space-y-3">
             {[
               {
-                q: 'Is there a free trial?',
-                a: 'Yes — schools can try ClubIt free for 30 days, no credit card required. You only pay when you\'re ready to commit.',
-              },
-              {
                 q: 'How does billing work?',
-                a: '$500/year or $50/month per school. We accept credit cards, Apple Pay, Google Pay, and school purchase orders.',
-              },
-              {
-                q: 'Can we import existing club rosters?',
-                a: 'Absolutely. Upload a CSV or sync from your existing SIS. We\'ll map fields automatically and you\'ll be live in under an hour.',
-              },
-              {
-                q: 'What happens when a club is full?',
-                a: 'New students see a "Full" badge and can join a waitlist. If a member drops, the next person on the waitlist is notified automatically.',
+                a: '$1.50 per enrolled student, per year. We accept credit cards, Apple Pay, and school purchase orders.',
               },
               {
                 q: 'Is student data private?',
@@ -876,14 +771,14 @@ export default function LandingPage() {
               Ready to fix club season?
             </h2>
             <p className="text-lg text-indigo-100 mb-8 max-w-xl mx-auto">
-              Join 40+ schools who've already ditched the spreadsheets.
+              Ditch the spreadsheets and run club season in one place.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
                 href="/sign-up"
                 className="group inline-flex items-center gap-2 h-12 px-8 rounded-xl bg-white text-slate-900 font-bold shadow-xl hover:scale-[1.02] transition-all"
               >
-                Get Started — $500/year
+                Get Started — $1.50/student
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
               <Link href="/sign-in" className="text-indigo-100 hover:text-white text-sm font-semibold underline underline-offset-4">
@@ -912,15 +807,36 @@ export default function LandingPage() {
               </p>
             </div>
             {[
-              { title: 'Product', items: ['Features', 'How it works', 'Pricing', 'FAQ'] },
-              { title: 'Company', items: ['About', 'Blog', 'Careers', 'Contact'] },
-              { title: 'Legal', items: ['Privacy', 'Terms', 'FERPA', 'Security'] },
+              {
+                title: 'Product',
+                items: [
+                  { label: 'Features', href: '#features' },
+                  { label: 'How it works', href: '#how' },
+                  { label: 'Pricing', href: '#pricing' },
+                  { label: 'FAQ', href: '#faq' },
+                ],
+              },
+              {
+                title: 'Account',
+                items: [
+                  { label: 'Log in', href: '/sign-in' },
+                  { label: 'Get started', href: '/sign-up' },
+                  { label: 'Support', href: '/support' },
+                ],
+              },
+              {
+                title: 'Legal',
+                items: [
+                  { label: 'Privacy', href: '/privacy' },
+                  { label: 'Terms', href: '/terms' },
+                ],
+              },
             ].map((col) => (
               <div key={col.title}>
                 <div className="font-bold text-sm mb-3" style={{ fontFamily: 'var(--font-manrope)' }}>{col.title}</div>
                 <ul className="space-y-2 text-sm text-slate-500">
                   {col.items.map((i) => (
-                    <li key={i}><a href="#" className="hover:text-slate-900 transition">{i}</a></li>
+                    <li key={i.label}><a href={i.href} className="hover:text-slate-900 transition">{i.label}</a></li>
                   ))}
                 </ul>
               </div>
