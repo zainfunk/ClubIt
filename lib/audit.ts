@@ -49,6 +49,9 @@ export type AuditAction =
   // staff access requests (admin/advisor elevation gate)
   | 'staff_request.approved'
   | 'staff_request.denied'
+  // self-serve club registration (open-registration schools)
+  | 'club_registration.approved'
+  | 'club_registration.denied'
   // election
   | 'election.created'
   | 'election.opened'

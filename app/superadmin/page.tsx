@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { School as SchoolType } from '@/types'
 import ContactRequestsPanel from '@/components/superadmin/ContactRequestsPanel'
+import ClubRegistrationsPanel from '@/components/superadmin/ClubRegistrationsPanel'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -1282,6 +1283,9 @@ export default function SuperAdminPage() {
 
       {/* Leads from the marketing contact form */}
       <ContactRequestsPanel />
+
+      {/* Self-serve club registrations (open-registration schools) */}
+      <ClubRegistrationsPanel />
 
       {/* School Management Section */}
       <div className="mb-4">
