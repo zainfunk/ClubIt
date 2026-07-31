@@ -148,6 +148,38 @@ export const CreateElectionSchema = z
   .strict()
 
 // ---------------------------------------------------------------------------
+// /api/registrations -- self-serve club registration (open-registration schools)
+// ---------------------------------------------------------------------------
+
+export const REQUESTER_ROLES = ['president', 'officer'] as const
+
+/** Fields a requester submits or edits. Shared by POST (create) and PATCH. */
+export const ClubRegistrationSchema = z
+  .object({
+    clubName:        ShortText(120),
+    description:     z.string().trim().min(1).max(2000),
+    category:        z.string().trim().max(80).optional().or(z.literal('')),
+    expectedMembers: z.number().int().min(1).max(100_000).optional(),
+    requesterRole:   z.enum(REQUESTER_ROLES),
+    contactInfo:     z.string().trim().max(200).optional().or(z.literal('')),
+    slug:            z.string().trim().min(1).max(60),
+  })
+  .strict()
+
+/** Reviewer approve/deny. Deny requires a non-empty reason. */
+export const ClubRegistrationReviewSchema = z
+  .object({
+    id:     z.string().trim().min(1).max(80),
+    action: z.enum(['approve', 'deny']),
+    reason: z.string().trim().max(1000).optional(),
+  })
+  .strict()
+  .refine((v) => v.action !== 'deny' || (v.reason && v.reason.length > 0), {
+    message: 'A reason is required when denying a request',
+    path: ['reason'],
+  })
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

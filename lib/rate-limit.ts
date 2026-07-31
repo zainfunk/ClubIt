@@ -157,6 +157,12 @@ export const setupLimiter = makeLimiter({ name: 'setup', max: 5, windowSeconds: 
 // A real prospect submits once; this caps spam/abuse of the open endpoint.
 export const contactLimiter = makeLimiter({ name: 'contact', max: 5, windowSeconds: 3600 })
 
+// Self-serve club registration submissions. The route is authenticated but
+// its signup funnel is public, so bots that mint accounts could still spam it.
+// Keyed by BOTH user and IP at the call site: a handful of edits/resubmits is
+// fine, hundreds is abuse.
+export const clubRegistrationLimiter = makeLimiter({ name: 'club_reg', max: 10, windowSeconds: 3600 })
+
 // 10 per user per hour. Stripe Checkout creation is rare; multiple
 // retries are usually a stuck client, not a real flow.
 export const checkoutLimiter = makeLimiter({ name: 'checkout', max: 10, windowSeconds: 3600 })

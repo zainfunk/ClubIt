@@ -253,6 +253,29 @@ export interface PaymentEvent {
   createdAt: string
 }
 
+export type ClubRegistrationStatus = 'pending' | 'approved' | 'denied'
+
+export type RequesterRole = 'president' | 'officer'
+
+export interface ClubRegistrationRequest {
+  id: string
+  schoolId: string
+  requesterId: string
+  clubName: string
+  description: string
+  category: string | null
+  expectedMembers: number | null
+  requesterRole: RequesterRole | null
+  contactInfo: string | null
+  status: ClubRegistrationStatus
+  denialReason: string | null
+  reviewerId: string | null
+  reviewedAt: string | null
+  createdClubId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type ClubFormType = 'signup' | 'nomination' | 'survey' | 'approval'
 
 export interface ClubForm {
