@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
-import { Club, Role } from '@/types'
+import { Role } from '@/types'
 import { sanitizeText } from '@/lib/sanitize'
+import { CLUB_COLUMNS, createClub, mapClubRowToClub } from '@/lib/clubs'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,38 +15,6 @@ interface RequesterContext {
   schoolId: string | null
   name: string
   email: string
-}
-
-function mapClubRowToClub(row: {
-  id: string
-  name: string
-  description: string | null
-  icon_url: string | null
-  capacity: number | null
-  advisor_id: string | null
-  auto_accept: boolean | null
-  tags: string[] | null
-  event_creator_ids: string[] | null
-  dues_amount_cents: number | null
-  created_at: string
-}): Club {
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description ?? '',
-    iconUrl: row.icon_url ?? undefined,
-    capacity: row.capacity,
-    advisorId: row.advisor_id ?? '',
-    memberIds: [],
-    leadershipPositions: [],
-    socialLinks: [],
-    meetingTimes: [],
-    tags: row.tags ?? [],
-    eventCreatorIds: row.event_creator_ids ?? [],
-    createdAt: row.created_at,
-    autoAccept: row.auto_accept ?? false,
-    duesAmountCents: row.dues_amount_cents ?? 0,
-  }
 }
 
 async function getRequesterContext(): Promise<RequesterContext | null> {
@@ -99,7 +68,7 @@ export async function GET(request: NextRequest) {
   const db = createServiceClient()
   const { data: clubRows, error: clubsError } = await db
     .from('clubs')
-    .select('id, name, description, icon_url, capacity, advisor_id, auto_accept, tags, event_creator_ids, dues_amount_cents, created_at')
+    .select(CLUB_COLUMNS)
     .eq('school_id', requester.schoolId)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
@@ -267,34 +236,22 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const createdAt = new Date().toISOString().split('T')[0]
-  const clubId = `club-${crypto.randomUUID()}`
-
-  const { data: clubRow, error: insertError } = await db
-    .from('clubs')
-    .insert({
-      id: clubId,
+  const result = await createClub(
+    {
+      schoolId: requester.schoolId,
       name,
       description,
-      icon_url: iconUrl || null,
+      ownerId,
+      iconUrl: iconUrl || null,
       capacity,
-      advisor_id: ownerId,
-      auto_accept: false,
       tags,
-      event_creator_ids: [],
-      created_at: createdAt,
-      school_id: requester.schoolId,
-    })
-    .select('id, name, description, icon_url, capacity, advisor_id, auto_accept, tags, event_creator_ids, dues_amount_cents, created_at')
-    .single()
+    },
+    db,
+  )
 
-  if (insertError || !clubRow) {
-    console.error('club create error', insertError)
-    return NextResponse.json(
-      { error: insertError?.message ?? 'Failed to create club' },
-      { status: 500 }
-    )
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, club: mapClubRowToClub(clubRow) })
+  return NextResponse.json({ ok: true, club: result.club })
 }
