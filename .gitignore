@@ -58,3 +58,4 @@ playwright-report/
 tests/e2e/.auth/
 tests/e2e/.chrome-data/
 tests/e2e/screenshots/
+.playwright-mcp/
