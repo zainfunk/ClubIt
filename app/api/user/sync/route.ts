@@ -108,7 +108,7 @@ export async function GET() {
   // Fetch school details
   const { data: school } = await db
     .from('schools')
-    .select('name, contact_name, contact_email, status, setup_completed_at')
+    .select('name, contact_name, contact_email, status, setup_completed_at, open_registration, registration_slug')
     .eq('id', schoolId)
     .maybeSingle()
 
@@ -120,5 +120,7 @@ export async function GET() {
     contactName: school?.contact_name ?? null,
     contactEmail: school?.contact_email ?? null,
     setupCompletedAt: school?.setup_completed_at ?? null,
+    openRegistration: school?.open_registration ?? false,
+    registrationSlug: school?.registration_slug ?? null,
   })
 }

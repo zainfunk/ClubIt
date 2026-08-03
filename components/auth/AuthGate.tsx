@@ -7,15 +7,27 @@ import { useEffect, useState, type ReactNode } from 'react'
 // terms making clear there is zero tolerance for objectionable content or
 // abusive users BEFORE registering or logging in.
 //
-// The agreement is always presented above the auth controls. The controls
-// (native social buttons + the Clerk hosted form, passed as children) are
-// disabled — visually dimmed and made inert — until the box is checked.
-// Acceptance is remembered so returning users aren't re-prompted every launch,
-// but the agreement text stays visible on the sign-in screen at all times.
+// The controls (native social buttons + the Clerk hosted form, passed as
+// children) are disabled — visually dimmed and made inert — until the box is
+// checked. Acceptance is remembered so returning users aren't re-prompted every
+// launch, but the agreement text stays visible on the auth screen at all times.
+//
+// `header` is an optional ungated slot rendered above everything (e.g. the
+// UConn student entry point on sign-in). `termsBelow` moves the agreement box
+// underneath the gated controls; the controls stay inert until agreed either
+// way, so the gate is functional regardless of visual order.
 
 const ACCEPT_KEY = 'clubit_terms_accepted_v1'
 
-export default function AuthGate({ children }: { children: ReactNode }) {
+export default function AuthGate({
+  children,
+  header,
+  termsBelow = false,
+}: {
+  children: ReactNode
+  header?: ReactNode
+  termsBelow?: boolean
+}) {
   // Start false on both server and first client render (avoids a hydration
   // mismatch); a returning user's stored acceptance is applied in the effect.
   const [agreed, setAgreed] = useState(false)
@@ -42,46 +54,64 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     }
   }
 
+  const termsBox = (
+    <label className="flex items-start gap-3 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-left cursor-pointer">
+      <input
+        type="checkbox"
+        checked={agreed}
+        onChange={e => toggle(e.target.checked)}
+        className="mt-0.5 h-4 w-4 shrink-0 accent-black cursor-pointer"
+        aria-describedby="auth-terms-text"
+      />
+      <span id="auth-terms-text" className="text-xs leading-relaxed text-gray-600">
+        I agree to ClubIt&apos;s{' '}
+        <a href="/terms" target="_blank" rel="noopener noreferrer" className="font-medium text-gray-900 underline">
+          Terms of Use (EULA)
+        </a>{' '}
+        and{' '}
+        <a href="/privacy" target="_blank" rel="noopener noreferrer" className="font-medium text-gray-900 underline">
+          Privacy Policy
+        </a>
+        . I understand ClubIt has <strong className="font-semibold text-gray-900">zero tolerance for objectionable
+        content or abusive behavior</strong>, and that such content and users can be reported and blocked.
+      </span>
+    </label>
+  )
+
+  const gatedControls = (
+    <div
+      className={
+        'w-full flex flex-col items-center gap-4 transition-opacity ' +
+        (agreed ? 'opacity-100' : 'opacity-40 pointer-events-none select-none')
+      }
+      aria-disabled={!agreed}
+      // inert blocks keyboard/tab access too, so the gate can't be bypassed by
+      // focusing a control the dimming only hides visually.
+      inert={!agreed}
+    >
+      {children}
+    </div>
+  )
+
   return (
     <div className="w-full max-w-sm flex flex-col items-center gap-4">
-      <label className="flex items-start gap-3 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-left cursor-pointer">
-        <input
-          type="checkbox"
-          checked={agreed}
-          onChange={e => toggle(e.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 accent-black cursor-pointer"
-          aria-describedby="auth-terms-text"
-        />
-        <span id="auth-terms-text" className="text-xs leading-relaxed text-gray-600">
-          I agree to ClubIt&apos;s{' '}
-          <a href="/terms" target="_blank" rel="noopener noreferrer" className="font-medium text-gray-900 underline">
-            Terms of Use (EULA)
-          </a>{' '}
-          and{' '}
-          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="font-medium text-gray-900 underline">
-            Privacy Policy
-          </a>
-          . I understand ClubIt has <strong className="font-semibold text-gray-900">zero tolerance for objectionable
-          content or abusive behavior</strong>, and that such content and users can be reported and blocked.
-        </span>
-      </label>
+      {header}
 
-      <div
-        className={
-          'w-full flex flex-col items-center gap-4 transition-opacity ' +
-          (agreed ? 'opacity-100' : 'opacity-40 pointer-events-none select-none')
-        }
-        aria-disabled={!agreed}
-        // inert blocks keyboard/tab access too, so the gate can't be bypassed by
-        // focusing a control the dimming only hides visually.
-        inert={!agreed}
-      >
-        {children}
-      </div>
+      {termsBelow ? (
+        <>
+          {gatedControls}
+          {termsBox}
+        </>
+      ) : (
+        <>
+          {termsBox}
+          {gatedControls}
+        </>
+      )}
 
       {!agreed && (
         <p className="text-xs text-gray-400 text-center">
-          Please agree to the terms above to continue.
+          Please agree to the terms {termsBelow ? 'below' : 'above'} to continue.
         </p>
       )}
     </div>

@@ -12,6 +12,8 @@ interface SchoolSession {
   role: Role
   schoolStatus?: SchoolStatus
   setupCompletedAt?: string | null
+  openRegistration?: boolean
+  registrationSlug?: string | null
 }
 
 interface AuthContextValue {
@@ -22,6 +24,10 @@ interface AuthContextValue {
   schoolPrincipal: string | null
   schoolContactEmail: string | null
   schoolSetupCompletedAt: string | null
+  // Open-registration (e.g. UConn): the school lets students self-serve. The
+  // slug drives the "Register a club" link (/join/<slug>?register=1).
+  openRegistration: boolean
+  registrationSlug: string | null
   devRole: Role | null
   setDevRole: (role: Role | null) => void
   refreshSchoolContext: () => void
@@ -116,6 +122,8 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
   const [schoolPrincipal, setSchoolPrincipal] = useState<string | null>(null)
   const [schoolContactEmail, setSchoolContactEmail] = useState<string | null>(null)
   const [schoolSetupCompletedAt, setSchoolSetupCompletedAt] = useState<string | null>(null)
+  const [openRegistration, setOpenRegistration] = useState<boolean>(false)
+  const [registrationSlug, setRegistrationSlug] = useState<string | null>(null)
   const [devRole, setDevRole] = useState<Role | null>(null)
   const [refreshTick, setRefreshTick] = useState(0)
   const [isResolved, setIsResolved] = useState(false)
@@ -181,6 +189,8 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
       contactName?: string | null
       contactEmail?: string | null
       setupCompletedAt?: string | null
+      openRegistration?: boolean
+      registrationSlug?: string | null
       persist?: boolean
     }) {
       if (cancelled) return
@@ -191,6 +201,8 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
       setSchoolPrincipal(args.contactName ?? null)
       setSchoolContactEmail(args.contactEmail ?? null)
       setSchoolSetupCompletedAt(args.setupCompletedAt ?? null)
+      setOpenRegistration(args.openRegistration ?? false)
+      setRegistrationSlug(args.registrationSlug ?? null)
 
       if (args.schoolId && args.schoolName && args.persist !== false) {
         saveSchoolSession(id, {
@@ -199,6 +211,8 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
           role: args.role,
           schoolStatus: args.schoolStatus ?? undefined,
           setupCompletedAt: args.setupCompletedAt ?? null,
+          openRegistration: args.openRegistration ?? false,
+          registrationSlug: args.registrationSlug ?? null,
         })
       } else if (!args.schoolId) {
         clearSchoolSession(id)
@@ -223,6 +237,8 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
         schoolName: cached.schoolName,
         schoolStatus: cached.schoolStatus ?? null,
         setupCompletedAt: cached.setupCompletedAt ?? null,
+        openRegistration: cached.openRegistration ?? false,
+        registrationSlug: cached.registrationSlug ?? null,
         persist: false,
       })
     } else if (clerkRole) {
@@ -250,6 +266,8 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
           contactName?: string | null
           contactEmail?: string | null
           setupCompletedAt?: string | null
+          openRegistration?: boolean
+          registrationSlug?: string | null
         }
 
         const role = (data.role as Role) ?? clerkRole ?? 'student'
@@ -268,6 +286,8 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
           contactName: data.contactName ?? null,
           contactEmail: data.contactEmail ?? null,
           setupCompletedAt: data.setupCompletedAt ?? null,
+          openRegistration: data.openRegistration ?? false,
+          registrationSlug: data.registrationSlug ?? null,
         })
       } finally {
         if (!cancelled) {
@@ -329,6 +349,8 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
     setSchoolPrincipal(null)
     setSchoolContactEmail(null)
     setSchoolSetupCompletedAt(null)
+    setOpenRegistration(false)
+    setRegistrationSlug(null)
     hasRedirected.current = false
     router.replace('/join')
     return { ok: true }
@@ -375,6 +397,8 @@ export function MockAuthProvider({ children }: { children: ReactNode }) {
         schoolPrincipal,
         schoolContactEmail,
         schoolSetupCompletedAt,
+        openRegistration,
+        registrationSlug,
         devRole,
         setDevRole,
         refreshSchoolContext: () => setRefreshTick((tick) => tick + 1),

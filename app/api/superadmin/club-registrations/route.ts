@@ -46,16 +46,20 @@ export async function GET() {
   const requesterIds = [...new Set(requests.map((r) => r.requesterId))]
   const schoolIds = [...new Set(requests.map((r) => r.schoolId))]
 
-  const [{ data: users }, { data: clubs }] = await Promise.all([
+  const [{ data: users }, { data: clubs }, { data: schools }] = await Promise.all([
     requesterIds.length
       ? db.from('users').select('id, name, email').in('id', requesterIds)
       : Promise.resolve({ data: [] as { id: string; name: string | null; email: string | null }[] }),
     schoolIds.length
       ? db.from('clubs').select('id, name, school_id').in('school_id', schoolIds)
       : Promise.resolve({ data: [] as { id: string; name: string; school_id: string }[] }),
+    schoolIds.length
+      ? db.from('schools').select('id, name').in('id', schoolIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
   ])
 
   const userById = new Map((users ?? []).map((u) => [u.id, u]))
+  const schoolNameById = new Map((schools ?? []).map((s) => [s.id, s.name]))
   const clubsBySchool = new Map<string, { id: string; name: string }[]>()
   for (const club of clubs ?? []) {
     const list = clubsBySchool.get(club.school_id) ?? []
@@ -79,6 +83,7 @@ export async function GET() {
       ...req,
       requesterName: requester?.name ?? null,
       requesterEmail: requester?.email ?? null,
+      schoolName: schoolNameById.get(req.schoolId) ?? null,
       duplicateClubNames,
     }
   })

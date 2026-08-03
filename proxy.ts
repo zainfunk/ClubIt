@@ -16,9 +16,15 @@ const isPublicRoute = createRouteMatcher([
   // /setup is the school IT contact's code page — they may not have an account.
   '/setup(.*)',
   '/api/setup/(.*)',
-  // NOTE: /join and /onboard (and their APIs) are NOT public — they require a
-  // signed-in Clerk user. Clerk redirects unauthenticated visitors to sign-in
-  // with a return URL, so they're never stranded on a form they can't submit.
+  // Open-registration join pages (e.g. /join/uconn) are public so a prospective
+  // UConn student can see the school + register CTA BEFORE signing in; the page
+  // itself shows a "Sign in to continue" prompt when signed out. The GET on
+  // /api/registrations returns only public school info to anon callers, while
+  // its POST/PATCH self-enforce auth. Note: bare /join (the invite-code page)
+  // and /onboard are deliberately left OUT — those still require a signed-in
+  // Clerk user and bounce anon visitors to sign-in with a return URL.
+  '/join/(.*)',
+  '/api/registrations',
   // /api/webhooks/* removed in W2.6 -- duplicate Stripe handler that
   // accepted unsigned events when STRIPE_WEBHOOK_SECRET was unset (C-6).
   '/api/stripe/webhook',

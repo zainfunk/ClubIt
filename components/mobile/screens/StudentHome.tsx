@@ -19,7 +19,7 @@ interface DashData {
 }
 
 export default function StudentHome() {
-  const { actualUser, currentUser, schoolName } = useMockAuth()
+  const { actualUser, currentUser, schoolName, openRegistration, registrationSlug } = useMockAuth()
   const router = useRouter()
   const [data, setData] = useState<DashData | null>(null)
 
@@ -58,6 +58,13 @@ export default function StudentHome() {
 
       {data === null ? <Loader /> : (
         <div className="m-noscroll" style={{ ...css('flex:1;overflow-y:auto;padding:6px 20px 0;'), paddingBottom: `calc(${BOTTOM(0)} + 96px)` }}>
+          {currentUser.role === 'student' && openRegistration && registrationSlug && (
+            <button onClick={() => router.push(`/join/${registrationSlug}?register=1`)} style={css('display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:16px;background:#0058be;color:#fff;border:none;border-radius:14px;padding:13px;font-family:var(--font-manrope);font-weight:800;font-size:14.5px;letter-spacing:-.01em;cursor:pointer;box-shadow:0 4px 12px rgba(0,88,190,.25);')}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+              Register a club
+            </button>
+          )}
+
           {/* pending requests */}
           {data.pendingRequests.length > 0 && (
             <div style={css('margin-top:18px;')}>

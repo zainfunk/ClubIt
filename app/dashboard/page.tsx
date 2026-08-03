@@ -43,7 +43,7 @@ export default function DashboardPage() {
 }
 
 function DesktopDashboard() {
-  const { currentUser } = useMockAuth()
+  const { currentUser, schoolName, openRegistration, registrationSlug } = useMockAuth()
   const [myClubs, setMyClubs] = useState<Club[]>([])
   const [advisorNames, setAdvisorNames] = useState<Record<string, string>>({})
   const [pinnedNews, setPinnedNews] = useState<Record<string, ClubNews>>({})
@@ -214,6 +214,11 @@ function DesktopDashboard() {
     <div className="max-w-2xl mx-auto px-2 sm:px-0">
       <FadeIn className="mb-10" y={20}>
         <div className="p-6 rounded-xl" style={{ background: 'rgba(33, 112, 228, 0.08)', border: '1px solid rgba(0, 88, 190, 0.1)' }}>
+          {schoolName && (
+            <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#0C2340] text-white mb-2">
+              {schoolName}
+            </span>
+          )}
           <h2 className="text-3xl font-extrabold text-[#191c1d] tracking-tight leading-none mb-2" style={{ fontFamily: 'var(--font-manrope, sans-serif)' }}>
             Hi, {firstName}!
           </h2>
@@ -240,6 +245,18 @@ function DesktopDashboard() {
               <Plus className="w-4 h-4" />
               Create a club
             </button>
+          )}
+          {/* Open-registration students (e.g. UConn) can propose a new club for
+              superadmin review — it's optional, hence a dashboard action rather
+              than a forced step at enrolment. */}
+          {currentUser.role === 'student' && openRegistration && registrationSlug && (
+            <Link
+              href={`/join/${registrationSlug}?register=1`}
+              className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold bg-[#0058be] text-white px-4 py-2 rounded-xl hover:bg-[#0047a0] transition-colors shadow-lg shadow-blue-500/20"
+            >
+              <Plus className="w-4 h-4" />
+              Register a club
+            </Link>
           )}
         </div>
 

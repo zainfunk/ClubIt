@@ -12,6 +12,7 @@ import type { ClubRegistrationRequest } from '@/types'
 interface ReviewRequest extends ClubRegistrationRequest {
   requesterName: string | null
   requesterEmail: string | null
+  schoolName: string | null
   duplicateClubNames: string[]
 }
 
@@ -139,6 +140,11 @@ export default function ClubRegistrationsPanel() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-gray-900">{r.clubName}</span>
+                  {r.schoolName && (
+                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[#0C2340] text-white">
+                      {r.schoolName}
+                    </span>
+                  )}
                   <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${STATUS_STYLES[r.status] ?? 'bg-gray-100 text-gray-500'}`}>
                     {r.status}
                   </span>

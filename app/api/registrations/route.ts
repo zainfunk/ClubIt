@@ -6,6 +6,7 @@ import { clubRegistrationLimiter } from '@/lib/rate-limit'
 import { sanitizeText } from '@/lib/sanitize'
 import { ClubRegistrationSchema } from '@/lib/schemas'
 import { REGISTRATION_COLUMNS, mapRegistrationRow, type RegistrationRow } from '@/lib/registrations'
+import { resolveOpenSchool, publicSchool, enrollStudent } from '@/lib/open-registration'
 
 /**
  * Self-serve club registration for open-registration schools (UConn).
@@ -21,39 +22,6 @@ import { REGISTRATION_COLUMNS, mapRegistrationRow, type RegistrationRow } from '
  */
 
 export const dynamic = 'force-dynamic'
-
-interface OpenSchool {
-  id: string
-  name: string
-  status: string
-  open_registration: boolean
-  allowed_email_domain: string | null
-  registration_slug: string | null
-}
-
-const SCHOOL_COLUMNS =
-  'id, name, status, open_registration, allowed_email_domain, registration_slug'
-
-async function resolveOpenSchool(slug: string): Promise<OpenSchool | null> {
-  const db = createServiceClient()
-  const { data } = await db
-    .from('schools')
-    .select(SCHOOL_COLUMNS)
-    .eq('registration_slug', slug)
-    .maybeSingle()
-
-  if (!data || !data.open_registration) return null
-  return data as OpenSchool
-}
-
-function publicSchool(school: OpenSchool) {
-  return {
-    name: school.name,
-    slug: school.registration_slug,
-    allowedEmailDomain: school.allowed_email_domain,
-    status: school.status,
-  }
-}
 
 export async function GET(request: NextRequest) {
   const slug = new URL(request.url).searchParams.get('slug')?.trim()
@@ -111,67 +79,26 @@ export async function POST(request: NextRequest) {
   if (!school) {
     return NextResponse.json({ error: 'Open registration is not available here' }, { status: 404 })
   }
-  if (school.status !== 'active') {
-    return NextResponse.json({ error: 'This school is not currently active' }, { status: 403 })
-  }
 
   const db = createServiceClient()
   const client = await clerkClient()
   const clerkUser = await client.users.getUser(userId)
   const primary = clerkUser.primaryEmailAddress
-  const email = (primary?.emailAddress ?? '').toLowerCase()
+  const email = primary?.emailAddress ?? ''
 
-  // Server-side email gate: verified primary email ending in the school's
-  // allowed domain. This is the only membership check — self-enrolment is
-  // gated entirely by proving control of an @uconn.edu inbox via Clerk.
-  if (primary?.verification?.status !== 'verified') {
-    return NextResponse.json(
-      { error: 'Verify your email address with Clerk before registering a club.' },
-      { status: 403 },
-    )
-  }
-  if (school.allowed_email_domain && !email.endsWith(`@${school.allowed_email_domain.toLowerCase()}`)) {
-    return NextResponse.json(
-      { error: `Registration is limited to @${school.allowed_email_domain} email addresses.` },
-      { status: 403 },
-    )
-  }
-
-  const { data: existingUser } = await db
-    .from('users')
-    .select('school_id, role')
-    .eq('id', userId)
-    .maybeSingle()
-
-  if (existingUser?.role === 'superadmin') {
-    return NextResponse.json(
-      { error: 'Superadmin accounts cannot self-register a club. Use a separate account.' },
-      { status: 409 },
-    )
-  }
-  if (existingUser?.school_id && existingUser.school_id !== school.id) {
-    return NextResponse.json(
-      { error: 'You are already enrolled in another school. School switching is not supported yet.' },
-      { status: 409 },
-    )
-  }
-
-  // Self-enrol into the open-registration school as a student if not already
-  // a member. Existing members keep their stored role (never demote).
-  if (!existingUser?.school_id) {
-    const name = clerkUser.fullName ?? clerkUser.username ?? 'New User'
-    const { error: enrolError } = existingUser
-      ? await db.from('users').update({ school_id: school.id }).eq('id', userId)
-      : await db
-          .from('users')
-          .upsert(
-            { id: userId, name, email, school_id: school.id, role: 'student' },
-            { onConflict: 'id' },
-          )
-    if (enrolError) {
-      console.error('registrations: enrol failed', enrolError)
-      return NextResponse.json({ error: 'Failed to enrol you into the school. Please try again.' }, { status: 500 })
-    }
+  // Enrol (email-gated) through the shared helper before recording the club
+  // request, so a club submission also makes the caller a member if they aren't
+  // already. Enrolment and submission stay separate actions but compose here.
+  const enroll = await enrollStudent({
+    db,
+    userId,
+    email,
+    emailVerified: primary?.verification?.status === 'verified',
+    name: clerkUser.fullName ?? clerkUser.username ?? 'New User',
+    school,
+  })
+  if (!enroll.ok) {
+    return NextResponse.json({ error: enroll.error }, { status: enroll.status })
   }
 
   // Friendly pre-check; the partial unique index is the race-proof backstop.

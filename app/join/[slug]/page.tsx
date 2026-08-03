@@ -1,9 +1,10 @@
 'use client'
 
-import { use, useCallback, useEffect, useState } from 'react'
+import { use, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useUser, useClerk } from '@clerk/nextjs'
-import { GraduationCap, CheckCircle, Clock, XCircle, LogOut } from 'lucide-react'
+import { GraduationCap, CheckCircle, Clock, XCircle, LogOut, Loader2 } from 'lucide-react'
+import { useMockAuth } from '@/lib/mock-auth'
 import type { ClubRegistrationRequest, RequesterRole } from '@/types'
 
 interface SchoolInfo {
@@ -46,6 +47,7 @@ export default function OpenRegistrationPage({ params }: { params: Promise<{ slu
   const { slug } = use(params)
   const { user: clerkUser, isLoaded } = useUser()
   const { signOut } = useClerk()
+  const { refreshSchoolContext } = useMockAuth()
 
   const [school, setSchool] = useState<SchoolInfo | null>(null)
   const [requests, setRequests] = useState<ClubRegistrationRequest[]>([])
@@ -55,6 +57,15 @@ export default function OpenRegistrationPage({ params }: { params: Promise<{ slu
   const [editing, setEditing] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [enrollError, setEnrollError] = useState<string | null>(null)
+
+  // Read the ?register=1 intent from the URL after mount (avoids the
+  // useSearchParams Suspense requirement). When absent, an enrolled student with
+  // no in-flight request is sent to the dashboard rather than shown the form.
+  const [wantsRegister, setWantsRegister] = useState(false)
+  useEffect(() => {
+    setWantsRegister(new URLSearchParams(window.location.search).get('register') === '1')
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -82,6 +93,51 @@ export default function OpenRegistrationPage({ params }: { params: Promise<{ slu
   const pending = requests.find((r) => r.status === 'pending') ?? null
   const latest = requests[0] ?? null
   const approved = requests.find((r) => r.status === 'approved') ?? null
+  const hasRequest = requests.length > 0
+
+  // Once signed in and the school is resolved, self-enrol the student (they've
+  // proven an @<domain> email by signing in). A fresh student with no request
+  // who didn't explicitly come to register a club is a "regular student" — send
+  // them to their dashboard. Everyone else stays here to see their request
+  // status or the registration form. A full navigation guarantees the auth
+  // provider re-reads the now-enrolled school context before the dashboard
+  // loads (avoids a no-school bounce back to /join).
+  const enrollAttempted = useRef(false)
+  useEffect(() => {
+    if (!isLoaded || !clerkUser || !school || loading) return
+    if (enrollAttempted.current) return
+    enrollAttempted.current = true
+
+    void (async () => {
+      try {
+        const res = await fetch('/api/registrations/enroll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setEnrollError(data.error ?? 'Could not enrol you into the school.')
+          return
+        }
+        refreshSchoolContext()
+        if (!hasRequest && !wantsRegister) {
+          window.location.assign('/dashboard')
+        }
+      } catch {
+        setEnrollError('Something went wrong. Please try again.')
+      }
+    })()
+  }, [isLoaded, clerkUser, school, loading, hasRequest, wantsRegister, slug, refreshSchoolContext])
+
+  // While a fresh, request-less student is being enrolled + bounced to the
+  // dashboard, show a placeholder instead of flashing the empty club form.
+  const redirectingToDashboard =
+    isLoaded && !!clerkUser && !enrollError && !hasRequest && !wantsRegister
+
+  // The club form appears only when the student explicitly wants to register
+  // (?register=1), is editing a pending request, or is resubmitting a denied one.
+  const showForm = !approved && (editing || (!pending && (wantsRegister || latest?.status === 'denied')))
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -147,6 +203,13 @@ export default function OpenRegistrationPage({ params }: { params: Promise<{ slu
           <div className="inline-flex items-center justify-center w-14 h-14 bg-black rounded-2xl mb-4">
             <GraduationCap className="w-7 h-7 text-white" />
           </div>
+          {school?.slug && (
+            <div className="mb-2">
+              <span className="inline-block text-[11px] font-bold uppercase tracking-widest px-3 py-1 rounded-full bg-[#0C2340] text-white">
+                {school.slug}
+              </span>
+            </div>
+          )}
           <h1 className="text-2xl font-bold text-gray-900">Register a club at {school?.name}</h1>
           {school?.allowedEmailDomain && (
             <p className="text-gray-500 mt-1 text-sm">
@@ -159,7 +222,7 @@ export default function OpenRegistrationPage({ params }: { params: Promise<{ slu
         {isLoaded && !clerkUser && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center space-y-4">
             <p className="text-sm text-gray-600">
-              Sign in{school?.allowedEmailDomain ? ` with your @${school.allowedEmailDomain} email` : ''} to register a club.
+              Sign in{school?.allowedEmailDomain ? ` with your @${school.allowedEmailDomain} email` : ''} to join {school?.name ?? 'your school'} on ClubIt.
             </p>
             <Link
               href={`/sign-in?redirect_url=${encodeURIComponent(`/join/${slug}`)}`}
@@ -191,6 +254,25 @@ export default function OpenRegistrationPage({ params }: { params: Promise<{ slu
                 </button>
               </div>
             </div>
+
+            {/* Enrolment blocked (wrong domain, unverified email, superadmin, …) */}
+            {enrollError && (
+              <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6 text-center">
+                <XCircle className="w-6 h-6 text-red-500 mx-auto mb-2" />
+                <p className="text-sm text-gray-700">{enrollError}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Use the “Switch” link above to sign in with a different account.
+                </p>
+              </div>
+            )}
+
+            {/* Regular student: enrolled and being sent to their dashboard. */}
+            {!enrollError && redirectingToDashboard && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center flex flex-col items-center gap-3">
+                <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                <p className="text-sm text-gray-600">Taking you to your dashboard…</p>
+              </div>
+            )}
 
             {/* Approved */}
             {approved && (
@@ -238,8 +320,11 @@ export default function OpenRegistrationPage({ params }: { params: Promise<{ slu
               </div>
             )}
 
-            {/* Form: shown when creating (no pending/approved) or editing a pending one */}
-            {!approved && (editing || !pending) && (
+            {/* Form: shown when the student explicitly wants to register a club
+                (?register=1), is editing a pending request, or resubmitting a
+                denied one. A plain new student never sees it — they're bounced
+                to the dashboard above. */}
+            {showForm && (
               <form onSubmit={submit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Club name</label>
