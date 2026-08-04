@@ -47,9 +47,34 @@ export type EnrollResult =
   | { ok: true }
   | { ok: false; status: number; error: string }
 
+/** One email address on the caller's Clerk account, with its verified state. */
+export interface CallerEmail {
+  email: string
+  verified: boolean
+}
+
+/**
+ * Flatten a Clerk backend user into the email list the gate below consumes.
+ * Both callers MUST build their list through here: reading only
+ * `primaryEmailAddress` would reject a student whose school address is a
+ * verified *secondary* address on the account (a personal Gmail is very often
+ * the primary), so the "which addresses count" rule lives in one place.
+ */
+export function callerEmails(user: {
+  emailAddresses: { emailAddress: string; verification: { status: string } | null }[]
+}): CallerEmail[] {
+  return user.emailAddresses.map((e) => ({
+    email: e.emailAddress,
+    verified: e.verification?.status === 'verified',
+  }))
+}
+
 /**
  * Self-enrol a caller into an open-registration school as a plain `student`,
- * gated solely by a verified primary email in the school's allowed domain.
+ * gated on the account holding a *verified* address in the school's allowed
+ * domain — any address on the account, not just the primary. Verification is
+ * what makes the domain meaningful: an unverified address proves nothing, so
+ * accepting one would let anyone claim to be a student there.
  * Idempotent: an existing member keeps their stored role (never demoted) and
  * this is a no-op. Does NOT create a club request — enrolment and club
  * submission are separate actions.
@@ -57,27 +82,43 @@ export type EnrollResult =
 export async function enrollStudent(params: {
   db: SupabaseClient
   userId: string
-  email: string
-  emailVerified: boolean
+  emails: CallerEmail[]
   name: string
   school: OpenSchool
 }): Promise<EnrollResult> {
   const { db, userId, name, school } = params
-  const email = params.email.toLowerCase()
 
   if (school.status !== 'active') {
     return { ok: false, status: 403, error: 'This school is not currently active' }
   }
-  if (!params.emailVerified) {
-    return { ok: false, status: 403, error: 'Verify your email address with Clerk before continuing.' }
-  }
-  if (school.allowed_email_domain && !email.endsWith(`@${school.allowed_email_domain.toLowerCase()}`)) {
+
+  const domain = school.allowed_email_domain?.toLowerCase() ?? null
+  const emails = params.emails
+    .map((e) => ({ email: e.email.toLowerCase().trim(), verified: e.verified }))
+    .filter((e) => e.email)
+  const inDomain = domain ? emails.filter((e) => e.email.endsWith(`@${domain}`)) : emails
+
+  const qualifying = inDomain.find((e) => e.verified)
+  if (!qualifying) {
+    // Distinguish "you don't have a school address" from "you have one but
+    // never confirmed it" — the second is fixable by the student in seconds,
+    // and telling them to switch accounts instead sends them in a circle.
+    if (inDomain.length > 0) {
+      return {
+        ok: false,
+        status: 403,
+        error: `Confirm ${inDomain[0].email} in your account settings, then reload this page.`,
+      }
+    }
     return {
       ok: false,
       status: 403,
-      error: `Registration is limited to @${school.allowed_email_domain} email addresses.`,
+      error: domain
+        ? `Registration is limited to @${domain} email addresses.`
+        : 'Confirm your email address before continuing.',
     }
   }
+  const email = qualifying.email
 
   const { data: existingUser } = await db
     .from('users')

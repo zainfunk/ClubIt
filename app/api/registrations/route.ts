@@ -6,7 +6,7 @@ import { clubRegistrationLimiter } from '@/lib/rate-limit'
 import { sanitizeText } from '@/lib/sanitize'
 import { ClubRegistrationSchema } from '@/lib/schemas'
 import { REGISTRATION_COLUMNS, mapRegistrationRow, type RegistrationRow } from '@/lib/registrations'
-import { resolveOpenSchool, publicSchool, enrollStudent } from '@/lib/open-registration'
+import { resolveOpenSchool, publicSchool, enrollStudent, callerEmails } from '@/lib/open-registration'
 
 /**
  * Self-serve club registration for open-registration schools (UConn).
@@ -83,8 +83,6 @@ export async function POST(request: NextRequest) {
   const db = createServiceClient()
   const client = await clerkClient()
   const clerkUser = await client.users.getUser(userId)
-  const primary = clerkUser.primaryEmailAddress
-  const email = primary?.emailAddress ?? ''
 
   // Enrol (email-gated) through the shared helper before recording the club
   // request, so a club submission also makes the caller a member if they aren't
@@ -92,8 +90,7 @@ export async function POST(request: NextRequest) {
   const enroll = await enrollStudent({
     db,
     userId,
-    email,
-    emailVerified: primary?.verification?.status === 'verified',
+    emails: callerEmails(clerkUser),
     name: clerkUser.fullName ?? clerkUser.username ?? 'New User',
     school,
   })

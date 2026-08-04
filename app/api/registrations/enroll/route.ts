@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase'
 import { clubRegistrationLimiter } from '@/lib/rate-limit'
-import { resolveOpenSchool, enrollStudent } from '@/lib/open-registration'
+import { resolveOpenSchool, enrollStudent, callerEmails } from '@/lib/open-registration'
 
 /**
  * POST /api/registrations/enroll  { slug }
@@ -44,13 +44,11 @@ export async function POST(request: NextRequest) {
   const db = createServiceClient()
   const client = await clerkClient()
   const clerkUser = await client.users.getUser(userId)
-  const primary = clerkUser.primaryEmailAddress
 
   const result = await enrollStudent({
     db,
     userId,
-    email: primary?.emailAddress ?? '',
-    emailVerified: primary?.verification?.status === 'verified',
+    emails: callerEmails(clerkUser),
     name: clerkUser.fullName ?? clerkUser.username ?? 'New User',
     school,
   })
