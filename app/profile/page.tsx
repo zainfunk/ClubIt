@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { useMockAuth } from '@/lib/mock-auth'
 import { fetchClubsByIds, fetchSchoolClubs, fetchSchoolUsers } from '@/lib/school-data'
 import { supabase } from '@/lib/supabase'
-import { setName, setEmail } from '@/lib/user-store'
+import { setName } from '@/lib/user-store'
 import { getProfile, setProfile, SOCIAL_PLATFORMS, PersonalSocialLink } from '@/lib/profile-store'
 import { getAdminSettings } from '@/lib/settings-store'
 import { apiUserAttendance } from '@/lib/school-api'
@@ -119,25 +119,28 @@ function ProfileDesktop() {
   }
 
   // ---- Name editing ----
+  // Email is deliberately NOT editable: it's the auth identity (Clerk) and the
+  // open-registration domain check keys off it.
+  const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput] = useState('')
+  const [displayName, setDisplayName] = useState('')
   useEffect(() => {
-    Promise.resolve().then(() => setNameInput(profileUser.name))
+    Promise.resolve().then(() => setDisplayName(profileUser.name))
   }, [profileUser.name])
-  function saveName() {
-    if (!nameInput.trim() || nameInput.trim() === profileUser.name) return
-    void setName(profileUser.id, nameInput.trim())
-  }
-
-  // ---- Email editing ----
-  const [editingEmail, setEditingEmail] = useState(false)
-  const [emailInput, setEmailInput] = useState('')
-  function saveEmail() {
-    if (!emailInput.trim()) return
-    void setEmail(profileUser.id, emailInput.trim())
-    setEditingEmail(false)
+  async function saveName() {
+    const next = nameInput.trim()
+    setEditingName(false)
+    if (!next || next === displayName) return
+    const prev = displayName
+    setDisplayName(next)
+    if (!(await setName(profileUser.id, next))) {
+      setDisplayName(prev)
+      setProfileError('Could not save your name. Please try again.')
+    }
   }
 
   // ---- Bio editing ----
+  const bioRef = useRef<HTMLTextAreaElement>(null)
   const [bioInput, setBioInput] = useState('')
   useEffect(() => { getProfile(profileUser.id).then((p) => setBioInput(p.bio)) }, [profileUser.id])
   function saveBio() {
@@ -278,7 +281,7 @@ function ProfileDesktop() {
         <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="text-sm font-medium text-red-800">Failed to load profile</p>
+            <p className="text-sm font-medium text-red-800">Something went wrong</p>
             <p className="text-xs text-red-600 mt-0.5">{profileError}</p>
           </div>
           <button onClick={() => window.location.reload()} className="text-xs font-bold text-red-700 hover:underline shrink-0">Retry</button>
@@ -314,45 +317,50 @@ function ProfileDesktop() {
             {/* Name / role / email */}
             <div className="min-w-0 flex-1 text-center sm:text-left">
               <div className="flex items-center justify-center sm:justify-start gap-2">
-                {canEdit ? (
-                  <Input
-                    value={nameInput}
-                    onChange={(e) => setNameInput(e.target.value)}
-                    onBlur={saveName}
-                    onKeyDown={(e) => e.key === 'Enter' && saveName()}
-                    className="h-auto text-2xl sm:text-3xl font-extrabold tracking-tight max-w-xs sm:max-w-md border-none shadow-none px-0 py-0 focus-visible:ring-0 text-center sm:text-left"
-                    style={{ fontFamily: 'var(--font-manrope)' }}
-                  />
+                {canEdit && editingName ? (
+                  <>
+                    <Input
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveName()
+                        if (e.key === 'Escape') setEditingName(false)
+                      }}
+                      className="h-auto text-2xl sm:text-3xl font-extrabold tracking-tight max-w-xs sm:max-w-md px-2 py-0.5 text-center sm:text-left"
+                      style={{ fontFamily: 'var(--font-manrope)' }}
+                    />
+                    <button onClick={saveName} className="text-emerald-600 hover:text-emerald-700 transition-colors" title="Save name">
+                      <Check className="w-5 h-5" />
+                    </button>
+                    <button onClick={() => setEditingName(false)} className="text-slate-400 hover:text-slate-600 transition-colors" title="Cancel">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </>
                 ) : (
-                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 truncate"
-                    style={{ fontFamily: 'var(--font-manrope)' }}>
-                    {profileUser.name}
-                  </h1>
+                  <>
+                    <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 truncate"
+                      style={{ fontFamily: 'var(--font-manrope)' }}>
+                      {displayName}
+                    </h1>
+                    <BadgeCheck className="w-6 h-6 text-indigo-500 shrink-0" />
+                    {canEdit && (
+                      <button
+                        onClick={() => { setNameInput(displayName); setEditingName(true) }}
+                        className="text-slate-400 hover:text-slate-600 transition-colors shrink-0"
+                        title="Edit name"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                  </>
                 )}
-                <BadgeCheck className="w-6 h-6 text-indigo-500 shrink-0" />
               </div>
               <div className="flex items-center justify-center sm:justify-start gap-2.5 flex-wrap mt-1.5">
                 <span className={`text-xs font-semibold px-3 py-0.5 rounded-full border ${ROLE_BADGE[profileUser.role]}`}>
                   {ROLE_LABEL[profileUser.role]}
                 </span>
-                {editingEmail ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Input value={emailInput} onChange={(e) => setEmailInput(e.target.value)}
-                      className="h-7 text-sm max-w-[14rem]" autoFocus onKeyDown={(e) => e.key === 'Enter' && saveEmail()} />
-                    <button onClick={saveEmail} className="text-emerald-600"><Check className="w-4 h-4" /></button>
-                    <button onClick={() => setEditingEmail(false)} className="text-slate-400"><X className="w-4 h-4" /></button>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="text-sm text-slate-500 truncate">{profileUser.email}</span>
-                    {canEdit && (
-                      <button onClick={() => { setEmailInput(profileUser.email); setEditingEmail(true) }}
-                        className="text-slate-400 hover:text-slate-600 transition-colors">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </span>
-                )}
+                <span className="text-sm text-slate-500 truncate">{profileUser.email}</span>
                 {avatarUrl && (
                   <button onClick={removeAvatar} disabled={uploadingAvatar}
                     className="text-xs font-medium text-slate-400 hover:text-red-500 transition-colors">
@@ -406,9 +414,17 @@ function ProfileDesktop() {
         <div className="space-y-5">
           {/* Bio */}
           <div className="rounded-2xl bg-white border border-slate-200/60 p-6" style={{ boxShadow: '0 4px 24px rgba(15,23,42,0.04)' }}>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">About</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">About</h3>
+              {canEdit && (
+                <button onClick={() => bioRef.current?.focus()} className="text-slate-400 hover:text-slate-600 transition-colors" title="Edit bio">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
             {canEdit ? (
               <textarea
+                ref={bioRef}
                 value={bioInput}
                 onChange={(e) => setBioInput(e.target.value)}
                 onBlur={saveBio}

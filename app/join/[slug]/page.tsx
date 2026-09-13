@@ -2,10 +2,23 @@
 
 import { use, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useUser, useClerk } from '@clerk/nextjs'
+import { useUser, useClerk, SignIn } from '@clerk/nextjs'
 import { GraduationCap, CheckCircle, Clock, XCircle, LogOut, Loader2 } from 'lucide-react'
 import { useMockAuth } from '@/lib/mock-auth'
+import { isNativeUserAgent } from '@/lib/platform'
+import AuthGate from '@/components/auth/AuthGate'
+import NativeSocialButtons from '@/components/auth/NativeSocialButtons'
 import type { ClubRegistrationRequest, RequesterRole } from '@/types'
+
+// Same treatment as the main sign-in page: in the native webview the hosted
+// social buttons break, so they're hidden and replaced by NativeSocialButtons.
+const HIDE_HOSTED_SOCIAL = {
+  elements: {
+    socialButtons: { display: 'none' },
+    socialButtonsBlockButton: { display: 'none' },
+    dividerRow: { display: 'none' },
+  },
+}
 
 interface SchoolInfo {
   name: string
@@ -58,6 +71,8 @@ export default function OpenRegistrationPage({ params }: { params: Promise<{ slu
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [enrollError, setEnrollError] = useState<string | null>(null)
+  const [emailLocal, setEmailLocal] = useState('')
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null)
 
   // Read the ?register=1 intent from the URL after mount (avoids the
   // useSearchParams Suspense requirement). When absent, an enrolled student with
@@ -121,14 +136,22 @@ export default function OpenRegistrationPage({ params }: { params: Promise<{ slu
           return
         }
         refreshSchoolContext()
-        if (!hasRequest && !wantsRegister) {
+        // Re-read requests with the now-active session before deciding where to
+        // send them: the inline sign-in doesn't reload the page, so the list in
+        // state can still be the (empty) anonymous fetch.
+        const fresh = await fetch(`/api/registrations?slug=${encodeURIComponent(slug)}`)
+          .then((r) => r.json())
+          .catch(() => null)
+        const freshRequests: ClubRegistrationRequest[] = fresh?.requests ?? []
+        setRequests(freshRequests)
+        if (freshRequests.length === 0 && !wantsRegister) {
           window.location.assign('/dashboard')
         }
       } catch {
         setEnrollError('Something went wrong. Please try again.')
       }
     })()
-  }, [isLoaded, clerkUser, school, loading, hasRequest, wantsRegister, slug, refreshSchoolContext])
+  }, [isLoaded, clerkUser, school, loading, wantsRegister, slug, refreshSchoolContext])
 
   // While a fresh, request-less student is being enrolled + bounced to the
   // dashboard, show a placeholder instead of flashing the empty club form.
@@ -138,6 +161,12 @@ export default function OpenRegistrationPage({ params }: { params: Promise<{ slu
   // The club form appears only when the student explicitly wants to register
   // (?register=1), is editing a pending request, or is resubmitting a denied one.
   const showForm = !approved && (editing || (!pending && (wantsRegister || latest?.status === 'denied')))
+
+  // hasRequest only counts while signed in — after "Switch" the stale request
+  // list would otherwise keep the club-registration framing for the next person.
+  const clubIntent = wantsRegister || editing || (!!clerkUser && hasRequest)
+  // Post-auth return target: back here, preserving an explicit register intent.
+  const returnUrl = `/join/${slug}${wantsRegister ? '?register=1' : ''}`
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -210,26 +239,89 @@ export default function OpenRegistrationPage({ params }: { params: Promise<{ slu
               </span>
             </div>
           )}
-          <h1 className="text-2xl font-bold text-gray-900">Register a club at {school?.name}</h1>
+          {/* Joining the school is the default framing — most students are here
+              to get into ClubIt (and join clubs from their dashboard), not to
+              found one. Club-registration copy only when that's the intent. */}
+          <h1 className="text-2xl font-bold text-gray-900">
+            {clubIntent ? `Register a club at ${school?.name}` : `Join ${school?.name} on ClubIt`}
+          </h1>
           {school?.allowedEmailDomain && (
             <p className="text-gray-500 mt-1 text-sm">
-              Open to students with a verified @{school.allowedEmailDomain} email. Submit your club for approval.
+              Open to students with a verified @{school.allowedEmailDomain} email.
+              {clubIntent && ' Submit your club for approval.'}
             </p>
           )}
         </div>
 
-        {/* Not signed in */}
-        {isLoaded && !clerkUser && (
+        {/* Not signed in. This IS the school's sign-in screen — a
+            fill-in-the-blank school email (the @domain is fixed), then the
+            Clerk form inline with the email prefilled. Never bounces to the
+            main /sign-in page. withSignUp: a student without an account flows
+            straight into sign-up instead of "account doesn't exist". */}
+        {isLoaded && !clerkUser && !pendingEmail && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center space-y-4">
             <p className="text-sm text-gray-600">
               Sign in{school?.allowedEmailDomain ? ` with your @${school.allowedEmailDomain} email` : ''} to join {school?.name ?? 'your school'} on ClubIt.
             </p>
-            <Link
-              href={`/sign-in?redirect_url=${encodeURIComponent(`/join/${slug}`)}`}
-              className="inline-block w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
+            {school?.allowedEmailDomain ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  setPendingEmail(`${emailLocal.trim()}@${school.allowedEmailDomain}`)
+                }}
+                className="space-y-3"
+              >
+                <div className="flex items-center rounded-xl border border-gray-200 bg-white focus-within:ring-2 focus-within:ring-black/10 focus-within:border-gray-400">
+                  <input
+                    type="text" required autoFocus
+                    pattern="[^@\s]+" title="Just the part before the @"
+                    value={emailLocal}
+                    onChange={(e) => setEmailLocal(e.target.value)}
+                    placeholder="netid"
+                    className="flex-1 min-w-0 px-4 py-2.5 text-sm rounded-l-xl focus:outline-none bg-transparent"
+                  />
+                  <span className="pr-4 text-sm text-gray-500 select-none">@{school.allowedEmailDomain}</span>
+                </div>
+                <button
+                  type="submit"
+                  disabled={!emailLocal.trim()}
+                  className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Continue
+                </button>
+              </form>
+            ) : (
+              <Link
+                href={`/sign-in?redirect_url=${encodeURIComponent(`/join/${slug}`)}`}
+                className="inline-block w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
+              >
+                Sign in to continue
+              </Link>
+            )}
+          </div>
+        )}
+
+        {isLoaded && !clerkUser && pendingEmail && (
+          <div className="flex flex-col items-center gap-3">
+            <AuthGate>
+              {isNativeUserAgent(navigator.userAgent) && <NativeSocialButtons />}
+              <SignIn
+                key={pendingEmail}
+                routing="hash"
+                withSignUp
+                initialValues={{ emailAddress: pendingEmail }}
+                forceRedirectUrl={returnUrl}
+                signUpForceRedirectUrl={returnUrl}
+                appearance={isNativeUserAgent(navigator.userAgent) ? HIDE_HOSTED_SOCIAL : undefined}
+              />
+            </AuthGate>
+            <button
+              type="button"
+              onClick={() => setPendingEmail(null)}
+              className="text-xs text-gray-400 hover:text-gray-700 underline"
             >
-              Sign in to continue
-            </Link>
+              Use a different email
+            </button>
           </div>
         )}
 
@@ -246,7 +338,7 @@ export default function OpenRegistrationPage({ params }: { params: Promise<{ slu
                 </span>
                 <button
                   type="button"
-                  onClick={() => signOut({ redirectUrl: `/sign-in?redirect_url=/join/${slug}` })}
+                  onClick={() => signOut({ redirectUrl: returnUrl })}
                   className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors ml-1"
                 >
                   <LogOut className="w-3 h-3" />

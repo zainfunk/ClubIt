@@ -1,9 +1,14 @@
-export async function setName(userId: string, name: string): Promise<void> {
-  await fetch(`/api/user/overrides?userId=${encodeURIComponent(userId)}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name.trim() }),
-  })
+export async function setName(userId: string, name: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/user/overrides?userId=${encodeURIComponent(userId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
 }
 
 export async function setEmail(userId: string, email: string): Promise<void> {
